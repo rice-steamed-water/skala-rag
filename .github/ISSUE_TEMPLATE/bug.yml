@@ -1,0 +1,40 @@
+name: 버그
+description: 기대와 다르게 동작하는 코드·결과
+labels: ["type:fix"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        만들기 전에 같은 버그가 있는지 검색한다. 제출 후 마일스톤을 지정한다. API key 등 비밀은 로그에서 지운다.
+  - type: textarea
+    id: symptom
+    attributes:
+      label: 현상
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 재현 방법
+      description: 실행한 명령, 입력, 설정
+      placeholder: |
+        1. uv run ...
+        2.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 기대 결과
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 실제 결과와 로그
+      render: text
+  - type: input
+    id: commit
+    attributes:
+      label: commit SHA
+      description: git rev-parse --short HEAD
