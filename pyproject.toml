@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "skala-rag"
+version = "0.1.0"
+description = "Physical AI / Robotics startup research and evaluation project skeleton"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "langgraph>=1.2.12",
+    "pydantic>=2.13.5",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/skala_rag"]
+
+[tool.ruff]
+target-version = "py311"
+src = ["src"]
+# Read-only source documents are not maintained Python code.
+extend-exclude = ["docs/raws"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--import-mode=importlib"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.9",
+]
