@@ -4,6 +4,8 @@
 
 **이슈 1개 = 담당자 1명 = 브랜치 1개 = PR 1개.** `main`은 PR 병합으로만 바뀐다.
 
+역할이나 WP로 나눈 담당 구역은 없다. 누구나 담당자가 없는 이슈를 가져갈 수 있다.
+
 ## main 보호
 
 - `main`에 직접 commit·push하지 않는다. 모든 변경은 브랜치 → PR → 병합으로 들어간다.
@@ -33,7 +35,7 @@ gh issue list --state all --search "retriever"
 ### 2. 이슈 작성
 
 - `작업` 또는 `버그` 템플릿을 쓴다. 한 사람이 PR 하나로 끝낼 크기로 쪼갠다.
-- 라벨 `wp:N`·`type:*`와 마일스톤을 지정한다([라벨과 마일스톤](#라벨과-마일스톤)).
+- 라벨 `type:*`와 마일스톤을 지정한다([라벨과 마일스톤](#라벨과-마일스톤)).
 - 먼저 끝나야 하는 이슈가 있으면 `선행 이슈`에 적는다.
 
 ### 3. 선점 — assignee
@@ -81,7 +83,6 @@ gh pr merge 34              # 병합 방식은 아래 참고
 
 | 라벨 | 의미 |
 | --- | --- |
-| `wp:1` ~ `wp:6` | 작업 패키지. [delivery §1](docs/implementation/delivery.md) |
 | `type:feat` `type:fix` `type:docs` `type:test` `type:refactor` `type:chore` | 브랜치 `type`과 같다 |
 | `blocked` | 외부 요인으로 진행할 수 없음. 이유는 코멘트에 |
 
@@ -102,7 +103,7 @@ gh pr merge 34              # 병합 방식은 아래 참고
 - 충돌은 PR 작성자가 자기 브랜치에서 해결한다.
 - 완료 정의는 [delivery §6](docs/implementation/delivery.md)을 따른다.
 
-## 폴더 구조와 담당 WP
+## 폴더 구조
 
 ```text
 skala-rag/
@@ -141,23 +142,23 @@ skala-rag/
 └── outputs/                     # run별 산출물 (git 제외)
 ```
 
-| 경로 | 담당 | 비고 |
-| --- | --- | --- |
-| `pyproject.toml` `uv.lock` `.env.example` `cli.py` | WP1 | 의존성 추가는 각 WP가 `uv add`로 하고 PR에 적는다 |
-| `contracts/` `graph/` | WP1 | 공통 타입 변경은 소비하는 WP와 먼저 합의하고 fixture를 함께 바꾼다([delivery §1](docs/implementation/delivery.md)) |
-| `agents/` `prompts/` | 해당 노드를 맡은 WP | WP2 조사 · WP3 근거 · WP4 Founder/Market/Technology/Moat · WP5 Traction/Deal Terms |
-| `tools/` | adapter를 쓰는 WP | budget wrapper는 WP1 |
-| `rag/` `data/manifests/` | WP3 | |
-| `scoring/` | WP5 | |
-| `reporting/` `README.md` | WP6 | |
-| `configs/` | 설정 종류별 | 점수 정책 WP5 · 예산 WP1 · 임베딩·코퍼스 WP3 · 보고서 WP6 |
-| `tests/fixtures/` | WP1 공통 fixture | 영역별 rubric·점수 fixture는 해당 WP |
-| `tests/unit/` `contract/` `integration/` | 테스트 대상 모듈의 WP | |
-| `tests/evals/` | WP3 retrieval · WP6 report | |
-| `docs/implementation/` `.github/` `AGENTS.md` `CONTRIBUTING.md` | 전원 | 규칙 변경은 이슈에서 합의한 뒤 PR |
-| `docs/raws/` | — | 읽기 전용 |
+- `docs/raws/`는 읽기 전용이다.
+- 협업 규칙(`.github/`, `AGENTS.md`, `CONTRIBUTING.md`)은 이슈에서 합의한 뒤 PR로 바꾼다.
 
-다른 WP 경로를 바꿔야 하면 그 WP 담당자에게 이슈나 PR 코멘트로 먼저 알린다.
+### 공통 파일
+
+여러 이슈가 함께 쓰는 파일이라 병렬 작업 중 충돌과 연쇄 수정이 가장 자주 나는 곳이다.
+
+- `src/skala_rag/contracts/`
+- `src/skala_rag/graph/`
+- `configs/`
+- `pyproject.toml`, `uv.lock`
+
+이 파일을 바꾸는 PR은:
+
+1. PR 본문 `공통 파일 변경` 칸에 무엇을 왜 바꿨는지 적는다.
+2. 영향받는 열린 이슈를 찾아 코멘트로 알린다. `gh issue list --state open`
+3. 공통 타입·정책을 바꿨다면 영향받는 fixture와 테스트를 같은 PR에서 함께 바꾼다.
 
 ## 개발 환경
 
@@ -172,7 +173,7 @@ uv add <패키지>                   # 런타임 의존성
 uv add --dev <패키지>             # 개발 의존성
 ```
 
-- `pyproject.toml`, Python 버전(`requires-python`), ruff·pytest 설정은 WP1이 첫 코드 PR에서 만든다. 그 전에는 위 명령이 동작하지 않는다.
+- `pyproject.toml`, Python 버전(`requires-python`), ruff·pytest 설정은 첫 코드 PR에서 만든다. 그 전에는 위 명령이 동작하지 않는다.
 - 패키지는 uv로만 설치한다. 의존성을 바꾼 PR은 `pyproject.toml`과 `uv.lock`을 함께 커밋한다. `uv.lock`이 충돌하면 `main`을 반영한 뒤 `uv lock`으로 다시 만든다.
 - unit/contract 테스트는 네트워크 없이 돈다. live 테스트 규칙은 [delivery §4](docs/implementation/delivery.md)를 따른다.
 - GitHub Actions CI는 코드가 생긴 뒤 추가한다.

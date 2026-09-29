@@ -2,28 +2,26 @@
 
 [문서 홈](../README.md) · [아키텍처](architecture.md) · [계약](contracts.md) · [결정 목록](decisions.md)
 
-**상태: 팀 배정·승인 전 실행 계획.** 아래 역할은 인원 수를 가정하지 않는 작업 묶음이다. 한 사람이 여러 묶음을 맡을 수 있다. 원문에서 이름 표기가 일치하지 않으므로 실명을 임의 배정하지 않았다.
+**상태: 승인 전 실행 계획.** 아래 WP는 구현 범위를 나눈 작업 묶음이며 사람·역할 배정이 아니다. 실제 작업은 GitHub 이슈로 쪼개고, 누구나 담당자가 없는 이슈를 assignee로 가져간다([협업 규칙](../../CONTRIBUTING.md#이슈로-일하기)).
 
-## 1. 역할별 작업 패키지
+## 1. 작업 패키지
 
-각 행의 담당/검토자를 팀에서 채운다. “PM”, “PL”보다 실제 구현 산출물을 기준으로 배정한다.
+| WP | 구현 범위 | 다른 작업에 넘길 것 | 완료 조건 |
+| --- | --- | --- | --- |
+| WP1 Contracts / Graph | 공통 schema, reducer, graph wiring, 후보·조사·보고서 loop, 예산 | schema와 fixture, graph trace, runner | 유한 종료·동일 세대 합류·상태 격리 테스트 통과 |
+| WP2 Discovery / Eligibility | 후보 탐색/정규화, 기업 조사, 상장·Exit·단계 근거 | Candidate, CompanyProfile, EligibilityResult, ToolResult | 적격/부적격/unknown/동명 기업 fixture와 live adapter 확인 |
+| WP3 Evidence / RAG | 코퍼스 manifest, 추출·chunk·embedding·검색, 근거 병합 | Source/Chunk/Evidence, retrieve adapter, 모델 비교 기록 | 200페이지 gate와 실제 검색→평가 연결 증거 |
+| WP4 Evaluation / Rubrics | Founder/Market/Technology/Moat rubric·prompt·구조화 출력 | 영역별 Evaluation과 rubric fixtures | 근거 없는 rating 거절, missing·상충·다른 기업 오염 테스트 |
+| WP5 Finance / Scoring | Traction/Deal Terms rubric·평가, deterministic score·decision | 여섯 영역 집계 계약, 정책, 숫자·라벨 테스트 | 비중·결측·저점수·임계값·단위 테스트 통과 |
+| WP6 Reports / Integration QA | ReportInput/ReportContext, 생성·구조·의미 검증, PDF, README, 제출 묶음 | Markdown/PDF renderer, validation manifest, 재현 절차 | 5페이지·SUMMARY·REFERENCE·근거 일치 및 clean run 확인 |
 
-| WP | 담당 / 검토 | 구현 책임 | 다른 팀원에게 넘길 것 | 완료 조건 |
-| --- | --- | --- | --- | --- |
-| WP1 Contracts / Graph | 미정 / 미정 | 공통 schema, reducer, graph wiring, 후보·조사·보고서 loop, 예산 | schema와 fixture, graph trace, runner | 유한 종료·동일 세대 합류·상태 격리 테스트 통과 |
-| WP2 Discovery / Eligibility | 미정 / 미정 | 후보 탐색/정규화, 기업 조사, 상장·Exit·단계 근거 | Candidate, CompanyProfile, EligibilityResult, ToolResult | 적격/부적격/unknown/동명 기업 fixture와 live adapter 확인 |
-| WP3 Evidence / RAG | 미정 / 미정 | 코퍼스 manifest, 추출·chunk·embedding·검색, 근거 병합 | Source/Chunk/Evidence, retrieve adapter, 모델 비교 기록 | 200페이지 gate와 실제 검색→평가 연결 증거 |
-| WP4 Evaluation / Rubrics | 미정 / 미정 | Founder/Market/Technology/Moat rubric·prompt·구조화 출력 | 영역별 Evaluation과 rubric fixtures | 근거 없는 rating 거절, missing·상충·다른 기업 오염 테스트 |
-| WP5 Finance / Scoring | 미정 / 미정 | Traction/Deal Terms rubric·평가, deterministic score·decision | 여섯 영역 집계 계약, 정책, 숫자·라벨 테스트 | 비중·결측·저점수·임계값·단위 테스트 통과 |
-| WP6 Reports / Integration QA | 미정 / 미정 | ReportInput/ReportContext, 생성·구조·의미 검증, PDF, README, 제출 묶음 | Markdown/PDF renderer, validation manifest, 재현 절차 | 5페이지·SUMMARY·REFERENCE·근거 일치 및 clean run 확인 |
-
-`contracts/`와 Graph 공통 wiring의 소유자는 WP1로 둔다. 다른 WP가 공통 타입을 바꿀 때는 소비하는 WP와 먼저 합의하고 fixture를 함께 바꾼다. 재무 Evidence 수집은 WP3의 adapter 계약을 사용하고 WP5가 의미·단위 검증을 소유한다.
+`contracts/`·`graph/`·`configs/`·`pyproject.toml`·`uv.lock`은 여러 이슈가 함께 쓰는 공통 파일이다. 바꾸는 PR은 변경 내용을 본문에 명시하고, 영향받는 열린 이슈에 알리고, fixture를 함께 바꾼다([공통 파일](../../CONTRIBUTING.md#공통-파일)). 재무 Evidence 수집은 WP3의 adapter 계약을 사용하고, 의미·단위 검증은 WP5 범위다.
 
 ## 2. 디렉터리 구조 — 아직 구현되지 않음
 
-채택한 디렉터리 구조와 폴더별 담당 WP는 [CONTRIBUTING.md](../../CONTRIBUTING.md#폴더-구조와-담당-wp)에 있다.
+채택한 디렉터리 구조와 공통 파일 규칙은 [CONTRIBUTING.md](../../CONTRIBUTING.md#폴더-구조)에 있다.
 
-패키지·lint·테스트 도구는 uv·ruff·pytest로 정했다([개발 환경](../../CONTRIBUTING.md#개발-환경)). Python 버전, 의존성 버전, vector store, LLM provider/model, PDF renderer는 아직 확정되지 않았다. 환경을 추측해 설치 명령을 적지 않는다. WP1이 설치·fixture 실행·테스트 명령을 실제로 검증한 뒤 루트 README Usage에 기입한다.
+패키지·lint·테스트 도구는 uv·ruff·pytest로 정했다([개발 환경](../../CONTRIBUTING.md#개발-환경)). Python 버전, 의존성 버전, vector store, LLM provider/model, PDF renderer는 아직 확정되지 않았다. 환경을 추측해 설치 명령을 적지 않는다. WP1 작업에서 설치·fixture 실행·테스트 명령을 실제로 검증한 뒤 루트 README Usage에 기입한다.
 
 ## 3. 구현 순서와 병렬화
 
@@ -36,7 +34,7 @@
 - WP3: 코퍼스 후보와 페이지 산정 표, 접근 가능한 모델/자료 점검.
 - WP6: 출력 목차, 인용 표기, 검증 체크리스트 합의.
 
-**완료:** 다른 WP가 동일 fixture를 읽고 타입 검증할 수 있다. 정책 승인 기록과 실제 팀 담당/검토자가 있다. 새 문서를 작성한 것만으로 M0 완료가 아니다.
+**완료:** 다른 WP가 동일 fixture를 읽고 타입 검증할 수 있다. 정책 승인 기록이 있고 M1 작업이 이슈로 나뉘어 있다. 새 문서를 작성한 것만으로 M0 완료가 아니다.
 
 ### M1 — fixture 기반 전체 세로 흐름
 
@@ -74,7 +72,7 @@ WP1이 예산 제한을 적용한 runner로 통합한다. WP6는 real Report Gen
 
 아래는 **구현할 테스트 목록**이지 현재 저장소에서 실행한 결과가 아니다.
 
-| ID | 계층 / 상황 | 통과 기준 | 담당 |
+| ID | 계층 / 상황 | 통과 기준 | 관련 WP |
 | --- | --- | --- | --- |
 | T01 | schema / 관측과 결측 | observed의 rating·근거 필수, missing rating=null, 없는 ID 거절 | WP1/WP4 |
 | T02 | policy / 가중치 | criterion ID 유일, 합 100, 영역 합 일치 | WP5 |

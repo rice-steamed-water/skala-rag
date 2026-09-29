@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        만들기 전에 같은 버그가 있는지 검색한다. 제출 후 `wp:N` 라벨을 지정한다. API key 등 비밀은 로그에서 지운다.
+        만들기 전에 같은 버그가 있는지 검색한다. 제출 후 마일스톤을 지정한다. API key 등 비밀은 로그에서 지운다.
   - type: textarea
     id: symptom
     attributes:

@@ -4,7 +4,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        만들기 전에 같은 작업이 있는지 검색한다. 제출 후 `wp:N`·`type:*` 라벨과 마일스톤을 지정하고, 맡을 사람은 assignee로 선점한다. 규칙: CONTRIBUTING.md
+        만들기 전에 같은 작업이 있는지 검색한다. 제출 후 `type:*` 라벨과 마일스톤을 지정한다. 누구나 담당자가 없는 이슈를 assignee로 선점해 가져갈 수 있다. 규칙: CONTRIBUTING.md
   - type: textarea
     id: goal
     attributes:

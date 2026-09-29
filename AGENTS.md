@@ -12,7 +12,8 @@ Physical AI / Robotics 스타트업 투자 조사·평가용 LangGraph Multi-Age
 
 ## 범위
 
-- 이슈의 WP가 담당하는 경로만 수정한다([폴더 구조와 담당 WP](CONTRIBUTING.md#폴더-구조와-담당-wp)). 다른 WP 경로나 `contracts/`·`graph/` 변경이 필요하면 멈추고 사용자에게 제안한다.
+- 역할·WP별 담당 구역은 없다. 이슈 범위에 필요한 파일을 수정한다.
+- [공통 파일](CONTRIBUTING.md#공통-파일)(`contracts/`·`graph/`·`configs/`·`pyproject.toml`·`uv.lock`)을 바꾸면 PR 본문 `공통 파일 변경` 칸에 무엇을 왜 바꿨는지 적고, 영향받는 열린 이슈에 코멘트로 알리고, 영향받는 fixture·테스트를 같은 PR에서 바꾼다.
 - `docs/raws/`는 읽기 전용이다.
 - [결정 목록](docs/implementation/decisions.md)의 `OPEN` 항목은 사용자에게 제안하고, 승인 전까지 fixture·인터페이스까지만 구현한다. 코드 기본값으로 결정을 대신하지 않는다.
 
