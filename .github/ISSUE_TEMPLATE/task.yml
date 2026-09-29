@@ -1,0 +1,37 @@
+name: 작업
+description: 한 사람이 PR 하나로 끝낼 구현·문서·테스트 작업
+body:
+  - type: markdown
+    attributes:
+      value: |
+        만들기 전에 같은 작업이 있는지 검색한다. 제출 후 `wp:N`·`type:*` 라벨과 마일스톤을 지정하고, 맡을 사람은 assignee로 선점한다. 규칙: CONTRIBUTING.md
+  - type: textarea
+    id: goal
+    attributes:
+      label: 목적
+      description: 왜 필요한가. 관련 문서, 결정 ID(Dxx), 테스트 ID(Txx)
+    validations:
+      required: true
+  - type: textarea
+    id: tasks
+    attributes:
+      label: 할 일
+      placeholder: "- [ ] "
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: 범위 밖
+  - type: textarea
+    id: done
+    attributes:
+      label: 완료 조건
+      description: 확인할 수 있는 조건. 예) 통과해야 할 테스트, 만들어질 산출물
+    validations:
+      required: true
+  - type: input
+    id: depends-on
+    attributes:
+      label: 선행 이슈
+      placeholder: "#12, #15"

@@ -23,6 +23,7 @@
 | 자료 수집, 페이지 예산, 검색, 임베딩 비교 | [데이터와 RAG](implementation/data-rag.md) | 데이터 / RAG 담당 |
 | 역할별 작업, 통합 순서, 테스트, 제출 | [작업 분담과 검증](implementation/delivery.md) | 전원 |
 | 원문 충돌, 새 제안, 승인 기록 | [결정 목록](implementation/decisions.md) | 전원, 정책 결정 담당 |
+| 이슈·브랜치·PR 규칙, 폴더별 담당, 개발 도구 | [협업 규칙](../CONTRIBUTING.md) | 전원 |
 
 ## 우리가 만드는 것
 

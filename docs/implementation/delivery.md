@@ -19,42 +19,11 @@
 
 `contracts/`와 Graph 공통 wiring의 소유자는 WP1로 둔다. 다른 WP가 공통 타입을 바꿀 때는 소비하는 WP와 먼저 합의하고 fixture를 함께 바꾼다. 재무 Evidence 수집은 WP3의 adapter 계약을 사용하고 WP5가 의미·단위 검증을 소유한다.
 
-## 2. 제안 디렉터리 — 아직 구현되지 않음
+## 2. 디렉터리 구조 — 아직 구현되지 않음
 
-```text
-skala-rag/
-├── README.md                    # 최종 실행 안내·발표 기준
-├── pyproject.toml               # 선택한 Python·의존성·도구 설정
-├── <선택한 패키지 도구의 lockfile>
-├── .env.example                 # 비밀 없는 설정명
-├── configs/                     # 승인 정책·모델·예산·보고서 설정
-├── docs/
-│   ├── README.md                # 현재 구현 가이드 진입점
-│   ├── implementation/          # 현재 팀 문서
-│   └── raws/                    # 수정하지 않는 원문
-├── src/skala_rag/
-│   ├── contracts/               # 공통 DTO·State·catalog 타입
-│   ├── graph/                   # wiring·router·reducer·controller
-│   ├── agents/                  # 조사 Agent와 영역 평가 노드
-│   ├── tools/                   # Web/API adapter·budget wrapper
-│   ├── rag/                     # load·chunk·index·retrieve
-│   ├── scoring/                 # 순수 산술·정책 판단
-│   ├── reporting/               # draft·validator·judge·PDF
-│   ├── prompts/                 # 버전 관리되는 prompt
-│   └── cli.py                   # 최종 runner 진입점 제안
-├── data/
-│   ├── manifests/               # 공개 가능한 corpus metadata
-│   └── local/                   # 허용된 원문·index, git 제외 제안
-├── tests/
-│   ├── fixtures/                # 가상/재배포 허용 자료; 출처 표기
-│   ├── unit/
-│   ├── contract/
-│   ├── integration/
-│   └── evals/                   # retrieval·report 평가
-└── outputs/                     # run별 산출물, git 제외 제안
-```
+채택한 디렉터리 구조와 폴더별 담당 WP는 [CONTRIBUTING.md](../../CONTRIBUTING.md#폴더-구조와-담당-wp)에 있다.
 
-Python 버전, 의존성 버전, vector store, LLM provider/model, PDF renderer, 패키지 도구는 아직 확정되지 않았다. 환경을 추측해 설치 명령을 적지 않는다. WP1이 설치·fixture 실행·테스트 명령을 실제로 검증한 뒤 루트 README Usage에 기입한다.
+패키지·lint·테스트 도구는 uv·ruff·pytest로 정했다([개발 환경](../../CONTRIBUTING.md#개발-환경)). Python 버전, 의존성 버전, vector store, LLM provider/model, PDF renderer는 아직 확정되지 않았다. 환경을 추측해 설치 명령을 적지 않는다. WP1이 설치·fixture 실행·테스트 명령을 실제로 검증한 뒤 루트 README Usage에 기입한다.
 
 ## 3. 구현 순서와 병렬화
 
@@ -185,7 +154,7 @@ Markdown 줄 수나 토큰 수로 PDF 페이지 준수를 선언하지 않는다
 - 변경을 검증하는 자동 테스트와 실제 실행 로그가 있다.
 - 외부 자료·fixture·실행 예시를 구분하며 가짜 fixture를 실측으로 표시하지 않는다.
 - 공통 schema/정책 변경은 영향받는 소비자·문서·테스트를 함께 변경한다.
-- 다른 팀원이 검토하고 중요한 지적을 해결했다.
+- 리뷰는 선택이다. 리뷰를 요청했다면 중요한 지적을 해결했다.
 - 실행하지 못한 테스트·API·기능은 실패/미검증 사유를 명시한다.
 - 비밀·재배포 불가 원문·생성 index·대용량 output을 실수로 commit하지 않는다.
 
