@@ -15,7 +15,7 @@
 | WP3 Evidence / RAG | 미정 / 미정 | 코퍼스 manifest, 추출·chunk·embedding·검색, 근거 병합 | Source/Chunk/Evidence, retrieve adapter, 모델 비교 기록 | 200페이지 gate와 실제 검색→평가 연결 증거 |
 | WP4 Evaluation / Rubrics | 미정 / 미정 | Founder/Market/Technology/Moat rubric·prompt·구조화 출력 | 영역별 Evaluation과 rubric fixtures | 근거 없는 rating 거절, missing·상충·다른 기업 오염 테스트 |
 | WP5 Finance / Scoring | 미정 / 미정 | Traction/Deal Terms rubric·평가, deterministic score·decision | 여섯 영역 집계 계약, 정책, 숫자·라벨 테스트 | 비중·결측·저점수·임계값·단위 테스트 통과 |
-| WP6 Reports / Integration QA | 미정 / 미정 | ReportInput, 생성·구조·의미 검증, PDF, README, 제출 묶음 | Markdown/PDF renderer, validation manifest, 재현 절차 | 5페이지·SUMMARY·REFERENCE·근거 일치 및 clean run 확인 |
+| WP6 Reports / Integration QA | 미정 / 미정 | ReportInput/ReportContext, 생성·구조·의미 검증, PDF, README, 제출 묶음 | Markdown/PDF renderer, validation manifest, 재현 절차 | 5페이지·SUMMARY·REFERENCE·근거 일치 및 clean run 확인 |
 
 `contracts/`와 Graph 공통 wiring의 소유자는 WP1로 둔다. 다른 WP가 공통 타입을 바꿀 때는 소비하는 WP와 먼저 합의하고 fixture를 함께 바꾼다. 재무 Evidence 수집은 WP3의 adapter 계약을 사용하고 WP5가 의미·단위 검증을 소유한다.
 
@@ -111,23 +111,27 @@ WP1이 예산 제한을 적용한 runner로 통합한다. WP6는 real Report Gen
 | T02 | policy / 가중치 | criterion ID 유일, 합 100, 영역 합 일치 | WP5 |
 | T03 | policy / 경계·우선순위 | scoring 문서 fixture와 임계값 모두 일치 | WP5 |
 | T04 | identity / 회사·단계 | 동명 기업 분리, TIPS/unknown 자동 적격 금지, Exit 제외 | WP2 |
-| T05 | merge / 재실행 | 동일 payload 재삽입 idempotent, 동일 ID 충돌 오류 | WP1/WP3 |
-| T06 | graph / 병렬 합류 | 다섯 결과 모두 수집; 이전 세대·다른 후보 결과 무효 | WP1 |
-| T07 | graph / 재조사 | 사전 coverage+사후 gap이 같은 후보 예산 사용, 무한 loop 없음 | WP1 |
-| T08 | graph / 후보 이동 | WATCHLIST/PASS 다음 후보, 첫 추천에서 종료, index 중복 증가 없음 | WP1 |
+| T05 | merge / 재실행 | Web→RAG 재발견은 하나의 Evidence와 두 provenance로 병합; confidence·criterion 등 해석 차이는 병합 규칙 적용; 재삽입 멱등, 식별 core 충돌은 오류, 기존 snapshot 불변 | WP1/WP3 |
+| T06 | graph / 병렬 합류 | 다섯 terminal result 모두 수집; 이전 세대·다른 후보 결과 무효 | WP1 |
+| T07 | graph / 재조사 | 사전/사후 gap이 후보별 예산 공유; 후보 A 사용량이 B의 최초 0을 소진하지 않으며 후보 이동 후에도 A count·이력 보존 | WP1 |
+| T08 | graph / 후보 이동 | WATCHLIST/PASS 다음 후보, 첫 추천에서 선택 outcome·나머지 not_evaluated 기록 후 single_candidate ReportInput, index 중복 증가 없음 | WP1 |
 | T09 | graph / 후보 고갈 | 0건·전부 부적격·전부 unknown·전부 비추천 각각 설명된 결과 | WP1/WP6 |
 | T10 | adapter / 실패 | 0건/401·403/timeout 구별, bounded retry, 인증 실패 반복 금지 | WP2/WP3 |
 | T11 | corpus / 페이지 | 전체 200 허용, 201 거절, 미상·미승인·교체 문서 검색 제외 | WP3 |
-| T12 | RAG / 귀속 | 회사·industry scope·as_of 필터; 잘못된 회사 근거로 평가하지 않음 | WP3/WP4 |
-| T13 | RAG / 실사용 | retrieve chunk_id → Evidence → 기술 평가 → 보고서 citation trace | WP3/WP6 |
+| T12 | RAG / 귀속 | 같은 query·기업·corpus에 서로 다른 as_of를 전달해 cutoff와 cache 격리 확인; 다른 기업/미허용 Source/날짜 미상 미래 snapshot 제외 | WP3/WP4 |
+| T13 | RAG / 실사용 | 실제 retrieval_id/chunk_id → rag provenance → 평가 snapshot의 Evidence → 기술 평가 → 보고서 citation; 사후 rag 표기만으로 통과 금지 | WP3/WP6 |
 | T14 | report / 인용 | Evidence·Source 연결, 실제 인용과 REFERENCE 정확히 일치 | WP6 |
 | T15 | report / 사실성 | 없는 수치·출처·단위 혼합·추정의 사실화 탐지 | WP5/WP6 |
-| T16 | report / 수정 예산 | 구조+의미+layout 공통 한도, 소진 시 failed와 draft 보존 | WP1/WP6 |
+| T16 | report / 수정 예산 | 구조+의미 revise+layout 공통 한도; Judge fail은 즉시 failed, revise만 재수정; draft·오류 보존 | WP1/WP6 |
 | T17 | PDF / 형식 | 실제 PDF ≤5페이지, SUMMARY ≤반 페이지, 표·인용 잘림 없음 | WP6 |
 | T18 | security / untrusted content | 문서의 prompt injection 무시, key 누출 없음, private URL fetch 차단 | WP1/WP3 |
 | T19 | reproducibility / 재실행 | lock·설정·corpus·모델·prompt·policy 기록으로 clean run 가능 | 전원 |
 | T20 | budget / 조기 실패 | 시간·호출·비용 제한에서 새 호출 중지, 미완성 결과를 final로 표시하지 않음 | WP1 |
 | T21 | finance / 런웨이 단위 | 월·연 현금소모 구별, 환산 provenance 필수, 0 이하 분모·기간 불일치에서 임의 개월 수 생성 금지 | WP5 |
+| T22 | graph / 평가 failure | 4 success+1 failure와 직렬 Deal Terms failure 각각 집계 없이 후보 archive → advance; missing과 구별 | WP1/WP4/WP5 |
+| T23 | report / context 참조 | 누락된 Source·다른 세대 점수·없는 decision ID 거절; 실제 payload만으로 생성/검증 가능, upstream 오류는 fail | WP1/WP6 |
+| T24 | discovery / 출처 전달 | DiscoveryBundle 모든 discovery_source_ids 해소; 후속 Company Research 실패 후에도 발견 Source·이력 보존 | WP1/WP2 |
+| T25 | snapshot / 불변성 | 근거·provenance 추가 후 이전 snapshot 불변, 새 세대에서만 보임; superseded/파생 입력 무효화·참조 폐쇄성 확인; 누락·적격성 근거 무효화는 SNAPSHOT_INVALID로 해당 후보만 archive | WP1/WP3 |
 
 unit/contract 테스트는 네트워크 없이 실행한다. live integration은 명시적 설정과 예산이 있을 때만 실행하고, 미설정 시 skipped 사유를 남긴다. 외부 LLM 출력의 완전 동일성은 보장하지 않지만, 점수 함수·분기·근거 추적 계약은 동일하게 검증한다.
 
@@ -166,8 +170,8 @@ Reference 양식은 원문 §9.3을 따른다.
 
 ### 검증 순서
 
-1. schema·필수 섹션 순서·점수·Evidence ID·Reference의 deterministic 검사.
-2. Semantic Judge가 근거가 실제 주장을 뒷받침하는지 확인하고 위치별 feedback 생성.
+1. 먼저 ReportContext의 참조 폐쇄성·세대·policy를 검증한다. 같은 context로 생성한 draft의 schema·필수 섹션·점수/판정·인용·Reference를 deterministic하게 대조한다.
+2. Semantic Judge가 같은 context의 실제 근거·평가로 문장을 확인한다. 수정 가능한 문장 문제는 revise, context/upstream 오류는 fail이며 보고서 재작성으로 원래 평가를 바꾸지 않는다.
 3. 고정 A4 템플릿·폰트·여백으로 PDF 렌더링.
 4. PDF parser로 실제 페이지 수, 렌더러 좌표 또는 페이지 이미지로 SUMMARY 점유 영역 확인.
 5. 사람이 표/한글 폰트/페이지 넘김/잘린 URL·인용을 눈으로 검토.

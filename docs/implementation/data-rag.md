@@ -79,9 +79,9 @@ Chunk 크기·overlap·top_k는 실험 설정으로 기록한다. 원문에 없�
 
 **검색 순서 제안**
 
-1. 승인된 corpus_version, 대상 기업 또는 관련 industry scope, 실행 as_of 조건으로 후보 Chunk를 제한한다.
+1. collector는 query·candidate_id·corpus/index_version·as_of·top_k·allowed_source_ids를 담은 `RetrievalRequest`를 만든다([공통 계약](contracts.md)). 승인된 manifest에서 대상 기업과 관련 industry 출처를 선택하고, 검색 adapter는 그 허용 목록과 실행 기준일을 함께 적용한다. 같은 질의라도 as_of가 다르면 별도 검색/cache 항목이다.
 2. 같은 embedding 모델·revision·차원으로 query와 document를 표현한다.
-3. dense 검색 결과를 반환하고 source/chunk/page metadata를 보존한다.
+3. dense 검색 결과를 반환하고 source/chunk/page metadata와 RetrievalRecord를 보존한다. Web→RAG 재발견은 [EvidenceProvenance 병합 계약](contracts.md)으로 추적하며 근거의 내용과 수집 경로를 분리한다.
 4. 특허를 실제 범위에 넣는 단계에서는 원문 요구대로 keyword/sparse 검색과 merge·reranking을 추가한다. dense-only 상태를 특허 hybrid 구현 완료로 표현하지 않는다.
 5. 검색 결과의 숫자는 LLM 구조화 추출 + 코드 검증으로 Evidence에 옮긴다. similarity 값은 CAGR·수익률·신뢰도 점수가 아니다.
 
@@ -132,7 +132,7 @@ Hit Rate@K / MRR@K / latency / memory / cost: [실측 후 입력]
 
 ## 6. 데이터 품질과 보안 게이트
 
-- 미래 정보 혼입 방지를 위해 `as_of` 이후 사건/발행 자료를 별도로 처리한다. 역사적 평가에서 사용할 수 없는 자료를 최신 자료라는 이유로 끼워 넣지 않는다.
+- `RetrievalRequest.as_of` 이후 발행·공개된 source snapshot은 평가 근거에서 제외한다. 날짜 미상 자료는 해당 시점 이전에 확보한 불변 snapshot 등 이용 가능성을 확인할 수 없으면 historical 검색에서 제외한다. 최신 편집본을 과거 발행일만 보고 통과시키지 않는다. 기준일 이전 공개된 전망은 미래 기간을 예측한다는 사실을 명시하고, 기준일 이후의 실제 사건·성과를 과거에 완료된 사실로 사용하지 않는다. live Web/API Evidence에도 같은 기준일 정책을 적용한다.
 - 회사명·논문 저자·특허 권리자 식별이 모호하면 자동 귀속하지 않는다.
 - 상충하는 최신/과거 정보는 둘 다 보존하고 사건일·문서 신뢰성에 따라 해소 이유를 남긴다.
 - API key는 환경 또는 secret store에 둔다. `.env.example`에는 이름과 설명만, 테스트에는 가짜 값만 넣는다.

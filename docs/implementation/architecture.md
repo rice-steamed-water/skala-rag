@@ -32,31 +32,43 @@ flowchart TD
     coverage -->|gaps and budget available| target[Targeted Research]
     target --> merge[Evidence Merge]
     merge --> coverage
-    snapshot --> founder[Founder Evaluation]
-    snapshot --> market[Market Evaluation]
-    snapshot --> technology[Technology Evaluation]
-    snapshot --> moat[Moat Evaluation]
-    snapshot --> traction[Traction Evaluation]
+    snapshot --> snapok{Snapshot valid?}
+    snapok -->|invalid| archive
+    snapok -->|yes| founder[Founder Evaluation]
+    snapok -->|yes| market[Market Evaluation]
+    snapok -->|yes| technology[Technology Evaluation]
+    snapok -->|yes| moat[Moat Evaluation]
+    snapok -->|yes| traction[Traction Evaluation]
     founder --> join[Evaluation Join: all five]
     market --> join
     technology --> join
     moat --> join
     traction --> join
-    join --> deal[Deal Terms Evaluation]
-    deal --> gaps{Unresolved gaps and budget?}
+    join --> evalok{All five successful?}
+    evalok -->|yes| deal[Deal Terms Evaluation]
+    evalok -->|no| archive
+    deal --> dealok{Deal Terms successful?}
+    dealok -->|yes| gaps{Unresolved gaps and budget?}
+    dealok -->|no| archive
     gaps -->|yes| target
     gaps -->|no| aggregate[Score Aggregator]
     aggregate --> decision[Decision Policy + LLM explanation]
     decision --> route{Label}
-    route -->|RECOMMEND| report[Report Generator]
+    route -->|RECOMMEND| finalize[Record selection + ReportInput]
+    finalize --> prepare[Build ReportContext]
     route -->|WATCHLIST or PASS| archive
     archive --> advance[Advance Candidate Index]
     advance --> left
-    summary --> report
+    summary --> prepare
+    prepare --> contextok{Context valid?}
+    contextok -->|yes| report[Report Generator]
+    contextok -->|no| failed
     report --> structure{Structural Validator}
     structure -->|valid| judge{Semantic Judge}
-    structure -->|invalid| retry{Revision budget?}
+    structure -->|draft invalid| retry{Revision budget?}
+    structure -->|context invalid| failed
     judge -->|revise| retry
+    judge -->|fail| failed
     retry -->|yes| report
     retry -->|no| failed[Failed: preserve draft and errors]
     judge -->|pass| render[Render PDF]
@@ -73,26 +85,28 @@ flowchart TD
 
 | 노드 | 읽기 | 쓰기 / 완료 조건 |
 | --- | --- | --- |
-| Discovery | theme, 국가/언어 범위, 후보 상한 | 출처가 있는 원시 후보; 검색 실패와 0건 구별 |
+| Discovery | theme, 국가/언어 범위, 후보 상한 | DiscoveryBundle의 후보와 Source payload를 저장; discovery_source_ids 참조 확인, 검색 실패와 0건 구별 |
 | Normalize | 원시 후보 | `Candidate[]`; 동일 법인 중복 제거, 동명이인 임의 병합 금지 |
 | Select Candidate | candidates, candidate_index | current_candidate_id, 후보 상태; 리스트 밖 접근 방지 |
 | Company Research | Candidate, 수집 도구 | CompanyProfile, StageInfo, Evidence, RetrievalRecord |
 | Eligibility | CompanyProfile와 관련 Evidence | `eligible/ineligible/unknown`; 각 조건의 이유·근거 |
 | Evidence Collector | 후보, 평가 기준, 문서 manifest | 검증된 Evidence와 수집 기록; 실제 RAG 호출 포함 |
 | Coverage | criterion catalog, 후보 Evidence | CoverageResult와 ResearchGap; 판단 기준은 scoring 문서 |
-| Targeted Research / Merge | 구체적인 gap, 잔여 예산 | 신규 Evidence만 병합; 실질적 근거 변경 시 evidence_revision 증가 |
-| Freeze Evidence Revision | 현 후보 근거·평가 정책 | 평가 세대 번호 증가, 불변 근거 snapshot 선택 |
-| 5 Evaluation Nodes | 같은 후보·세대·근거 snapshot | 각자의 `Evaluation` 한 건; missing도 명시적 결과 |
-| Evaluation Join | 해당 세대의 다섯 결과 | 모두 수집·검증. 하나라도 누락되면 집계 진입 금지 |
-| Deal Terms Evaluation | 같은 근거 snapshot, 투자조건 rubric | 여섯 번째 영역 Evaluation. 거래 사실은 Evidence에서만 읽음 |
+| Targeted Research / Merge | 구체적인 gap, 잔여 예산 | 신규 Evidence와 새 수집 provenance 병합; snapshot에서 보이는 내용/경로가 바뀌면 evidence_revision 증가 |
+| Freeze Evidence Revision | 현 후보 근거·평가 정책·Source/Chunk/수집 기록, 최종 EligibilityResult | 세대 증가 후 EvaluationSnapshot payload 복사·참조 검증·저장; 이후 불변. 참조 누락 또는 적격성 근거 무효화는 `SNAPSHOT_INVALID`로 해당 후보 failed → archive → advance |
+| 5 Evaluation Nodes | 같은 후보·세대·근거 snapshot | wrapper가 각자의 `EvaluationResult` 반환; 자료 missing과 기술 failure 구별 |
+| Evaluation Join | 해당 세대의 다섯 terminal result | 모두 성공일 때만 evaluations 저장. failure가 있으면 후보 failed → archive → advance; 누락은 전체 timeout/오류 처리 |
+| Deal Terms Evaluation | 같은 근거 snapshot, 투자조건 rubric | 여섯 번째 영역 EvaluationResult. 성공 저장 후 gap 검사, 실패 시 집계 없이 후보 archive |
 | Missing Check | 여섯 평가 결과, 조사 예산 | 재조사할 gap 합집합 또는 집계 진입 |
 | Score Aggregator | 여섯 영역, 승인된 정책 | ScoreSummary; 순수 함수로 구현 |
 | Decision Policy + 설명 | ScoreSummary, Eligibility | 정책이 label 결정, LLM은 근거·리스크·한계 서술만 추가 |
 | Candidate Archive / Advance | 판정 또는 적격성·오류 사유 | 후보 결과 보존; index를 정확히 한 번 증가 |
-| Summary | 종료된 후보 결과 전체 | 추천 없음 또는 조사 미완료를 구별한 ReportInput |
-| Report Generator | 검증된 ReportInput, 직전 feedback | ReportDraft; 새 사실을 생성하지 않고 근거 인용 |
-| Structural Validator | ReportDraft, Evidence, Reference | 필수 섹션·schema·인용·점수 일치 검증 |
-| Semantic Judge | draft, 사용 근거, 평가 결과 | ReportJudgement; 근거 없는 주장과 모순의 위치·수정 지시 |
+| Record selection + ReportInput | RECOMMEND 판정, 후보 결과 이력 | 선택 후보 outcome·selected_candidate_id 기록, 미처리 후보 `not_evaluated` outcome 기록, `single_candidate` ReportInput 생성 |
+| Summary | 종료된 후보 결과 전체 | 추천 없음 또는 조사 미완료를 구별한 `no_recommendation` ReportInput |
+| Build ReportContext | ReportInput, 최종 State의 평가/판정·snapshot·출처 | 모든 참조를 해소한 payload context 고정. 불완전/모순이면 CONTEXT_INVALID로 실패 |
+| Report Generator | 검증된 ReportContext, 직전 feedback | ReportDraft; context의 실제 근거·서지정보만 사용 |
+| Structural Validator | ReportDraft, 같은 ReportContext, 승인 policy | 섹션·schema·인용·Reference와 원래 점수/판정 일치 검증 |
+| Semantic Judge | draft, 같은 ReportContext | 원래 평가·실제 근거와 대조해 pass/revise/fail. upstream 오류는 fail |
 | PDF Renderer / Layout Validator | 검증된 draft, 고정 템플릿 | PDF와 페이지/요약영역 검증; 렌더링 실패는 완료가 아님 |
 
 ## 4. 병렬 실행과 데이터 소유권
@@ -100,10 +114,10 @@ flowchart TD
 원문은 공유 State의 dictionary에 `operator.or_`, 이력에 `operator.add`를 제안한다. 실제 구현에서는 **동일 키 충돌과 재실행**을 먼저 다룬다.
 
 - 후보는 직렬, Founder / Market / Technology / Moat / Traction만 병렬로 시작한다.
-- 평가 노드는 `evaluations`에 자신의 key만 반환한다. `current_candidate_id`, index, retry count, 공통 gap 목록을 동시에 수정하지 않는다.
-- 모든 branch는 같은 `candidate_id`, `evaluation_round`, `evidence_revision`을 읽는다.
-- 합류는 **이번 세대의 다섯 결과**를 기다린다. 과거 세대 결과가 dictionary에 있다는 이유로 통과하지 않는다.
-- 평가가 끝나면 합류 노드가 gap을 단독 생성한다. 그 뒤 투자조건 결과를 추가하고 여섯 영역을 확인한다.
+- 평가 wrapper는 `evaluation_results`에 자신의 key와 terminal result만 반환한다. `current_candidate_id`, index, retry count, 공통 gap 목록, 성공 `evaluations`를 동시에 수정하지 않는다. 오류 객체도 failure envelope로 보내 join controller가 State.errors에 기록한다.
+- 모든 branch는 같은 `candidate_id`, `evaluation_round`, `evidence_revision`, `snapshot_id`와 그 payload 복사본을 읽는다. 현재 State.evidence를 다시 읽어 snapshot에 없는 근거를 끼워 넣지 않는다.
+- 합류는 **이번 세대의 다섯 terminal result**를 기다린다. 다섯 성공일 때만 평가 결과를 승격하고, 하나라도 failure이면 후보를 실패 처리한다. 과거 세대 결과가 dictionary에 있다는 이유로 통과하지 않는다.
+- 다섯 성공을 확인한 합류 노드가 gap을 단독 생성한다. 직렬 투자조건 controller가 여섯 번째 성공 결과와 gap을 추가한다. 어느 단계의 기술 실패도 일부 점수 집계로 이어지지 않는다.
 - 재조사 후 MVP는 다섯 노드 전체와 투자조건을 새 세대로 다시 평가한다. 영향 영역만 재평가하는 최적화는 나중에 한다.
 
 **공식 API 확인 [LG1, LG2]:** State의 각 key는 reducer에 따라 갱신된다. 여러 시작 노드 이름을 받는 `add_edge([...], end)`는 모든 시작 노드 완료를 기다린다. 고정 다섯 노드 합류는 이 형태로 표현하고, 실제 설치 버전의 통합 테스트로 동작을 확인한다.
@@ -116,7 +130,7 @@ builder.add_edge(
 )
 ```
 
-dictionary의 겹치는 key를 조용히 덮어쓰는 reducer 대신, 동일 ID·동일 payload는 무시하고 동일 ID·다른 payload는 오류로 만드는 merge를 제안한다. 새로운 평가에는 새로운 세대 key를 부여한다. 전체 State를 반환하지 말고 변경 부분만 반환한다.
+일반 결과 map은 동일 ID·동일 payload 재삽입을 무시하고, 동일 ID·다른 payload는 오류로 처리한다. **Evidence는 동일 core에서 provenance 집합 병합을 허용하고, Source는 같은 core의 최초 수집 시각을 보존하는 예외**를 둔다([계약 §3](contracts.md)). 신규 RAG 경로가 추가되면 새 snapshot 세대에 반영하되 기존 snapshot은 변경하지 않는다. 새로운 평가에는 새로운 세대 key를 부여한다. 전체 State가 아닌 변경 부분만 반환한다.
 
 ## 5. 반복 예산과 종료 — D08 제안
 
@@ -151,7 +165,11 @@ Graph 전체 step 제한은 보조 안전장치다. 이를 정상 종료 정책�
 | 일부 보조 도구 실패 | failure를 기록하고 대체 근거만 사용. 신뢰도를 지어내지 않음 |
 | 핵심 RAG 미구축 / 정책 미승인 / 필수 provider 전부 실패 | 정상 투자 결과 대신 workflow failed; 진단 산출물 보존 |
 | LLM 출력 schema 오류 | 제한된 구조 수정 1회 제안; 계속 실패하면 실패 표시. 검증 실패를 0점으로 대체하지 않음 |
-| 평가 branch 실패 | 합류 controller가 후보 실패를 기록하고 다음 후보; 일부 결과만으로 추천 금지 |
+| 평가 branch 실패 | wrapper가 failure envelope 반환, join이 오류를 저장하고 후보 archive → advance; 일부 성공만으로 추천 금지 |
+| 직렬 Deal Terms 실패 | 같은 failure envelope를 직렬 controller가 저장하고 후보 archive → advance; 집계 금지 |
+| Semantic Judge `fail` | 재수정으로 보내지 않고 workflow failed, draft·findings·오류 보존. `revise`만 공유 수정 예산 사용 |
+| 평가 snapshot 참조 누락 / 적격성 근거 무효화 | `SNAPSHOT_INVALID` 오류 저장, 해당 후보만 failed → archive → advance. 불완전 snapshot으로 평가 LLM을 호출하지 않음 |
+| 보고서 context 참조 불일치 또는 upstream 평가·점수 오류 | CONTEXT_INVALID/UPSTREAM_INVALID로 workflow failed. 보고서 loop가 upstream 사실·평가·점수를 수정하지 않음 |
 | PDF 렌더러 실패 | 원인 기록, 일시 실패면 도구 재시도 적용. 최종 실패는 workflow failed |
 | 실행 총예산/시간 소진 | 신규 호출 중지, 현재 결과·오류 보존, workflow failed. 검증되지 않은 보고서는 draft |
 
