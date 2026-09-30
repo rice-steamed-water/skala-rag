@@ -134,11 +134,18 @@ record. Unknown usage/cost remains unknown. The shared ledger can be reused acro
 all tools; adapters do not construct a second ledger.
 
 The approved transient retry backoff is 1/2 seconds with at most two additional
-attempts; authentication never retries. The runtime has no Retry-After field.
-On any HTTP error carrying Retry-After the bridge stops with nonretryable
-TOOL_NOT_CONFIGURED, consuming the one request already made. It does not sleep,
-retry, or claim full Retry-After compliance. Runtime support remains necessary
-before that path can be enabled. Live Discovery is still rejected unconditionally;
+attempts; authentication never retries, even with malformed Retry-After.
+Merged #122 supplies `parse_retry_after` and frozen `RetryAfter` metadata. The
+bridge passes the same injected `runtime.clock` to its single-attempt transport;
+the bridge constructor remains compatible, while direct `TavilySingleAttempt`
+construction now requires an explicit clock (no default clock is created).
+On retryable 429/5xx responses it captures delta-seconds/HTTP-date at response
+arrival, before body processing, and passes normalized metadata to `http_failure`.
+Malformed retryable headers fail closed as TOOL_RESPONSE_INVALID without raw
+headers or exception text. Runtime alone waits for the maximum of policy backoff
+and remaining provider minimum, subtracts processing elapsed time, checks deadline
+before/after sleep, and accounts once per physical request. The bridge has no
+sleep or retry loop. Live Discovery is still rejected unconditionally;
 bridge live gates additionally require approvals, deadline, bounded ledger and
 priced allowance. Missing prices/readiness are not supplied by fixtures.
 

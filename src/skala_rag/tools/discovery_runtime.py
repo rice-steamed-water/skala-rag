@@ -10,6 +10,7 @@ from typing import Literal
 import httpx
 
 from skala_rag.contracts.error_codes import ErrorCode
+from skala_rag.contracts.interfaces import Clock
 from skala_rag.contracts.tools import ToolBudget, ToolResult
 from skala_rag.tools.discovery_live import ProviderResponse
 from skala_rag.tools.runtime import (
@@ -21,6 +22,7 @@ from skala_rag.tools.runtime import (
     TransportFailure,
     Usage,
     http_failure,
+    parse_retry_after,
 )
 
 
@@ -30,6 +32,7 @@ class TavilySingleAttempt:
     api_key: str = field(repr=False)
     payload: dict = field(repr=False)
     schema_version: str
+    clock: Clock = field(repr=False)
     retry_owner: Literal["runtime"] = field(default="runtime", init=False)
 
     def __call__(self, *, timeout_seconds: float) -> AttemptResponse[ProviderResponse]:
@@ -40,14 +43,22 @@ class TavilySingleAttempt:
             timeout=timeout_seconds,
             follow_redirects=False,
         )
-        # Shared runtime has no Retry-After channel. Never retry sooner than a
-        # provider minimum: stop non-retryably rather than add a second owner.
         if response.status_code >= 400:
-            if "Retry-After" in response.headers:
-                raise TransportFailure(ErrorCode.TOOL_NOT_CONFIGURED)
+            # Authentication and provider budget errors never consume retry metadata.
+            if response.status_code in (401, 403):
+                raise http_failure(response.status_code)
             if response.status_code in (432, 433):
                 raise TransportFailure(ErrorCode.BUDGET_EXHAUSTED)
-            raise http_failure(response.status_code)
+            failure = http_failure(response.status_code)
+            if response.status_code == 429 or 500 <= response.status_code <= 599:
+                # Capture at response arrival, before body parsing or postprocessing.
+                failure = http_failure(
+                    response.status_code,
+                    retry_after=parse_retry_after(
+                        response.headers.get("Retry-After"), clock=self.clock
+                    ),
+                )
+            raise failure
         if response.status_code != 200:
             raise TransportFailure(ErrorCode.TOOL_RESPONSE_INVALID)
         try:
@@ -93,6 +104,10 @@ class TavilyRuntimeBridge:
             readiness=self.readiness,
             allowance=self.allowance,
             transport=TavilySingleAttempt(
-                self.client, self.api_key, payload, self.context.schema_version
+                self.client,
+                self.api_key,
+                payload,
+                self.context.schema_version,
+                clock=self.runtime.clock,
             ),
         )

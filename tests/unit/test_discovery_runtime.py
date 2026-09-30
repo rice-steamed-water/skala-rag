@@ -110,13 +110,27 @@ def test_failure_spends_once_without_auth_retry(status, code):
     assert ledger.snapshot()["calls"] == 1
 
 
-def test_retry_after_fails_closed_without_retry():
+@pytest.mark.parametrize("header", ["20", "Wed, 30 Sep 2026 00:00:20 GMT"])
+def test_retry_after_minimum_and_runtime_clock(header):
+    from datetime import timedelta
+
     bridge, budget, ledger = build(
-        lambda r: httpx.Response(429, headers={"Retry-After": "20"}), retries=2
+        lambda r: httpx.Response(429, headers={"Retry-After": header}), retries=2
     )
+    now = [bridge.runtime.clock.now()]
+    bridge.runtime.clock.now = lambda: now[0]
+    delays = []
+
+    def sleep(delay):
+        delays.append(delay)
+        now[0] += timedelta(seconds=delay)
+
+    bridge.runtime.sleep = sleep
     result = bridge({}, budget)
-    assert result.errors[0].error_code == "TOOL_NOT_CONFIGURED"
-    assert ledger.snapshot()["calls"] == 1
+    assert result.errors[0].error_code == "TOOL_RATE_LIMITED"
+    assert delays == ([20, 20] if header == "20" else [20, 2])
+    assert len(result.retrieval_records) == 3
+    assert ledger.snapshot()["calls"] == 3
 
 
 @pytest.mark.parametrize("kind", ["invalid", "timeout", "exception"])
@@ -167,3 +181,116 @@ def test_live_without_approvals_deadline_price_or_limits_never_sends():
     bridge, budget, ledger = build(lambda r: pytest.fail("live forbidden"), mode="live")
     assert bridge({}, budget).errors[0].error_code == "TOOL_NOT_CONFIGURED"
     assert ledger.snapshot()["calls"] == 0
+
+
+@pytest.mark.parametrize("status", [401, 403, 429, 503])
+def test_malformed_retry_after_redacted_and_auth_precedence(status):
+    bridge, budget, ledger = build(
+        lambda r: httpx.Response(status, headers={"Retry-After": "SECRET-invalid"}),
+        retries=2,
+    )
+    result = bridge({}, budget)
+    expected = "TOOL_AUTH_FAILED" if status in (401, 403) else "TOOL_RESPONSE_INVALID"
+    assert result.errors[0].error_code == expected
+    assert "SECRET" not in result.model_dump_json()
+    assert ledger.snapshot()["calls"] == 1
+    assert len(result.retrieval_records) == 1
+
+
+@pytest.mark.parametrize("header", ["0", "Wed, 30 Sep 2026 00:00:00 GMT"])
+def test_retry_after_policy_maximum_and_no_early_request(header):
+    from datetime import timedelta
+
+    requests = []
+    bridge, budget, ledger = build(
+        lambda r: (
+            requests.append(bridge.runtime.clock.now())
+            or httpx.Response(
+                503 if len(requests) < 3 else 200,
+                headers={"Retry-After": header},
+                json={"results": []},
+            )
+        ),
+        retries=2,
+    )
+    now = [bridge.runtime.clock.now()]
+    bridge.runtime.clock.now = lambda: now[0]
+    delays = []
+
+    def sleep(delay):
+        delays.append(delay)
+        now[0] += timedelta(seconds=delay)
+
+    bridge.runtime.sleep = sleep
+    assert bridge({}, budget).status == "ok"
+    assert delays == [1, 2]
+    assert [(t - requests[0]).total_seconds() for t in requests] == [0, 1, 3]
+    assert ledger.snapshot()["calls"] == 3
+
+
+@pytest.mark.parametrize("oversleep", [False, True])
+def test_retry_after_deadline_before_and_after_sleep(oversleep):
+    from datetime import timedelta
+
+    bridge, budget, ledger = build(
+        lambda r: httpx.Response(429, headers={"Retry-After": "5"}), retries=2
+    )
+    now = [bridge.runtime.clock.now()]
+    bridge.runtime.clock.now = lambda: now[0]
+    budget = budget.model_copy(
+        update={"deadline": now[0] + timedelta(seconds=6 if oversleep else 5)}
+    )
+    delays = []
+
+    def sleep(delay):
+        delays.append(delay)
+        now[0] += timedelta(seconds=10)
+
+    bridge.runtime.sleep = sleep
+    result = bridge({}, budget)
+    assert result.errors[0].error_code == "BUDGET_EXHAUSTED"
+    assert delays == ([5] if oversleep else [])
+    assert ledger.snapshot()["calls"] == 1
+    assert len(result.retrieval_records) == 1
+
+
+def test_retry_after_processing_elapsed_subtracted(monkeypatch):
+    from datetime import timedelta
+
+    import skala_rag.tools.discovery_runtime as module
+
+    bridge, budget, ledger = build(
+        lambda r: httpx.Response(429, headers={"Retry-After": "5"}), retries=1
+    )
+    now = [bridge.runtime.clock.now()]
+    bridge.runtime.clock.now = lambda: now[0]
+    original = module.parse_retry_after
+
+    def parse(value, *, clock):
+        assert clock is bridge.runtime.clock
+        metadata = original(value, clock=clock)
+        now[0] += timedelta(seconds=3)
+        return metadata
+
+    monkeypatch.setattr(module, "parse_retry_after", parse)
+    delays = []
+
+    def sleep(delay):
+        delays.append(delay)
+        now[0] += timedelta(seconds=delay)
+
+    bridge.runtime.sleep = sleep
+    result = bridge({}, budget)
+    assert delays == [2]
+    assert result.errors[0].error_code == "TOOL_RATE_LIMITED"
+    assert len(result.retrieval_records) == 2
+    assert ledger.snapshot()["calls"] == 2
+
+
+def test_retry_after_undersleep_never_sends_early():
+    bridge, budget, ledger = build(
+        lambda r: httpx.Response(429, headers={"Retry-After": "5"}), retries=2
+    )
+    result = bridge({}, budget)
+    assert result.errors[0].error_code == "TOOL_FAILED"
+    assert ledger.snapshot()["calls"] == 1
