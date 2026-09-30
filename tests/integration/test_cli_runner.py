@@ -26,8 +26,8 @@ def test_fixture_artifacts_have_valid_hashes_and_no_final(tmp_path):
     assert manifest.run_input.execution_mode == "fixture"
     assert manifest.usage["external_requests"] == 0
     assert manifest.usage["fixture_evaluation_branches"] == 10
-    assert manifest.workflow_status == "running"
-    assert manifest.run_outcome is None
+    assert manifest.workflow_status == "failed"
+    assert manifest.run_outcome == "technical_failure"
     assert not manifest.validation_results
     assert not (destination / "report.md").exists()
     for artifact in manifest.artifacts.values():
@@ -92,3 +92,48 @@ def test_live_config_and_policy_mismatch_refuse_without_artifacts(tmp_path):
             config_path=path,
         )
     assert not (tmp_path / "outputs").exists()
+
+
+def test_injected_warning_persists_draft_findings_and_terminal_manifest(tmp_path):
+    from tests.unit.test_run_finalization import completion
+
+    destination = run(
+        "robotics",
+        output_dir=tmp_path,
+        policy_path="configs/scoring.v3.json",
+        catalog_path="configs/scoring.draft.json",
+        config_path=CONFIG,
+        report_adapter=lambda result: completion(revisions=2, verdict="revise"),
+    )
+    manifest = RunManifest.model_validate_json(
+        (destination / "manifest.json").read_text()
+    )
+    receipt = json.loads((destination / "run-result.json").read_text())
+    assert manifest.workflow_status == "completed"
+    assert manifest.usage["report_revisions"] == 2
+    assert manifest.validation_results["semantic"].verdict == "revise"
+    assert receipt["exit_code"] == 2 and receipt["warnings"]
+    assert (
+        not receipt["publication_allowed"] and not (destination / "report.md").exists()
+    )
+    assert (destination / "draft.md").read_text() == "Fixture draft"
+
+
+def test_report_adapter_failure_is_redacted_and_terminal(tmp_path):
+    def broken(result):
+        raise RuntimeError("secret-provider-token")
+
+    destination = run(
+        "robotics",
+        output_dir=tmp_path,
+        policy_path="configs/scoring.v3.json",
+        catalog_path="configs/scoring.draft.json",
+        config_path=CONFIG,
+        report_adapter=broken,
+    )
+    receipt = json.loads((destination / "run-result.json").read_text())
+    assert receipt["reason"] == "REPORT_ADAPTER_FAILED"
+    assert receipt["workflow_status"] == "failed"
+    assert all(
+        "secret-provider-token" not in p.read_text() for p in destination.iterdir()
+    )

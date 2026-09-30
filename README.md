@@ -199,7 +199,11 @@ uv run python -m skala_rag.cli --theme 'Physical AI robotics' --config tests/fix
 산출물은 가상 데이터이고 외부 호출·유료 LLM·모델 다운로드는 없다.
 
 현재 #94의 v3 보고서 context adapter가 없어 draft는 진단용이며 검증된 보고서가
-아니다. manifest는 `running`/`run_outcome=null`, CLI는 미완료를 나타내는 exit 1을
-반환한다. 보고서 수정 소진의 `completed`+Warning+exit 2와 구별한다.
-구조·의미·PDF 검증과 final 발행은 미실행이다. `--mode live` 또는 live 설정은
+아니다. adapter가 없는 실행은 `failed`/`technical_failure`, CLI exit 1로
+종료하고 `run-result.json`에 `REPORT_ADAPTER_UNAVAILABLE` 사유를 저장한다. 보고서 수정 소진의 `completed`+Warning+exit 2와 구별한다.
+구조·의미·PDF 검증과 final 발행은 미실행이다.
+프로그램 주입용 `ReportCompletion` fixture 경계는 같은 draft/context/hash의 검사만
+받는다. 구조·의미 수정 2회 소진은 `completed`+Warning+exit 2와 현재 draft/findings를
+보존한다. fixture 통과도 `acceptance=fixture_only`, `publication_allowed=false`이며
+검증된 제출용 final을 발행하지 않는다. 실제 v3 adapter 연결은 #94 이후 작업이다. `--mode live` 또는 live 설정은
 실행 전에 거절한다. 전체 live runner는 #96 범위다.

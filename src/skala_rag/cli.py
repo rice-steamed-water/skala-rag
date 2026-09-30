@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import subprocess
+from copy import deepcopy
 from dataclasses import asdict
 from pathlib import Path
 from uuid import uuid4
@@ -11,6 +12,7 @@ from uuid import uuid4
 from skala_rag.contracts.inputs import RunInput
 from skala_rag.contracts.manifest import ArtifactMetadata, RunManifest
 from skala_rag.fixture_runner import run_fixture
+from skala_rag.run_finalization import finalize_fixture
 from skala_rag.scoring.v3_policy import load_v3_policy
 
 
@@ -24,7 +26,9 @@ def digest(content):
     return hashlib.sha256(content).hexdigest()
 
 
-def run(theme, *, output_dir, policy_path, catalog_path, config_path):
+def run(
+    theme, *, output_dir, policy_path, catalog_path, config_path, report_adapter=None
+):
     config = json.loads(Path(config_path).read_text(encoding="utf-8"))
     config["investment_theme"] = theme
     run_input = RunInput.model_validate(config)
@@ -48,6 +52,15 @@ def run(theme, *, output_dir, policy_path, catalog_path, config_path):
     result, _ = run_fixture(
         run_id=run_id, trace=trace, policy_path=policy_path, catalog_path=catalog_path
     )
+    report = None
+    adapter_failed = False
+    if report_adapter is not None:
+        try:
+            report = report_adapter(deepcopy(result))
+        except Exception:
+            # Never persist arbitrary provider errors, prompts or credentials.
+            adapter_failed = True
+    terminal = finalize_fixture(report)
     destination = Path(output_dir) / run_id
     destination.mkdir(parents=True, exist_ok=False)
     artifacts = {}
@@ -80,6 +93,39 @@ def run(theme, *, output_dir, policy_path, catalog_path, config_path):
             for cid, decision in result.decisions.items()
         ),
     )
+    if report is not None and terminal.reason not in (
+        "INVALID_REPORT_COMPLETION",
+        "INVALID_REPORT_REVISION_COUNT",
+        "REPORT_REVISION_MISMATCH",
+        "STALE_REPORT_VALIDATION",
+        "INVALID_REPORT_STAGE_ORDER",
+    ):
+        save("draft.md", report.draft.markdown)
+        save("report-draft.json", report.draft.model_dump_json(indent=2))
+    save(
+        "run-result.json",
+        json.dumps(
+            {
+                "execution_mode": "fixture",
+                "workflow_status": terminal.workflow_status,
+                "run_outcome": terminal.run_outcome,
+                "exit_code": terminal.exit_code,
+                "acceptance": terminal.acceptance,
+                "publication_allowed": terminal.publication_allowed,
+                "warnings": terminal.warnings,
+                "reason": "REPORT_ADAPTER_FAILED"
+                if adapter_failed
+                else terminal.reason,
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+    )
+    if terminal.validations:
+        save(
+            "validation-results.json",
+            json.dumps(terminal.validations, default=encode, indent=2),
+        )
     revision = subprocess.run(
         ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=False
     )
@@ -103,7 +149,7 @@ def run(theme, *, output_dir, policy_path, catalog_path, config_path):
         tool_status={
             "execution_mode": "fixture",
             "external_calls": "disabled",
-            "reporting": "blocked: v3 context adapter #94",
+            "reporting": terminal.reason or terminal.acceptance,
             "pdf": "not_run",
         },
         budgets={
@@ -119,12 +165,12 @@ def run(theme, *, output_dir, policy_path, catalog_path, config_path):
                 in ("founder", "market", "technology", "moat", "business_deal")
                 for t in trace
             ),
-            "report_revisions": 0,
+            "report_revisions": (report.revisions if terminal.validations else 0),
         },
         artifacts=artifacts,
-        validation_results={},
-        workflow_status="running",
-        run_outcome=None,
+        validation_results=terminal.validations,
+        workflow_status=terminal.workflow_status,
+        run_outcome=terminal.run_outcome,
     )
     (destination / "manifest.json").write_text(
         manifest.model_dump_json(indent=2), encoding="utf-8"
@@ -156,11 +202,13 @@ def main(argv=None):
         )
     except (ValueError, OSError) as exc:
         parser.exit(1, f"fixture execution refused ({type(exc).__name__})\n")
+    receipt = json.loads((destination / "run-result.json").read_text())
     print(
-        f"Fixture artifacts: {destination}; reporting blocked (#94), no validated final"
+        f"Fixture artifacts: {destination}; "
+        f"status={receipt['workflow_status']}; "
+        f"acceptance={receipt['acceptance']}; no validated final"
     )
-    # Exit 2 is reserved for report revision exhaustion Warning.
-    return 1
+    return receipt["exit_code"]
 
 
 if __name__ == "__main__":
