@@ -114,14 +114,48 @@ RetrievalRecord에 실제 반환 Source/Chunk ID와 index identity/cache key를 
 넣지 않으며 runtime의 정적 redacted 오류와 개별 시도 이력을 보존한다.
 collector는 기존처럼 반환 Chunk를 저장하고 Evidence provenance를 연결한다.
 
-## 남은 완료 조건
+## 실제 로컬 검색 검증 — 2026-09-30
 
-#52는 PR #146까지 병합됐고 text-only 승인 gate·HF API·SQLite 인터페이스가 가용하다.
-#49 실제 π0/π0.5 자료의 full-document `partial`을 유지하며 승인된 텍스트 범위에만
-별도 gate를 적용한다. 실제 HF embedding/index/reopen/search 성공 검증은 사용자
-승인으로 #145에 분리됐다. endpoint·deployment revision·자격증명·예산·저장소 선택이
-미설정이므로 #54는 실제 성공 검증을 계속 기다린다. 실제 승인 corpus,
-BGE-M3 revision/LICENSE·query encoder·store·read-back·readiness·실행 승인 이후
-실제 index의 검색 Chunk/Source/page trace와 검색 품질을 확인해야 #54를 완료할 수 있다.
-doc_type/year schema 확장·fallback 우선순위 등 OPEN 정책은 이번 구현에 넣지 않았다.
-모델 다운로드·실제 embedding/index/search·외부 API는 실행하지 않았다.
+#145의 사용자 승인 로컬 경로와 병합된 PR #149를 소비했다. 기존 로컬 BGE-M3
+revision `5617a9f61b028005a4858fdac845db406aefb181` 모델 파일 hash를 #145 receipt와
+대조하고 36 Chunk corpus의 실제 PDF 추출/텍스트 승인·plan을 재검증했다. 모델 파일을
+추가 다운로드하지 않고 local_files_only/trust_remote_code=false로 읽었다.
+`LocalQueryEncoder`는 #145 LocalEncoder를 사용하며 tokenizer/전처리/모델 설정
+일치를 요구한다. 초과 길이와 늦게 반환된 query 결과를 거절한다. 동기 모델 연산을
+강제로 중단하지는 못한다.
+
+기존 SQLite index를 별도 Python interpreter에서 다시 열고 IndexedRetriever와
+SQLiteDenseSearch를 실제 query embedding에 연결했다. 결과는 다음과 같다.
+
+| 요청 | 실제 결과 |
+| --- | --- |
+| 두 문서 허용, Top-5 | π0.5 2·1·7·10·4페이지, Source/Chunk/locator 일치 |
+| 같은 질의 반복 | 같은 결과, cache_hit=true, 추가 query encoding 없음 |
+| π0 출처만 허용 | π0 4·15·1·7·2페이지, 다른 Source 제외 |
+| 다른 기업 | empty, query encoding 없음 |
+| 2025-01-01 historical 기준일 | empty, 늦게 확보된 snapshot 제외 |
+| 허용 출처 없음 | empty, query encoding 없음 |
+
+실행 31.30초(모델 파일 hash·로드·재추출·query·검색 포함), query encoding 2회,
+각 26 token, 외부 inference API 0회/비용 USD 0이다. 로컬 compute 비용은 미측정이다.
+이는 한 질의의 실제 검색·격리 smoke이며 Hit Rate/MRR benchmark나 모델 우위,
+Evidence LLM 추출·Technology 평가·보고서 인용·전체 M2 성공은 아니다.
+full-document partial과 이미지/그래프 누락·text_only metadata를 보존했다.
+
+결과/이력은 Git 제외 `outputs/issue54-local-retrieve-v1/validation.json`에 있다.
+index version은 #145와 같은
+`sha256:bc345db2d4ed9c6c4edb46e02ccc3021408ae8aabe1431b376af1fa579ba53c7`이다.
+모델·원문·벡터·index·추출 텍스트는 커밋하지 않는다.
+
+```bash
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HUB_DISABLE_IMPLICIT_TOKEN=1 \
+uv run python -m skala_rag.rag.retrieve_validation \
+  --root /path/to/repo --model-path /path/to/repo/data/local/models/bge-m3-5617a9f \
+  --store-path /path/to/repo/outputs/issue145-local-bge-final/index.sqlite \
+  --receipt-path /path/to/repo/outputs/issue145-local-bge-final/validation.json \
+  --output-dir /path/to/repo/outputs/issue54-local-retrieve-rerun --timeout-seconds 60
+```
+
+명시적인 60초는 이 로컬 smoke의 기술적 상한이며 유료 provider/M3의
+timeout/backoff 정책 승인으로 확대하지 않는다.
+doc_type/year schema·fallback OPEN은 추가하지 않고 유료 HF endpoint 검증도 하지 않았다.
