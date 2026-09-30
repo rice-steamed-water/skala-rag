@@ -168,6 +168,22 @@ ID 생성은 controller의 공통 함수가 소유하며 LLM이 만들지 않는
 
 재실행은 새로운 run_id를 사용한다. 같은 실행·key의 동일 결과 재기록은 idempotent, 다른 결과로 덮어쓰기는 오류다. State의 `eligibility_results`, `score_summaries`, `investment_decisions`는 원문대로 candidate_id → 현재 최종 DTO map을 유지하고, 각 DTO 내부에 위 ID를 넣는다. 보고서 controller가 이 값을 ID → DTO map으로 변환하여 참조를 해소한다. `CandidateOutcome.failure_ids`는 State.errors에 실제 존재하는 error_id만 허용한다.
 
+**#6 ID 문자열 인코딩:** `contracts.ids`의 함수는
+`["skala-rag-id-v1", kind, *key_components]` 배열을 UTF-8 JSON으로 직렬화한다
+(`ensure_ascii=False`, 구분자 `,`와 `:`, 추가 공백 없음). SHA-256 전체 hex를
+`{kind}-v1-{digest}` 형태로 반환한다. kind는 `snapshot/eligibility/score/decision`이다.
+snapshot key는 위 Freeze 튜플, 나머지는 위 표의 튜플을 그대로 사용한다.
+문자열은 공백뿐인 값을 거절하되 입력 자체를 정규화하지 않는다. 세대·revision은
+bool을 제외한 음이 아닌 정수다. 평가 map key는 `{candidate_id}:{evaluation_round}:{dimension}`을
+유지하며 모호한 분리를 막기 위해 candidate_id와 dimension의 `:`를 거절한다.
+이는 식별자 인코딩 규칙이며 OPEN 정책 승인이나 평가 척도 승인에 해당하지 않는다.
+
+**#6 CriterionAssessment 구조 검증:** schema_version은 호출자가 명시한다.
+observed는 1..5의 strict 정수 rating, 공백 아닌 rationale, 중복 없는 근거 ID를
+하나 이상 요구하며 missing_reason을 허용하지 않는다. missing은 rating=null과
+missing_reason을 요구한다. 실제 근거 존재·snapshot 포함 여부와 영역 criterion
+완전성은 평가 wrapper의 책임이며 이 DTO만으로 검증되었다고 표현하지 않는다.
+
 **검증 불변식**
 
 - Evaluation에는 해당 영역의 모든 criterion이 정확히 한 번 나타나야 한다. 누락은 schema 오류이지 자동 결측 처리 아님.
