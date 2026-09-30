@@ -15,6 +15,7 @@ from skala_rag.agents.evidence_extraction import (
     SegmentError,
     extract_evidence,
     link_record,
+    locate_excerpt,
     rag_segment,
     recompute_evidence_id,
     verify_provenance,
@@ -620,3 +621,52 @@ def test_industry_segment_has_no_company_owner():
     )
     (item,) = result.evidence.values()
     assert item.scope == "industry" and item.candidate_id is None
+
+
+# --- #161 PDF 공백·줄바꿈: 원문 구간 복원 -------------------------------------------
+
+PDF_TEXT = (
+    "가상  로봇   알파는 2025년\n매출 120억원을   기록했다(2025-12-31\n기준).\n"
+    "π                   0  모델은 가상 로봇 알파가 공개했다."
+)
+
+
+def test_locate_excerpt_returns_verbatim_source_span():
+    tidy = "가상 로봇 알파는 2025년 매출 120억원을 기록했다(2025-12-31 기준)."
+    span = locate_excerpt(tidy, PDF_TEXT)
+    assert (
+        span
+        == "가상  로봇   알파는 2025년\n매출 120억원을   기록했다(2025-12-31\n기준)."
+    )
+    assert span in PDF_TEXT
+    assert locate_excerpt("π0 모델은", PDF_TEXT) == "π                   0  모델은"
+    assert locate_excerpt(REVENUE, REVENUE) == REVENUE
+
+
+@pytest.mark.parametrize(
+    "excerpt",
+    ["가상 로봇 알파는 2025년 매출 150억원을 기록했다", "매출을 기록했다", "   ", ""],
+)
+def test_locate_excerpt_rejects_non_whitespace_differences(excerpt):
+    assert locate_excerpt(excerpt, PDF_TEXT) is None
+
+
+def test_pdf_whitespace_excerpt_becomes_evidence_with_source_span():
+    snapshot = raw(PDF_TEXT)
+    src = source(snapshot)
+    segment = web_seg((snapshot, src, record("ret-web-pdf", src)))
+    tidy = "가상 로봇 알파는 2025년 매출 120억원을 기록했다(2025-12-31 기준)."
+    result, _ = extract(segment, {**REVENUE_CLAIM, "excerpt": tidy})
+    (item,) = result.evidence.values()
+    assert item.excerpt in PDF_TEXT and item.excerpt != tidy
+    assert result.rejected == []
+
+
+def test_pdf_whitespace_excerpt_still_checks_values(web):
+    snapshot = raw(PDF_TEXT)
+    src = source(snapshot)
+    segment = web_seg((snapshot, src, record("ret-web-pdf", src)))
+    tidy = "가상 로봇 알파는 2025년 매출 120억원을 기록했다(2025-12-31 기준)."
+    result, _ = extract(segment, {**REVENUE_CLAIM, "excerpt": tidy, "value": 150})
+    assert result.evidence == {}
+    assert [r.reason for r in result.rejected] == [ClaimRejection.VALUE_NOT_IN_EXCERPT]
