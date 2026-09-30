@@ -456,3 +456,112 @@ def test_snapshot_receipt_cannot_be_mutated_by_consumer():
     source.title = "mutated"
     assert next(iter(adapter.observed_sources.values())).title == "Synthetic Robot"
     assert next(iter(result.data.sources.values())).title == "Synthetic Robot"
+
+
+def test_opt_in_cannot_admit_arbitrary_callback():
+    adapter, request, budget, calls = setup_adapter(
+        allow_live=True, extractor=lambda s, r: []
+    )
+    adapter.runtime.bridge_version = "tavily-runtime-v1"
+    result = adapter(request.model_copy(update={"execution_mode": "live"}), budget)
+    assert result.errors[0].error_code == "TOOL_NOT_CONFIGURED"
+    assert calls == []
+
+
+def test_failure_receipt_is_detached_and_keeps_errors_and_sources():
+    from skala_rag.tools.discovery_receipt import search_with_receipt
+
+    def fail(sources, request):
+        raise RuntimeError("SECRET")
+
+    adapter, request, budget, _ = setup_adapter(search_body(), extractor=fail)
+    receipt = search_with_receipt(adapter, request, budget)
+    assert receipt.result.status == "failed"
+    assert receipt.result.data is None
+    assert receipt.result.errors[0].error_code == "TOOL_FAILED"
+    assert receipt.result.retrieval_records[-1].source_ids == list(
+        receipt.observed_sources
+    )
+    adapter(request.model_copy(update={"execution_mode": "live"}), budget)
+    assert adapter.observed_sources == {}
+    assert receipt.observed_sources
+    assert "SECRET" not in receipt.result.model_dump_json()
+
+
+def test_mocked_opt_in_live_runtime_and_failure_receipt():
+    from datetime import timedelta
+
+    import httpx
+    from tests.unit.test_discovery_runtime import build
+
+    from skala_rag.tools.discovery_receipt import search_with_receipt
+    from skala_rag.tools.runtime import BudgetLedger, RuntimeLimits
+
+    calls = []
+    bridge, budget, _ = build(
+        lambda r: calls.append(r) or httpx.Response(200, json=search_body()),
+        mode="live",
+        price=0.01,
+    )
+    bridge.runtime.policy = bridge.runtime.policy.model_copy(
+        update={
+            "live_approval_reference": "public-pilot",
+            "timing_approval_reference": "timeout-retry",
+        }
+    )
+    bridge.runtime.ledger = BudgetLedger(
+        RuntimeLimits(
+            schema_version="1",
+            max_calls=6,
+            tool_max_calls={"tavily": 6},
+            max_input_tokens=0,
+            max_output_tokens=0,
+            max_cost_usd=0.06,
+        )
+    )
+    bridge.context = bridge.context.model_copy(update={"run_id": "run-synthetic"})
+    budget = budget.model_copy(
+        update={"deadline": bridge.runtime.clock.now() + timedelta(seconds=30)}
+    )
+    adapter, request, _, _ = setup_adapter(
+        runtime=bridge, allow_live=True, extractor=lambda s, r: []
+    )
+    request = request.model_copy(update={"execution_mode": "live"})
+    result = adapter(request, budget)
+    assert result.status == "empty"
+    assert len(calls) == 1
+    assert bridge.runtime.ledger.snapshot()["calls"] == 1
+    source = next(iter(result.data.sources.values()))
+    assert source.bibliographic_metadata["execution_mode"] == "live"
+    assert "Synthetic/offline" not in source.access_notes
+    assert result.retrieval_records[-1].tool_name.endswith("-live")
+
+    def fail(sources, request):
+        raise RuntimeError("SECRET")
+
+    adapter.extractor = fail
+    receipt = search_with_receipt(adapter, request, budget)
+    assert receipt.result.status == "failed"
+    assert receipt.result.data is None
+    assert len(receipt.result.retrieval_records) == 2
+    assert receipt.observed_sources
+    assert "SECRET" not in receipt.result.model_dump_json()
+    bridge.runtime.policy = bridge.runtime.policy.model_copy(
+        update={"live_approval_reference": None}
+    )
+    assert adapter(request, budget).status == "unavailable"
+    assert len(calls) == 2
+    bridge.runtime.policy = bridge.runtime.policy.model_copy(
+        update={
+            "live_approval_reference": "public-pilot",
+        }
+    )
+    for updates in ({"allow_live": False}, {"extractor": None}):
+        for name, value in updates.items():
+            setattr(adapter, name, value)
+        assert adapter(request, budget).status == "unavailable"
+        assert len(calls) == 2
+        adapter.allow_live, adapter.extractor = True, fail
+    bridge.allowance = bridge.allowance.model_copy(update={"max_cost_usd": None})
+    assert adapter(request, budget).status == "failed"
+    assert len(calls) == 2
