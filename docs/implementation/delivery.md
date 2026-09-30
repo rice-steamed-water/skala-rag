@@ -171,7 +171,7 @@ Reference 양식은 v3 E-2와 이전 원문 §9.3을 따른다.
 
 구조/의미 수정 한도 소진은 현재 결과와 Warning 반환 경로이며 실패한 검사를 pass로 바꾸지 않는다. `CONTEXT_INVALID/UPSTREAM_INVALID`는 별도 fatal이다. PDF renderer 장애·layout 위반의 retry/Warning 매핑은 D08·D09에서 합의하고, 어떤 경우에도 실제 PDF≤5·SUMMARY≤0.5 미검증 산출물을 제출용 final로 승격하지 않는다.
 
-Markdown 줄 수나 토큰 수로 PDF 페이지 준수를 선언하지 않는다. SUMMARY 반 페이지는 고정된 인쇄 가능 본문 영역의 절반으로 측정하는 제안이며 D09에서 합의한다.
+Markdown 줄 수나 토큰 수로 PDF 페이지 준수를 선언하지 않는다. D09 PDF 승인(#95)에 따라 SUMMARY heading 포함 실제 배치 bbox 높이를 전체 A4 페이지 높이로 나눠 0.5 이하인지 확인한다.
 
 ## 6. PR / 작업 완료 정의
 
