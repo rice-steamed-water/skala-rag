@@ -95,6 +95,31 @@ def test_approved_rubric_disallows_other_na_even_with_true_verifier(case):
     assert run(case, output).status == "failure"
 
 
+@pytest.mark.parametrize("mode", ["real", "live"])
+def test_actual_mode_blocked_before_fake_llm_call(case, mode):
+    snapshot, policy, output, rubric = case
+    llm = FakeLLM([output])
+    with pytest.raises(ValueError, match="approved finance-0.1.0 semantic verifiers"):
+        evaluate_business_deal(
+            snapshot,
+            llm=llm,
+            policy=policy,
+            rubric=rubric,
+            verifiers=ApprovedVerifiers(
+                "finance-0.1.0",
+                "finance-0.1.0",
+                "finance-0.1.0",
+                lambda c, s: True,
+                lambda c, s: True,
+                lambda c, s: True,
+            ),
+            clock=FakeClock(datetime(2026, 9, 30, tzinfo=UTC)),
+            schema_version="test",
+            execution_mode=mode,
+        )
+    assert llm.calls == []
+
+
 def test_atomic_missing(case):
     result = run(case, case[2])
     assert result.status == "success"

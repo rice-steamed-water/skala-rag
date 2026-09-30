@@ -1,4 +1,4 @@
-"""Atomic v3 snapshot boundary; #55 live readiness remains blocked."""
+"""Atomic v3 snapshot boundary; actual Finance semantic verification is blocked."""
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -90,7 +90,9 @@ def evaluate_business_deal(
     """
     if execution_mode != "fixture":
         raise ValueError(
-            "live blocked: #55 actual research integration readiness required"
+            "actual evaluation blocked: approved finance-0.1.0 semantic verifiers "
+            "and authoritative metric-role/round/accounting-subject facts required; "
+            "#55 merge alone is not evaluation readiness"
         )
     identity = {
         k: getattr(snapshot, k)
