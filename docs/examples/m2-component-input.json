@@ -1,0 +1,32 @@
+{
+  "candidate": {
+    "schema_version": "m2-62-v1",
+    "candidate_id": "co-physical-intelligence",
+    "canonical_name": "Physical Intelligence",
+    "aliases": [],
+    "country": "US",
+    "homepage_url": "https://www.pi.website/",
+    "legal_identifiers": {},
+    "discovery_source_ids": []
+  },
+  "run_input": {
+    "schema_version": "m2-62-v1",
+    "investment_theme": "Physical AI / Robotics",
+    "countries": ["US"],
+    "languages": ["en"],
+    "as_of": "2026-09-30",
+    "policy_version": "main-draft-0.1.0",
+    "corpus_version": "issue52-reviewed-text-v1",
+    "execution_mode": "live"
+  },
+  "run_id": "issue62-component-v1",
+  "local_rag": {
+    "model_path": "data/local/models/bge-m3-5617a9f",
+    "store_path": "outputs/issue145-local-bge-final/index.sqlite",
+    "receipt_path": "outputs/issue145-local-bge-final/validation.json",
+    "query": "Physical Intelligence vision-language-action model robot control"
+  },
+  "domain_definition": "Physical AI / Robotics: robots, robotic arms and autonomous physical systems, including their perception and control AI",
+  "campaign_cost_usd_accounted": "0.00",
+  "rubric_path": "data/local/issue62/core-approved-c22df2c.yaml"
+}
