@@ -1,6 +1,5 @@
-"""T11: 전체 200페이지 gate, 미상·미승인·교체 문서 제외. 가상 manifest만 쓴다."""
+"""T11: 미승인·추출 미완료·교체 문서 제외와 버전 고정. 가상 manifest만 쓴다."""
 
-from dataclasses import dataclass
 from datetime import date
 
 import pytest
@@ -9,7 +8,6 @@ from pydantic import ValidationError
 from skala_rag.contracts.retrieval import RetrievalRequest
 from skala_rag.contracts.sources import Chunk, Source
 from skala_rag.rag.corpus import (
-    PROJECT_PAGE_LIMIT,
     CorpusGateError,
     CorpusManifest,
     ManifestDocument,
@@ -25,39 +23,17 @@ from skala_rag.rag.corpus import (
 from skala_rag.tools.fixture_retrieve import fixture_search
 
 SCHEMA = "synthetic-1"
-RULE_VERSION = "fixture-d13-proposal"
 
 
-@dataclass(frozen=True)
-class FixtureRule:
-    """D13 제안안을 흉내 낸 가상 규칙. 승인된 산정 규칙이 아니다."""
-
-    rule_version: str = RULE_VERSION
-    approved: bool = False
-    allow_partial: bool = False
-    kinds: frozenset[str] = frozenset({"pdf", "pitch_deck", "html_snapshot"})
-
-    def counted_page_ids(self, document):
-        if document.document_kind not in self.kinds:
-            return None
-        if document.is_partial() and not self.allow_partial:
-            return None
-        return document.included_pages()
-
-
-def doc(document_id, pages, **changes):
+def doc(document_id, **changes):
     data = dict(
         schema_version=SCHEMA,
         document_id=document_id,
         source_id=f"src-{document_id}",
-        document_kind="pdf",
         local_path=f"data/local/corpus/{document_id}.pdf",
         content_hash=f"hash-{document_id}",
         title=f"Synthetic {document_id}",
         language="ko",
-        original_page_count=pages,
-        included_page_ranges=[{"schema_version": SCHEMA, "start": 1, "end": pages}],
-        counted_pages=pages,
         permission_note="Synthetic only",
         candidate_ids=[],
         scope="industry",
@@ -73,7 +49,6 @@ def manifest(*documents, version="corpus-v1", **changes):
     return CorpusManifest(
         schema_version=SCHEMA,
         corpus_version=version,
-        counting_rule_version=RULE_VERSION,
         documents=documents,
         **changes,
     )
@@ -83,41 +58,10 @@ def codes(result):
     return {(issue.code, issue.document_id) for issue in result.issues}
 
 
-def test_project_total_200_passes_and_201_rejects():
-    ok = check_corpus(
-        manifest(doc("a", 120), doc("b", 80)), FixtureRule(), execution_mode="fixture"
-    )
-    assert ok.passed and ok.total_counted_pages == PROJECT_PAGE_LIMIT
-
-    over = check_corpus(
-        manifest(doc("a", 120), doc("b", 81)), FixtureRule(), execution_mode="fixture"
-    )
-    assert not over.passed
-    assert codes(over) == {(Rejection.PAGE_LIMIT_EXCEEDED, None)}
-    with pytest.raises(CorpusGateError):
-        require_indexable(over)
-
-
-def test_limit_is_project_wide_not_per_company():
-    a = doc("a", 150, scope="company", candidate_ids=["co-a"])
-    b = doc("b", 60, scope="company", candidate_ids=["co-b"])
-    result = check_corpus(manifest(a, b), FixtureRule(), execution_mode="fixture")
-    assert codes(result) == {(Rejection.PAGE_LIMIT_EXCEEDED, None)}
-
-
-def test_unknown_page_count_is_rejected_not_counted_as_one():
-    unknown = doc(
-        "u",
-        1,
-        original_page_count=None,
-        counted_pages=None,
-    )
-    result = check_corpus(
-        manifest(doc("a", 200), unknown), FixtureRule(), execution_mode="fixture"
-    )
-    assert codes(result) == {(Rejection.PAGE_COUNT_UNKNOWN, "u")}
-    assert result.total_counted_pages == 200
-    assert result.indexable_document_ids == ("a",)
+def test_approved_extracted_documents_pass():
+    result = check_corpus(manifest(doc("a"), doc("b")))
+    assert result.passed
+    assert require_indexable(result) == ("a", "b")
 
 
 @pytest.mark.parametrize(
@@ -125,58 +69,15 @@ def test_unknown_page_count_is_rejected_not_counted_as_one():
     [
         (dict(approved=False, reviewer=None), Rejection.DOCUMENT_NOT_APPROVED),
         (dict(extraction_status="partial"), Rejection.EXTRACTION_NOT_OK),
-        (dict(document_kind="html_raw"), Rejection.COUNT_NOT_ALLOWED),
-        (dict(counted_pages=1), Rejection.COUNTED_PAGES_MISMATCH),
+        (dict(extraction_status="pending"), Rejection.EXTRACTION_NOT_OK),
     ],
 )
 def test_document_level_rejections(changes, code):
-    result = check_corpus(
-        manifest(doc("x", 10, **changes)), FixtureRule(), execution_mode="fixture"
-    )
+    result = check_corpus(manifest(doc("ok"), doc("x", **changes)))
     assert codes(result) == {(code, "x")}
-    assert result.indexable_document_ids == ()
-
-
-def test_partial_extraction_requires_rule_permission():
-    partial = doc(
-        "p",
-        5,
-        original_page_count=30,
-        included_page_ranges=[
-            {"schema_version": SCHEMA, "start": 3, "end": 5},
-            {"schema_version": SCHEMA, "start": 10, "end": 11},
-        ],
-    )
-    denied = check_corpus(manifest(partial), FixtureRule(), execution_mode="fixture")
-    assert codes(denied) == {(Rejection.COUNT_NOT_ALLOWED, "p")}
-
-    allowed = check_corpus(
-        manifest(partial), FixtureRule(allow_partial=True), execution_mode="fixture"
-    )
-    assert allowed.passed and allowed.total_counted_pages == 5
-
-
-def test_same_original_page_is_counted_once():
-    first = doc("a", 150, content_hash="hash-shared")
-    copy = doc("b", 150, content_hash="hash-shared")
-    result = check_corpus(
-        manifest(first, copy), FixtureRule(), execution_mode="fixture"
-    )
-    assert result.passed and result.total_counted_pages == 150
-
-
-def test_unapproved_rule_blocks_live_indexing():
-    corpus = manifest(doc("a", 10))
-    assert check_corpus(corpus, FixtureRule(), execution_mode="fixture").passed
-    live = check_corpus(corpus, FixtureRule(), execution_mode="live")
-    assert codes(live) == {(Rejection.RULE_NOT_APPROVED, None)}
+    assert result.indexable_document_ids == ("ok",)
     with pytest.raises(CorpusGateError):
-        require_indexable(live)
-
-    other = check_corpus(
-        corpus, FixtureRule(rule_version="other"), execution_mode="fixture"
-    )
-    assert codes(other) == {(Rejection.RULE_VERSION_MISMATCH, None)}
+        require_indexable(result)
 
 
 @pytest.mark.parametrize(
@@ -184,46 +85,39 @@ def test_unapproved_rule_blocks_live_indexing():
     [
         dict(approved=True, reviewer=None),
         dict(scope="company", candidate_ids=[]),
+        dict(scope="industry", candidate_ids=["co-a"]),
         dict(local_path="/abs/path.pdf"),
         dict(local_path="data/local/../secret.pdf"),
         dict(local_path="data/manifests/a.pdf"),
         dict(local_path="https://example.invalid/a.pdf"),
-        dict(
-            included_page_ranges=[
-                {"schema_version": SCHEMA, "start": 1, "end": 5},
-                {"schema_version": SCHEMA, "start": 5, "end": 8},
-            ]
-        ),
-        dict(included_page_ranges=[{"schema_version": SCHEMA, "start": 1, "end": 11}]),
-        dict(included_page_ranges=[]),
     ],
 )
 def test_manifest_document_shape_is_rejected(changes):
     with pytest.raises(ValidationError):
-        doc("x", 10, **changes)
+        doc("x", **changes)
 
 
 def test_manifest_is_immutable_and_rejects_duplicates():
-    corpus = manifest(doc("a", 10))
+    corpus = manifest(doc("a"))
     with pytest.raises(ValidationError):
         corpus.corpus_version = "changed"
     with pytest.raises(ValidationError):
-        manifest(doc("a", 10), doc("a", 5, source_id="src-other"))
+        manifest(doc("a"), doc("a", source_id="src-other"))
 
 
-def test_replacement_creates_new_version_and_excludes_old_document(tmp_path):
-    v1 = manifest(doc("old", 50), doc("keep", 50))
+def test_replacement_creates_new_version_and_excludes_old_document():
+    v1 = manifest(doc("old"), doc("keep"))
     v2 = next_corpus_version(
         v1,
         corpus_version="corpus-v2",
         remove=["old"],
-        add=[doc("new", 60), doc("pending", 10, approved=False, reviewer=None)],
+        add=[doc("new"), doc("pending", approved=False, reviewer=None)],
     )
     assert v1.corpus_version == "corpus-v1" and len(v1.documents) == 2
     assert v2.previous_corpus_version == "corpus-v1"
     assert manifest_hash(v1) != manifest_hash(v2)
 
-    result = check_corpus(v2, FixtureRule(), execution_mode="fixture")
+    result = check_corpus(v2)
     assert result.indexable_document_ids == ("keep", "new")
     assert codes(result) == {(Rejection.DOCUMENT_NOT_APPROVED, "pending")}
 
@@ -235,12 +129,12 @@ def test_replacement_creates_new_version_and_excludes_old_document(tmp_path):
 
 def test_store_freezes_version(tmp_path):
     store = ManifestStore(tmp_path / "data/manifests")
-    v1 = manifest(doc("a", 10))
+    v1 = manifest(doc("a"))
     digest = store.save(v1)
     assert store.save(v1) == digest
     assert store.load("corpus-v1", expected_hash=digest) == v1
 
-    changed = manifest(doc("a", 11))
+    changed = manifest(doc("a", content_hash="hash-a-edited"))
     with pytest.raises(FileExistsError):
         store.save(changed)
     with pytest.raises(ValueError):
@@ -250,8 +144,8 @@ def test_store_freezes_version(tmp_path):
 
 
 def test_index_inputs_are_compared_with_approved_manifest():
-    corpus = manifest(doc("a", 10), doc("b", 10))
-    result = check_corpus(corpus, FixtureRule(), execution_mode="fixture")
+    corpus = manifest(doc("a"), doc("b"))
+    result = check_corpus(corpus)
     assert compare_index_inputs(corpus, result, {"a": "hash-a", "b": "hash-b"}).matches
 
     diff = compare_index_inputs(
@@ -262,7 +156,7 @@ def test_index_inputs_are_compared_with_approved_manifest():
     assert diff.hash_mismatch == ("a",)
 
     with pytest.raises(ValueError):
-        compare_index_inputs(manifest(doc("a", 10)), result, {})
+        compare_index_inputs(manifest(doc("a")), result, {})
 
 
 def _chunk(source_id, corpus_version):
@@ -297,12 +191,11 @@ def _source(source_id):
 
 
 def test_replaced_document_is_not_retrieved():
-    v1 = manifest(doc("old", 10), doc("keep", 10))
+    v1 = manifest(doc("old"), doc("keep"))
     v2 = next_corpus_version(
-        v1, corpus_version="corpus-v2", remove=["old"], add=[doc("new", 10)]
+        v1, corpus_version="corpus-v2", remove=["old"], add=[doc("new")]
     )
-    result = check_corpus(v2, FixtureRule(), execution_mode="fixture")
-    allowed = allowed_source_ids(v2, result, "co-a")
+    allowed = allowed_source_ids(v2, check_corpus(v2), "co-a")
     assert allowed == ["src-keep", "src-new"]
 
     ids = ["src-old", "src-keep", "src-new"]
@@ -329,13 +222,15 @@ def test_replaced_document_is_not_retrieved():
 
 def test_allowed_sources_follow_company_scope_and_gate():
     corpus = manifest(
-        doc("mine", 10, scope="company", candidate_ids=["co-a"]),
-        doc("other", 10, scope="company", candidate_ids=["co-b"]),
-        doc("industry", 10),
+        doc("mine", scope="company", candidate_ids=["co-a"]),
+        doc("other", scope="company", candidate_ids=["co-b"]),
+        doc("industry"),
     )
-    result = check_corpus(corpus, FixtureRule(), execution_mode="fixture")
+    result = check_corpus(corpus)
     assert allowed_source_ids(corpus, result, "co-a") == ["src-industry", "src-mine"]
 
-    failed = check_corpus(corpus, FixtureRule(), execution_mode="live")
+    failed = check_corpus(
+        manifest(doc("mine"), doc("draft", approved=False, reviewer=None))
+    )
     with pytest.raises(CorpusGateError):
         allowed_source_ids(corpus, failed, "co-a")
