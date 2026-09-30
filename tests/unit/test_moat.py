@@ -144,3 +144,139 @@ def test_offline_boundaries(kind):
     else:
         assert result.evaluations is None
     assert len(llm.calls) == 1
+
+
+def _approved_case(
+    *, rubric_version="core-0.1.0", mutate=None, verifier=None, policy=POLICY
+):
+    from copy import deepcopy
+
+    from skala_rag.agents.moat import evaluate_moat
+
+    fixtures = load_common_fixtures(POLICY)
+    snapshot = _closed_snapshot(next(iter(fixtures.snapshots.values())))
+    output = output_from_evaluation(
+        fixtures.evaluations[
+            f"{snapshot.candidate_id}:{snapshot.evaluation_round}:moat"
+        ]
+    ).model_dump()
+    if mutate:
+        mutate(output)
+    rubric = deepcopy(RUBRIC)
+    rubric.update(status="approved", rubric_version=rubric_version)
+    llm = FakeLLM([output])
+    calls = []
+
+    def verify(criterion, evidence):
+        calls.append((criterion.criterion_id, criterion.rating, set(evidence)))
+        return True if verifier is None else verifier(criterion, evidence)
+
+    result = evaluate_moat(
+        snapshot,
+        rubric=rubric,
+        policy=policy,
+        llm=llm,
+        clock=FakeClock(datetime(2026, 9, 30, tzinfo=UTC)),
+        schema_version="fixture-1",
+        verify_observation=verify,
+        verified_patents={},
+        independent_comparisons={},
+    )
+    return result, calls, llm
+
+
+@pytest.mark.parametrize("rating", [1, 2, 3, 4])
+def test_approved_core_anchors_do_not_require_active_rights_or_independent_comparison(
+    rating,
+):
+    def mutate(output):
+        for criterion in output["criteria"]:
+            criterion["rating"] = rating
+
+    result, calls, llm = _approved_case(mutate=mutate)
+    assert result.status == "success"
+    assert result.evaluations is not None
+    assert result.evaluations["moat"].rubric_version == "core-0.1.0"
+    assert len(calls) == 4
+    assert all(cited for _, _, cited in calls)
+    assert len(llm.calls) == 1
+
+
+@pytest.mark.parametrize("kind", ["not_applicable", "unknown", "wrong_criterion"])
+def test_approved_core_rejects_invalid_status_or_source(kind):
+    def mutate(output):
+        criterion = output["criteria"][0]
+        if kind == "not_applicable":
+            criterion.update(status=kind, rating=None)
+        elif kind == "unknown":
+            criterion["evidence_ids"] = ["unknown"]
+        else:
+            criterion["evidence_ids"] = output["criteria"][1]["evidence_ids"]
+
+    result, _, llm = _approved_case(mutate=mutate)
+    assert result.status == "failure"
+    assert result.evaluations is None
+    assert len(llm.calls) == 1
+
+
+@pytest.mark.parametrize("rating", [1, 2, 5])
+def test_approved_core_requires_semantic_verifier_for_negative_and_independent_evidence(
+    rating,
+):
+    # Evidence/Source DTOs have no verified negative-fact or independence field.
+    # Upstream verifier rejects unconfirmed weakness or self-claim-only rating 5.
+    def mutate(output):
+        output["criteria"][0]["rating"] = rating
+
+    result, calls, _ = _approved_case(
+        mutate=mutate,
+        verifier=lambda criterion, evidence: criterion.rating not in {1, 2, 5},
+    )
+    assert result.status == "failure"
+    assert result.evaluations is None
+    assert calls[0][1] == rating
+    assert "MOAT_RUBRIC_UNVERIFIED" in result.errors[0].message_redacted
+
+
+def test_approved_core_unknown_version_is_not_implicitly_approved():
+    with pytest.raises(ValueError, match="offline fixture only"):
+        _approved_case(rubric_version="core-future")
+
+
+def test_approved_core_does_not_approve_scoring_policy():
+    with pytest.raises(ValueError, match="offline fixture only"):
+        _approved_case(policy=POLICY.model_copy(update={"status": "approved"}))
+
+
+@pytest.mark.parametrize("receipt", [False, None, 1])
+def test_approved_core_requires_exact_true_verifier_receipt(receipt):
+    result, _, _ = _approved_case(verifier=lambda criterion, evidence: receipt)
+    assert result.status == "failure"
+    assert result.evaluations is None
+
+
+def test_approved_core_missing_is_not_replaced_with_rating():
+    def mutate(output):
+        for criterion in output["criteria"]:
+            criterion.update(
+                status="missing",
+                rating=None,
+                evidence_ids=[],
+                missing_reason="not_disclosed",
+            )
+
+    result, calls, _ = _approved_case(mutate=mutate)
+    assert result.status == "success"
+    assert result.evaluations is not None
+    assert all(c.rating is None for c in result.evaluations["moat"].criteria)
+    assert calls == []
+
+
+def test_approved_core_rating_five_requires_positive_verifier_receipt():
+    def mutate(output):
+        for criterion in output["criteria"]:
+            criterion["rating"] = 5
+
+    result, calls, _ = _approved_case(mutate=mutate)
+    assert result.status == "success"
+    assert len(calls) == 4

@@ -16,7 +16,7 @@ from collections.abc import Mapping
 from skala_rag.contracts.evaluation import EvaluationSnapshot
 from skala_rag.scoring.catalog import ScoringPolicy
 
-PROMPT_VERSION = "moat-evaluation-v1"
+PROMPT_VERSION = "moat-evaluation-v2"
 
 DIMENSION = "moat"
 
@@ -37,10 +37,12 @@ SYSTEM_PROMPT = (
     "5. 검색 유사도·순위·근거 개수는 rating이 아니다. rating은 anchor 서술과 "
     "근거 내용의 대응으로만 정한다.\n"
     "6. 기업의 자기 주장은 제3자 확인이 아니다. 필요한 한계는 rationale에 쓴다.\n"
-    "7. 특허 독점성은 권리자·활성 권리 상태·청구 범위를 확인한 "
-    "snapshot 근거가 필요하다. "
-    "차별성은 독립 경쟁사 비교 근거가 필요하며 회사 자기 주장으로 대체하지 않는다. "
-    "N/A는 이 offline bridge에서 지원하지 않으며 missing과 바꾸지 않는다.\n"
+    "7. core-0.1.0의 특허 평가는 출원인 식별·핵심 기술 관련성과 rating anchor를 "
+    "확인한다. 출원·특허 부재의 낮은 rating에 활성 권리를 요구하지 않는다. "
+    "검색 0건만으로 특허 부재를 확정하지 않는다. 차별성은 이름이 명시된 비교 "
+    "대상과 비교 항목이 필요하다. 회사 자료만이면 최대 4이며 5는 독립 출처 "
+    "교차확인이 필요하다. 1–2는 확인된 약점 근거가 필요하다. "
+    "N/A는 Core에서 금지하며 missing과 바꾸지 않는다.\n"
     "8. 점수·비중·URL·출처 ID·provenance는 출력하지 않는다."
 )
 
