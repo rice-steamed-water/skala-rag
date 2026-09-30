@@ -2,6 +2,24 @@
 
 ## 구현과 검증 범위
 
+`agents.m2_research.run_research_to_trace`는 Company Research 도구를 실행하고
+반환된 profile/Source/Evidence/요청 이력을 `InvestmentState`로 조립한다.
+실제 관측의 provenance를 성공 요청에 연결한 뒤 기존 `check_eligibility`를 실행한다.
+사용자가 적격 State JSON을 따로 만들 필요는 없다.
+
+- 새 `outputs/` 하위 디렉터리에 `research-state.json`과 `research-receipt.json`을
+  저장한다. 디렉터리는 0700, 파일은 0600이며 원문 발췌를 포함하는 State는 커밋하지 않는다.
+- 다른 후보/미래 자료/잘못된 요청 이력, 경로 이탈·덮어쓰기·설정된 비밀 값 포함을 거절한다.
+- `eligible`일 때만 주입한 Technology 단계로 진입한다. `unknown`/`ineligible` 및
+  required provider 실패도 저장하고 평가를 호출하지 않는다.
+- 평가가 실패해도 저장한 조사 State는 유지한다. 연구 receipt의 `ready`는 평가 진입
+  조건을 뜻하며 평가 성공을 뜻하지 않는다. Technology 결과는 기존 trace 함수가 검증한다.
+
+새 `tests/integration/test_m2_research_state.py`의 13개 synthetic 통합 테스트는
+적격성 세 상태의 분기, 저장 후 freeze, 실제 요청 이력 연결, 비밀 값·덮어쓰기·
+미래/타 기업 자료 거절, 429 provider 실패와 평가 실패 시 조사 State 보존을 검증한다.
+해당 테스트는 socket 연결을 차단한다.
+
 `agents.m2_trace.run_technology_trace`는 호출자가 제공한 적격성 조사 State와
 검색 결과를 사용해 RAG segment → LLM Evidence 추출 → 이력 연결 → snapshot 동결 →
 Technology 평가를 연결한다. 적격성을 만들어 넣거나 전체 M2 완료를 선언하지 않는다.
@@ -35,12 +53,36 @@ uv run pytest tests/integration/test_m2_trace_boundaries.py -q
 | 다섯 평가 branch (#57–#61) | 실제 smoke 및 원자적 여섯 차원 결과가 필요하다. Technology component 성공만으로 대체하지 않는다 |
 | runtime | required/optional readiness, 계정 요금·잔여 credit, 승인 범위·시간/호출/비용/retry 기록이 필요하다 |
 
-OpenAI credential의 존재만 확인했으며 값은 기록하지 않았다. 실제 API 요청은 실행하지
+OpenAI credential의 존재만 확인했으며 값은 기록하지 않았다. 실제 LLM 요청은 실행하지
 않았다. 사용자 후속 승인으로 [승인 요청안 §3](m2-live-approval-proposal.md)의
 #62 LLM timeout은 30초, 추가 transport 재시도는 0회로 확정되었다.
-실행에는 적격성 근거를 포함한 실제 조사 State의 경로와 계정 요금·잔여 credit 확인이
-필요하다. 로컬 산출물에는 해당 State가 없으며, #51의 공개 live 기록은
-레인보우로보틱스의 `ineligible`/`LISTED` 결과여서 적격 후보 State로 사용할 수 없다.
+사용자가 OpenAI API key만 있으며 요금·잔여 credit 확인 정보는 없다고 응답했다.
+기존 승인 조건에 따라 과금 가능한 새 호출은 하지 않았다. State 생성·저장 연결은
+구현됐으므로 더 이상 사용자에게 State JSON 작성을 요청하지 않는다.
+
+## #62 실제 공개자료 조회 기록
+
+승인 corpus와 같은 후보 `co-physical-intelligence`를 수동 선택해 source-only opt-in
+CLI를 실행했다. Discovery 성공을 주장하지 않는다.
+
+```bash
+uv run python -m skala_rag.agents.m2_research_live \
+  --root /Users/xxhigh/workspace/ai-service/skala-rag \
+  --input /private/tmp/issue62-research-input.json \
+  --output-dir /Users/xxhigh/workspace/ai-service/skala-rag/outputs/issue62-company-research-v1 \
+  --live
+```
+
+- run: `issue62-research-20260930T084103Z` (2026-09-30 08:41:03 UTC).
+- `https://www.pi.website/` 공식 사이트 요청 1회: HTTP 429 / `TOOL_RATE_LIMITED`.
+  추가 재시도 0회. required provider 실패로 research=`unavailable`, eligibility 미판정이다.
+- Source/Evidence는 0건이고 Technology 요청은 없다. OpenAI 요청 0회, 비용 실측 없음.
+  source-only CLI 자체는 LLM 사실 추출을 구성하지 않는다. optional OpenDART는 이
+  required 실패 뒤 실행되지 않았으며 계정 key도 없다. US 후보의 법인 식별 근거도 필요하다.
+- 전체 State와 receipt는 위 로컬 outputs에 저장했다. source-only CLI는 `--live`가
+  없으면 실행을 거절한다. input에는 candidate/run_input/run_id만 넣고 credential은 넣지 않는다.
+
+이 기록은 실제 접근 실패 증거이며 실제 적격 후보·LLM 추출·평가 성공 증거가 아니다.
 
 실제 실행 기록에는 run/retrieval/chunk/source/page/evidence/snapshot/evaluation ID와
 model/prompt/policy/corpus/index version, 공유 예산 사용량을 남긴다.
