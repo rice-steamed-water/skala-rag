@@ -352,6 +352,10 @@ def convert_currency(amount: Evidence, rate: Evidence, target_currency: str) -> 
     bad = _check_inputs([amount])
     if bad:
         return bad
+    if (rate.scope == "company" and rate.candidate_id != amount.candidate_id) or (
+        rate.scope == "industry" and rate.candidate_id is not None
+    ):
+        return Unavailable("attribution_mismatch", "환율 근거의 기업 귀속이 다르다")
     if rate.evidence_kind == "estimated" or rate.conflicts_with:
         return Unavailable("estimated_input", f"{rate.evidence_id}: 환율 근거 부적합")
     amt = to_amount(amount)
@@ -360,7 +364,10 @@ def convert_currency(amount: Evidence, rate: Evidence, target_currency: str) -> 
     target = target_currency.strip().upper()
     expected_unit = f"{amt.currency}/{target}"
     if (
-        rate.value is None
+        rate.currency is None
+        or rate.currency.strip().upper() != target
+        or not target
+        or rate.value is None
         or rate.unit is None
         or rate.unit.strip().upper() != expected_unit
     ):

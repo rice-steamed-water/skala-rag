@@ -31,7 +31,7 @@ from skala_rag.tools.company_research import (
     LiveResearchCompany,
     StageObservation,
 )
-from skala_rag.tools.official_homepage import OfficialHomepage
+from skala_rag.tools.official_homepage import ExtractedFacts, OfficialHomepage
 from skala_rag.tools.opendart import OpenDartCompany
 from skala_rag.tools.source_fetch import FetchPolicy, SafeFetcher
 
@@ -147,10 +147,12 @@ def obs(field, value=None, *, basis="official_domain", **extra):
 class Extractor:
     """source_id만 채워 미리 정한 관측을 돌려준다(가짜 LLM 추출 대신)."""
 
+    version = "fake-extractor-v0"
+
     def __init__(self, specs):
         self.specs = specs
 
-    def __call__(self, candidate, source, content):
+    def __call__(self, candidate, source, content, content_type=None):
         out = []
         for i, spec in enumerate(self.specs):
             spec = dict(spec)
@@ -163,7 +165,7 @@ class Extractor:
                     **spec,
                 )
             )
-        return out
+        return ExtractedFacts(observations=tuple(out))
 
 
 FULL = [
