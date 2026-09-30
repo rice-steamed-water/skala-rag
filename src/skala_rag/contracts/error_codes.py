@@ -30,6 +30,8 @@ class ErrorCode(StrEnum):
     SNAPSHOT_INVALID = "SNAPSHOT_INVALID"  # 해당 후보만 failed → archive
     CONTEXT_INVALID = "CONTEXT_INVALID"  # workflow failed
     UPSTREAM_INVALID = "UPSTREAM_INVALID"  # workflow failed
+    # 보고서
+    REPORT_REJECTED = "REPORT_REJECTED"  # Semantic Judge fail: 재수정 없이 failed
 
 
 class ErrorSpec(NamedTuple):
@@ -53,6 +55,7 @@ ERROR_SPECS: dict[ErrorCode, ErrorSpec] = {
     ErrorCode.SNAPSHOT_INVALID: ErrorSpec(False, None),
     ErrorCode.CONTEXT_INVALID: ErrorSpec(False, None),
     ErrorCode.UPSTREAM_INVALID: ErrorSpec(False, None),
+    ErrorCode.REPORT_REJECTED: ErrorSpec(False, None),
 }
 
 
