@@ -119,3 +119,20 @@ def test_bands_cover_line_without_overlap(rubric, probe):
 )
 def test_document_boundary_examples(rubric, criterion, value, expected):
     assert _rate(_criteria(rubric)[criterion]["bands"], value) == expected
+
+
+def test_matches_draft_policy_catalog(rubric):
+    """#9 draft 정책 catalog(configs/scoring.draft.json)와 ID·비중·표시명 일치."""
+    from skala_rag.scoring.catalog import load_policy
+
+    policy = load_policy(
+        ROOT / "configs" / "scoring.draft.json", execution_mode="fixture"
+    )
+    catalog = {
+        c.criterion_id: (c.weight, c.display_name)
+        for c in policy.criteria
+        if c.dimension in {"traction", "deal_terms"}
+    }
+    assert {
+        cid: (c["weight"], c["name"]) for cid, c in _criteria(rubric).items()
+    } == catalog

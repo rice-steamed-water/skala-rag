@@ -16,3 +16,10 @@ OPEN이며, v3 정합화 작업 #35 / PR #36의 변경은 반영하지 않았다
 실제 aggregate_scores·decide 구현과 세대 검증은 #16 범위다.
 
 검증: `uv run pytest tests/unit/test_scoring_catalog.py`
+
+## rubric (D14 제안)
+
+`rubrics/finance.yaml`(traction·deal_terms)과 `rubrics/core.yaml`(founder·market·technology·moat, PR #40)은
+criterion별 rating 1–5 기준·최소 근거·missing 조건을 담은 **미승인 제안**이다. criterion ID·비중·표시명은
+`scoring.draft.json`과 같아야 하며 `tests/unit/test_finance_rubric.py`·`test_core_rubric.py`가 확인한다.
+설명: `docs/implementation/rubric-finance.md`, `docs/implementation/rubric-core.md`.
