@@ -1,4 +1,4 @@
-# Founder·Market·Technology·Moat rubric과 missing 조건 — D14 제안
+# Founder·Market·Technology·Moat rubric과 missing 조건 — D14 core 승인
 
 **현재 구현 방향 — v3 전환 승인:** [사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)에 따라 새 작업은 기존 baseline의 계속 구현이 아니라 v3에 정합화한다. baseline 코드·승인 기록은 호환성과 이력으로 보존하며 새 구현의 우선 방향이 아니다. 방향 승인에 이어 #82 및 #35 comment 5903505208에서 N/A·0분모·최종 selector·재조사 회계·Warning 종료의 운영 규칙을 별도 승인했다. #35 comment 5903574761의 무작위 선정은 평가 전 조사·평가 대상 집합에만 적용하며 최종 selector는 무작위가 아니다. 승인과 구현 완료는 별개이며 rubric 상세·provider·corpus·시간/비용 예산 등 남은 세부 선택만 [결정 목록](decisions.md)의 OPEN gate를 따른다.
 
@@ -6,7 +6,9 @@
 
 [문서 홈](../README.md) · [점수와 판단 정책](scoring.md) · [공통 계약](contracts.md) · [결정 목록](decisions.md) · 구조화 파일: [`configs/rubrics/core.yaml`](../../configs/rubrics/core.yaml) · 재무 영역: #11 (PR #34)
 
-> 상태: **구현 제안 / D14(founder·market·technology·moat 영역) OPEN** · rubric_version `core-0.1.0`
+> 상태: **D14(founder·market·technology·moat 영역) APPROVED — 2026-09-30, heojiwon2, [승인 기록](https://github.com/rice-steamed-water/skala-rag/issues/59#issuecomment-5904859865)** · rubric_version `core-0.1.0`. §6 Q1–Q5는 표의 제안안대로 승인. 아래 본문의 "제안"·"승인 전" 표기는 작성 당시 문구를 보존한 것이다. 정책 파일은 draft이며 finance 부분은 OPEN이다([결정 목록](decisions.md)).
+>
+> (작성 당시 상태: 구현 제안 / D14 OPEN)
 > 근거: 원문 §3 "상세 평가 기준 — 창업자 / 시장성 / 제품·기술력 / 경쟁 우위", [scoring §2–§4](scoring.md), D02·D05(APPROVED). 설계 산출물 v3 C-2(#35 / PR #36, 미병합)의 5단계 척도와 정합.
 > 숫자 구간과 anchor는 **팀 승인 전 제안**이다. 모든 예시는 **가상 기업**이며 실제 기업이 아니다.
 

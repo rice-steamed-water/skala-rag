@@ -1,6 +1,7 @@
 """Founder 평가의 인물 귀속 경계 (#58).
 
-현재 rubric/catalog는 제안 상태이므로 fixture 실행만 허용한다. 인물 동일성은
+rubric은 D14 core 승인(core-0.1.0)을 요구하고, catalog는 draft이므로 fixture
+실행만 허용한다. 인물 동일성은
 Evidence 텍스트나 동명이인 추측으로 판정하지 않고, 상위 조사 단계가 검증해
 전달한 evidence_id → person_id 매핑을 요구한다.
 """
@@ -30,8 +31,8 @@ def evaluate_founder_fixture(
     확인한 결과여야 한다. 이 함수는 그 판단을 텍스트에서 재추론하지 않는다.
     매핑 밖 근거는 프롬프트와 출력 검증 양쪽에서 제외한다.
     """
-    if rubric.get("status") != "proposed" or policy.status != "draft":
-        raise ValueError("Founder fixture requires proposed rubric and draft policy")
+    if rubric.get("status") != "approved" or policy.status != "draft":
+        raise ValueError("Founder fixture requires approved rubric and draft policy")
     people = set(founder_person_ids)
     if not people or any(not isinstance(pid, str) or not pid.strip() for pid in people):
         raise ValueError("Founder person IDs must be explicit nonblank IDs")

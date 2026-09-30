@@ -341,9 +341,10 @@ def test_numeric_evidence_without_figure_link_rejected(case):
         case.run()
 
 
-def test_approved_rubric_not_accepted_without_approved_policy(case):
-    with pytest.raises(ValueError, match="proposed rubric"):
-        case.run(rubric={**RUBRIC, "status": "approved"})
+def test_unapproved_rubric_rejected(case):
+    assert RUBRIC["status"] == "approved"
+    with pytest.raises(ValueError, match="approved rubric"):
+        case.run(rubric={**RUBRIC, "status": "proposed"})
 
 
 def test_link_requires_complete_figure_context():

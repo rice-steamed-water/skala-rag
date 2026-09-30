@@ -12,9 +12,10 @@
 않는다.
 
 호출은 #45 runtime(live)을 거치며 평가 1회 + 구조 수정 1회, 요청당 입력 8,000/출력
-2,000 token, USD 1.00 상한이다(M2 승인 B). rubric은 D14 제안(core-0.1.0 proposed)
-이므로 결과는 연결 smoke이지 추천 근거가 아니다. model·prompt·rubric version과 인용
-근거 ID를 요약 JSON으로 출력한다(``pytest -s``). 근거 원문·key는 출력하지 않는다.
+2,000 token, USD 1.00 상한이다(M2 승인 B). rubric은 D14 core 승인(core-0.1.0)이지만
+정책 파일은 draft이므로 결과는 연결 smoke이지 추천 근거가 아니다.
+model·prompt·rubric version과 인용 근거 ID를 요약 JSON으로
+출력한다(``pytest -s``). 근거 원문·key는 출력하지 않는다.
 """
 
 import json
@@ -80,7 +81,7 @@ def test_live_market_evaluation_smoke():
         for eid, link in raw["market_links"].items()
     }
     rubric = yaml.safe_load((ROOT / "configs/rubrics/core.yaml").read_text())
-    # D14 OPEN: 제안 rubric은 draft 정책과만 쓴다. live 추천 정책이 아니다.
+    # 정책 파일은 draft다(D14 core 승인은 정책 승인이 아님). live 추천 정책이 아니다.
     policy = load_policy(ROOT / "configs/scoring.draft.json", execution_mode="fixture")
     if snapshot.policy_version != policy.policy_version:
         pytest.fail("snapshot은 draft 정책 버전으로 동결되어야 한다(덮어쓰지 않음)")

@@ -1,7 +1,8 @@
 """Market 평가의 시장 맥락 경계 (#59).
 
-rubric/catalog가 제안 상태(D14 OPEN)이므로 proposed rubric + draft policy 조합만
-허용한다. 세부 시장 일치는 Evidence 텍스트에서 재추론하지 않고, 상위 조사 단계가
+rubric은 D14 core 승인(core-0.1.0, #59)을 요구한다. 정책 파일은 아직 draft이므로
+결과를 추천 근거로 표시하는 것은 이 모듈의 범위가 아니다. 세부 시장 일치는
+Evidence 텍스트에서 재추론하지 않고, 상위 조사 단계가
 검증해 전달한 ``evidence_id → MarketLink``를 요구한다(#58 Founder 귀속과 같은 방식).
 
 - 후보가 진입하는 세부 시장·지역과 맞지 않는 근거, 통화가 rubric 단위와 다른 규모
@@ -234,8 +235,8 @@ def evaluate_market(
     ``market_links``는 상위 조사 경계에서 시장 정의·지역·기준연도를 확인한
     결과여야 한다. 링크 밖 근거는 프롬프트와 출력 검증 양쪽에서 제외된다.
     """
-    if rubric.get("status") != "proposed" or policy.status != "draft":
-        raise ValueError("Market evaluation requires proposed rubric and draft policy")
+    if rubric.get("status") != "approved":
+        raise ValueError("Market evaluation requires approved rubric (D14 core)")
     if not set(market_links) <= set(snapshot.evidence):
         raise ValueError("Market link references evidence outside snapshot")
     rules = _MarketRules(rubric)
