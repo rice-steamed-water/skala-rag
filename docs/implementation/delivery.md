@@ -21,7 +21,7 @@
 
 채택한 디렉터리 구조와 공통 파일 규칙은 [CONTRIBUTING.md](../../CONTRIBUTING.md#폴더-구조)에 있다.
 
-main의 `pyproject.toml`은 Python `>=3.11`과 직접 의존성·uv/ruff/pytest를 명시하고 `uv.lock`이 설치 해석 결과를 고정한다. 빈 패키지와 offline import/의존성 API smoke test만 제공하며 업무 DTO·Graph·CLI·실 RAG·보고서는 없다. 설치·기존 테스트 명령은 [루트 README](../../README.md)에 있다. `CONTRIBUTING.md`의 “첫 코드 PR에서 만든다”는 시점 문구보다 현재 파일과 [기준 SHA](design-v3-alignment.md)를 본다. 그 협업문서는 #35 수정 범위 밖이다.
+main의 `pyproject.toml`은 Python `>=3.11`과 직접 의존성·uv/ruff/pytest를 명시하고 `uv.lock`이 설치 해석 결과를 고정한다. #5의 구조 DTO (`skala_rag.contracts`)와 #7의 `InvestmentState`/`create_initial_state`, 그 contract fixture·test는 현재 존재한다. 이는 storage/검증·초기 state 범위이며 Coverage 계산, Graph/reducer wiring, CLI, live RAG, 점수·보고서 구현을 뜻하지 않는다. 설치·기존 테스트 명령은 [루트 README](../../README.md)에 있다. `CONTRIBUTING.md`의 “첫 코드 PR에서 만든다”는 시점 문구보다 현재 파일과 [기준 SHA](design-v3-alignment.md)를 본다. 그 협업문서는 #35 수정 범위 밖이다.
 
 Vector store, LLM provider/model, 최종 embedding, PDF renderer는 미정이다. BGE-M3의 v3 1차 선택이 모델 설치·벤치마크·D07 최종 승인을 뜻하지 않는다. WP1의 fixture 실행 명령은 실제 구현·검증 후 Usage에 추가한다.
 
@@ -88,7 +88,7 @@ WP1이 예산 제한을 적용한 runner로 통합한다. WP6는 real Report Gen
 | T09 | graph / selector·고갈 | 승인/가상 selection policy에 따른 순서 불변·동점·전부 WATCHLIST/PASS·성공 평가 없음. 무적격은 None+사유 보고서; 0건/전부 부적격/unknown/기술실패 구별 | WP1/WP6 |
 | T10 | adapter / 실패 | 0건/401·403/timeout 구별, bounded retry, 인증 실패 반복 금지 | WP2/WP3 |
 | T11 | corpus / 페이지 | 전체 200 허용, 201 거절, 미상·미승인·교체 문서 검색 제외 | WP3 |
-| T12 | RAG / 귀속 | 같은 query·기업·corpus에 서로 다른 as_of를 전달해 cutoff와 cache 격리 확인; 다른 기업/미허용 Source/날짜 미상 미래 snapshot 제외 | WP3/WP4 |
+| T12 | RAG / 귀속·metadata filter | 같은 query·기업·corpus에 서로 다른 as_of를 전달해 cutoff와 cache 격리 확인; 다른 기업/미허용 Source/날짜 미상 미래 snapshot 제외. schema 확장 후에는 doc_type/year filter, unknown metadata, 1→2→3 priority fallback과 returned Chunk/cache key 격리를 fixture로 확인 | WP3/WP4 |
 | T13 | RAG / 실사용 | 실제 retrieval_id/chunk_id → rag provenance → 평가 snapshot의 Evidence → 기술 평가 → 보고서 citation; 사후 rag 표기만으로 통과 금지 | WP3/WP6 |
 | T14 | report / 인용 | Evidence·Source 연결, 실제 인용과 REFERENCE 정확히 일치 | WP6 |
 | T15 | report / 사실성 | 없는 수치·출처·단위 혼합·추정의 사실화 탐지 | WP5/WP6 |
@@ -121,7 +121,7 @@ unit/contract 테스트는 네트워크 없이 실행한다. live integration은
 
 | 섹션 | 입력·내용 | v3 목표 분량 |
 | --- | --- | --- |
-| SUMMARY | 최종 선택·정규화 점수/등급, 핵심 투자 포인트·위험·결론 | ≤0.5 page |
+| SUMMARY | **기업 한 줄 정의**, 최종 선택·정규화 점수/등급, 핵심 투자 포인트·위험·결론 | ≤0.5 page |
 | COMPANY & TEAM | CompanyProfile·Founder, 개요·아이디어·팀/사업화 역량 | 0.5~0.75 page |
 | TECHNOLOGY & MARKET | Technology·Market·Moat, 성능/통합·규모/성장/수요·차별성 | 1.25~1.5 pages |
 | INVESTMENT ASSESSMENT & RISKS | Business & Deal의 traction/deal_terms, 최종 점수·결측/해당 없음·판단·리스크 | 1.5~1.75 pages |
@@ -131,7 +131,7 @@ v3는 본문 약 4~4.5페이지를 목표로 둔다. 목표 분량 합이나 Mar
 
 **과제 필수:** 5장 이내, SUMMARY는 전체 보고서의 핵심 요약이며 1/2페이지 이내, 마지막 REFERENCE는 실제 사용 자료만. 표지·참고문헌을 분량 제한 밖으로 빼는 예외는 원문에 없으므로 전체 PDF를 세는 제안이다.
 
-- SUMMARY: 추천 여부, 핵심 이유, 가장 큰 위험, 근거 한계. 단순 목차나 회사 소개로 대체하지 않는다.
+- SUMMARY: **기업 한 줄 정의**, 추천 여부, 핵심 이유, 가장 큰 위험, 근거 한계. 단순 목차나 회사 소개로 대체하지 않는다.
 - 점수: 원배점 observed_score·applicable_weight, normalized_score, missing_weight·weighted_missing_pct, N/A 항목·차원별 비율·모든 보류 사유를 구별한다. 네 label은 원 Decision과 일치해야 한다.
 - 모든 수치·기업 사실: Evidence로 되돌아가는 인용을 둔다. LLM의 평가는 사실과 구별한다.
 - 추정값: 방법·입력·가정을 밝히고 직접 관측과 구분한다.

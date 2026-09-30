@@ -3,13 +3,12 @@
 Physical AI / Robotics 스타트업의 투자 조사·평가를 위한 수업용
 LangGraph Multi-Agent RAG 프로젝트다. 실제 투자 실행 시스템은 아니다.
 
-현재는 설치 가능한 `src/skala_rag` 패키지 골격과 네트워크 호출 없는
-import 및 공개 의존성 API 호환성 smoke test만 제공한다. 애플리케이션, CLI, live RAG, 평가 및
-보고서 출력은 구현되지 않았다. 새 구현 목표는 사용자 제공
+현재는 설치 가능한 `src/skala_rag` 패키지와 네트워크 호출 없는 검증이 있으며, #5의 구조 DTO
+(`RunInput`·후보·Source/Chunk/Evidence·retrieval/coverage bundle)와 #7의 `InvestmentState`·
+`create_initial_state`가 포함된다. 이는 정책 계산이 없는 저장/검증 및 초기 state 범위다. Graph/reducer wiring, CLI, live RAG, 평가·점수 계산 및 보고서 출력은 구현되지 않았다. 새 구현 목표는 사용자 제공
 [설계 v3 보존본](docs/design/design-v3.html)이며, 이전 설계와의 차이 및
 main·미병합 PR 기준은 [v3 정합화 기록](docs/implementation/design-v3-alignment.md)에 있다.
-v3의 명시 목표와 팀의 구현 정책 승인은 별개다. [결정 목록](docs/implementation/decisions.md)은
-모두 OPEN을 유지하며, 미정 정책·최종 모델·provider를 실행 기본값으로 정하지 않는다.
+v3의 명시 목표와 팀의 구현 정책 승인은 별개다. #3에는 D01–D06·D08의 **기존 baseline** 승인 기록이 있으나 v3의 selector·N/A·Warning 대체 세부는 별도 `v3-OPEN`이다. [결정 목록](docs/implementation/decisions.md)은 이 경계를 추적하며, 미정 정책·최종 모델·provider를 실행 기본값으로 정하지 않는다.
 
 ## 설치
 
@@ -73,9 +72,8 @@ uv lock --check
 
 ## 구조와 문서
 
-- `src/skala_rag/`: contracts, graph, agents, tools, rag, scoring,
-  reporting, prompts의 빈 하위 패키지
-- `tests/unit/`: 기존 import smoke test와 유틸리티별 공개 API 호환성 테스트 5개
-- `tests/contract/`, `tests/integration/`, `tests/fixtures/`: 빈 골격
+- `src/skala_rag/contracts/`: #5 구조 DTO와 #7 state factory; 다른 `graph`, `agents`, `tools`, `rag`, `scoring`, `reporting`, `prompts`는 업무 흐름 미구현
+- `tests/contract/`, `tests/fixtures/contracts.json`: 구조 DTO/state 검증 fixture·tests; 테스트 총수는 실행 결과로만 보고
+- `tests/unit/`, `tests/integration/`: 각 작업의 별도 검증 범위
 - [구현 가이드](docs/README.md): 목표와 승인 전 설계
 - [협업 규칙](CONTRIBUTING.md): 이슈·브랜치·개발 환경 규칙

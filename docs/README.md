@@ -1,6 +1,6 @@
 # 팀 구현 가이드 — Robotics Startup Agentic RAG
 
-> 상태: **v3 목표 정합화 / 구현 정책 팀 승인 전** · 기준일: 2026-09-30 KST
+> 상태: **v3 목표 정합화 / baseline 승인 기록과 v3 대체안 분리 필요** · 기준일: 2026-09-30 KST
 > 대상: 기능을 나누어 구현하고 통합할 팀원
 > 새 설계 입력: [설계 v3](design/design-v3.html) · 이전 설계·과제 요구: [통합 원문](raws/robotics_startup_agentic_rag_notion_integrated.md)
 
@@ -11,7 +11,7 @@
 3. 모든 구현 담당자가 [공통 데이터 계약](implementation/contracts.md)을 먼저 읽는다.
 4. [작업 분담과 검증](implementation/delivery.md)의 M0 → M1 순서로 시작한다. 외부 API부터 각자 연결하기보다, 같은 fixture로 전체 흐름을 먼저 맞춘다.
 
-현재 main에는 `pyproject.toml`·`uv.lock`, 설치 가능한 Python 패키지 골격과 offline import/의존성 API smoke test가 있다. 업무 DTO·Graph·CLI·실제 RAG·평가·보고서는 구현되지 않았다. 설치·검증 명령은 [루트 README](../README.md), 조사한 main SHA와 미병합 PR snapshot은 [정합화 기록](implementation/design-v3-alignment.md)에 있다. 아래 함수·DTO·정책은 **구현 목표/제안**이지 제공되는 기능이 아니다. v3 HTML과 `raws/`는 수정하지 않는다.
+현재 main에는 `pyproject.toml`·`uv.lock`, 설치 가능한 Python 패키지, #5의 구조 DTO와 #7의 `InvestmentState`/`create_initial_state`, 관련 contract fixture·tests가 있다. 이는 정책 계산이 없는 DTO/state 범위이며 Graph/reducer wiring·CLI·실제 RAG·평가·점수·보고서는 구현되지 않았다. 설치·검증 명령은 [루트 README](../README.md), 조사한 main SHA와 미병합 PR snapshot은 [정합화 기록](implementation/design-v3-alignment.md)에 있다. 아래 함수·DTO·정책은 **구현 목표/제안**이지 제공되는 기능이 아니다. v3 HTML과 `raws/`는 수정하지 않는다.
 
 ## 문서를 읽는 순서
 
@@ -52,7 +52,7 @@
 | **구현 제안** | 원문을 실행 가능한 계약으로 보완한 초안 | 팀 승인 후 채택; 승인 전 확정안으로 표현하지 않음 |
 | **미결정** | 원문만으로 결론을 낼 수 없는 사항 | 담당자·결정·근거·승인일 기록 |
 
-각 상세 문서의 새 필드, 예외 처리, 함수명은 별도 표시가 없어도 **구현 제안**이다. 현재 `APPROVED`로 처리된 결정은 없다. v3의 명시 내용은 목표로 반영하되 세부 정책을 승인 없이 기본값으로 만들지 않는다. OPEN에 의존하는 기능은 주입된 가상 정책·인터페이스까지만 진행하고 live를 차단한다.
+각 상세 문서의 새 필드, 예외 처리, 함수명은 별도 표시가 없어도 **구현 제안**이다. #3 issue comment의 D01–D06·D08 baseline 승인 기록은 존재하지만, v3가 바꾸는 selector·N/A·Warning 세부는 자동으로 승인되지 않아 `v3-OPEN`이다. v3의 명시 내용은 목표로 반영하되 세부 정책을 승인 없이 기본값으로 만들지 않는다. OPEN에 의존하는 기능은 주입된 가상 정책·인터페이스까지만 진행하고 live를 차단한다.
 
 ## 필수 요구사항과 검증 위치
 

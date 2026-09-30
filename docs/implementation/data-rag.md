@@ -89,13 +89,13 @@ Chunk 크기·overlap·top_k는 실험 설정으로 기록한다. 원문에 없�
 
 **검색 순서 제안**
 
-1. collector는 query·candidate_id·corpus/index_version·as_of·top_k·allowed_source_ids를 담은 `RetrievalRequest`를 만든다([공통 계약](contracts.md)). 승인된 manifest에서 대상 기업과 관련 industry 출처를 선택하고, 검색 adapter는 그 허용 목록과 실행 기준일을 함께 적용한다. 같은 질의라도 as_of가 다르면 별도 검색/cache 항목이다.
+1. collector는 현재 `RetrievalRequest`의 query·candidate_id·corpus/index_version·as_of·top_k·allowed_source_ids를 만든다([공통 계약](contracts.md)). 승인된 manifest에서 대상 기업과 관련 industry 출처를 선택하고, 검색 adapter는 그 허용 목록과 실행 기준일을 함께 적용한다. 같은 질의라도 as_of가 다르면 별도 검색/cache 항목이다. v3의 doc_type/year metadata filter는 아직 DTO에 없다: Source의 versioned bibliographic metadata에서 유도한 document class/year와 request filter 확장 proposal을 schema로 승인한 뒤 cache key·returned result 검증에 함께 넣는다. class unknown은 우선순위 승격에 쓰지 않으며, 1→2→3은 hard filter가 아닌 명시적 fallback 정책이다.
 2. 같은 embedding 모델·revision·차원으로 query와 document를 표현한다.
 3. dense 검색 결과를 반환하고 source/chunk/page metadata와 RetrievalRecord를 보존한다. Web→RAG 재발견은 [EvidenceProvenance 병합 계약](contracts.md)으로 추적하며 근거의 내용과 수집 경로를 분리한다.
 4. MVP는 dense 중심이다(v3 B-3). 특허번호·IPC·모델명 등 exact match가 필요한 경우 keyword/sparse를 **필요 시 확장**하며 특허를 포함한다는 이유만으로 hybrid·reranker를 필수화하지 않는다. 적용 여부·merge·reranking 설정과 실측을 기록하고 dense-only를 hybrid 완료로 표시하지 않는다.
 5. 검색 결과의 숫자는 LLM 구조화 추출 + 코드 검증으로 Evidence에 옮긴다. similarity 값은 CAGR·수익률·신뢰도 점수가 아니다.
 
-재인덱싱할 때 모델 revision, tokenizer, chunk 설정, 정규화 설정이 바뀌면 새 index_version을 만든다. 서로 다른 embedding 공간을 같은 collection에 섞지 않는다. vector store 제품과 배포 방식은 D07에서 정한다.
+재인덱싱할 때 모델 revision, tokenizer, chunk 설정, 정규화 설정이 바뀌면 새 index_version을 만든다. 문서별 manifest/Chunk에는 document class·year와 자료 유형별 slide/patent metadata를 보존할 확장 shape를 별도 승인하며, 현재 `Source`/`Chunk` DTO에 그 필드가 이미 있다고 가정하지 않는다. 서로 다른 embedding 공간을 같은 collection에 섞지 않는다. vector store 제품과 배포 방식은 D07에서 정한다.
 
 ## 5. Embedding 후보와 선택 절차
 
@@ -120,6 +120,8 @@ Chunk 크기·overlap·top_k는 실험 설정으로 기록한다. 원문에 없�
 - **MRR:** 첫 정답 rank 역수의 전체 질의 평균. 검색 깊이/cutoff를 D07 실험 설정에 명시하고 해당 범위에 정답이 없으면 0으로 계산하는 안이다. cutoff가 있으면 `MRR@depth`로 함께 표시하여 전체 순위 MRR로 오해하지 않게 한다.
 - **Cross-lingual:** 한국어 질의→영문 논문/기술문서 subset을 별도 구성하고 같은 지표를 분리 보고한다. 전체 평균으로 교차언어 실패를 숨기지 않는다.
 - retrieval latency, indexing time, peak memory, 실제 비용도 같은 하드웨어·설정에서 측정한다.
+- **입력 길이/절단:** 모델별 최대 입력 길이와 실제 chunk token 분포·truncation 발생/방식을 측정해 기록한다.
+- **통합·운영 복잡도:** 현재 pipeline과의 입력 포맷·의존성·index migration·배포/관측 부담을 정성 기준으로 비교한다. 이는 성능 수치가 아니며 실측 결과 없이 우열을 선언하지 않는다.
 - 출처/페이지 복원 가능 여부와 기술 평가에 실제로 쓰인 근거를 확인한다.
 - 임계값은 D07에서 사전에 정한다. 이 문서에는 측정 결과나 통과 수치를 기입하지 않는다.
 
@@ -129,6 +131,8 @@ Chunk 크기·overlap·top_k는 실험 설정으로 기록한다. 원문에 없�
 모델 / revision / 라이선스 확인:
 코퍼스 / 질의셋 version:
 실행환경 / library lock / embedding·chunk·retrieval 설정:
+입력 길이 / chunk token 분포 / truncation 발생·방식: [실측 후 입력]
+통합·운영 복잡도(입력 포맷·의존성·migration·관측): [확인 후 입력]
 Hit Rate@1 / Hit Rate@3 / Hit Rate@5 / MRR(검색 depth·cutoff 포함): [실측 후 입력]
 한국어→영문 subset 지표 / latency / indexing time / memory / cost: [실측 후 입력]
 실패 사례 / 기술 평가에 사용된 evidence_ids:

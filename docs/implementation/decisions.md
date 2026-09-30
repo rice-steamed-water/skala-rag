@@ -2,20 +2,20 @@
 
 [문서 홈](../README.md) · [v3 원문](../design/design-v3.html) · [이전 통합 원문](../raws/robotics_startup_agentic_rag_notion_integrated.md) · [정합화·영향표](design-v3-alignment.md)
 
-2026-09-30 기준 사용자가 v3를 새 설계 입력으로 지정했다. **v3 명시 목표 ≠ 팀의 구현 정책 APPROVED ≠ main 구현/검증**이다. 아래 **D01–D14는 모두 OPEN**이며 승인자·승인일은 기록되지 않았다. 표의 과거 제안은 역사이지 활성 기본값이 아니다. 담당은 검토 역할 제안으로 실명/GitHub 계정 배정이 아니다. PR #33의 OPEN 승인기록 초안과 PR #34의 proposed rubric도 팀 승인을 대신하지 않는다.
+2026-09-30 기준 사용자가 v3를 새 설계 입력으로 지정했다. **v3 명시 목표 ≠ baseline 정책 승인 ≠ main 구현/검증**이다. issue #3 comment `5902473875` (2026-09-30 01:49:36Z, xxhigh)는 PR #41 head `7b9f6cee8f36a016d5f47191b41999430390e6ee`의 D01–D06·D08 **기존 baseline을 변경 없이 승인**한 기록이다. 그러나 그 baseline의 first-RECOMMEND 종료·serial Deal·fixed100·all-domain-low 같은 전제는 v3 목표와 다르다. 따라서 아래 표의 D01–D08은 v3 대체 세부에 관한 `v3-OPEN`이며, 승인 이력을 지우거나 `SUPERSEDED`로 바꾸지 않는다. v3 replacement를 승인할 때만 근거·정확한 supersession 범위를 기록한다. D07·D09–D14와 live 총시간·LLM 호출·비용 상한은 이번 승인 범위 밖이다.
 
 ## 구현 전에 합의할 항목
 
 | ID / 상태 | 이전 제안의 이력 | v3 목표 / 근거 | 남은 결정·제안 / 차단 대상 |
 | --- | --- | --- | --- |
-| D01 OPEN | 통합 원문 §3·§7의 팀안/교수 예시/단계별 비중이 공존 | C-1의 23개 criterion, `5/30/25/20/10/10`, 원 catalog 합 100 | 지표 담당: catalog ID·버전 승인. 단계별 비중 자동 변경 금지; N/A 분모는 D05와 함께 검증 / 점수 정책 |
-| D02 OPEN | 과거 모든 상위 영역의 관측 평균 rating≤2 보류안은 v3 대상 아님 | C-2의 1..5 anchor; C-4의 market/technology만 적용가능 배점 대비 획득≤40%, 결측≥30%, 네 label | 지표 담당: 소수 연속 구간·반올림 전 비교·다중 reason 대표표시 우선순위. 부분/완전 핵심 missing의 비율과 관측 저점수를 설명에서 구별 / 평가·판정 |
-| D03 OPEN | 과거 첫 RECOMMEND 종료·나머지 not_evaluated는 v3 대상 아님 | B-1/D-3: 전 후보 처리 후 deterministic selector; 무적격은 selected=None+사유 보고서 | Graph+전원: label/score 우선, tie-break, 전부 WATCHLIST/PASS, 성공 평가 없음, 비교 대상 제외 기준·report mode. 임의 candidate_id/입력순 정렬 금지 / selector·종료 |
-| D04 OPEN | 과거 5개 평가 뒤 직렬 Deal Terms안은 v3 대상 아님 | B-1/D-2: 5번째 Business & Deal가 실적·투자조건 함께 담당; 5 branch/6 dimension | 평가+Graph: `business_deal` branch의 `{traction, deal_terms}` atomic envelope, key·wrapper·schema version. 일부 실패 성공 승격 금지 / DTO·Join |
-| D05 OPEN | 과거 고정 분모 100·not_applicable 미채택안은 v3 대상 아님 | C-3: Missing 포함, 해당 없음만 분모 제외; C-2의 근거부족 N/A 표기는 내부 충돌 | 데이터+지표: missing/not_applicable 구분 해석 승인, 적용성 근거·검증 주체, 전체/차원 0분모 결과. 최소 Evidence gate와 Coverage 충분성·gap 우선순위 / Coverage·집계 |
-| D06 OPEN | 통합 원문 §7의 TIPS·프리/브릿지·추정 정규화는 확인 필요 | A-2/B-1: 비상장·Seed~C·Exit 미완료·최소 Evidence 확보 가능 | Discovery+전원: 최소 Evidence가 확보 가능성/현재 확보 중 무엇인지, Company Research 경계·unknown 보강/다음 후보, 프리시드 허용. TIPS/검색0건/unknown 자동 적격 금지 / Eligibility |
+| D01 v3-OPEN | 통합 원문 §3·§7의 팀안/교수 예시/단계별 비중이 공존 | C-1의 23개 criterion, `5/30/25/20/10/10`, 원 catalog 합 100 | 지표 담당: catalog ID·버전 승인. 단계별 비중 자동 변경 금지; N/A 분모는 D05와 함께 검증 / 점수 정책 |
+| D02 v3-OPEN | 과거 모든 상위 영역의 관측 평균 rating≤2 보류안은 v3 대상 아님 | C-2의 1..5 anchor; C-4의 market/technology만 적용가능 배점 대비 획득≤40%, 결측≥30%, 네 label | 지표 담당: 소수 연속 구간·반올림 전 비교·다중 reason 대표표시 우선순위. 부분/완전 핵심 missing의 비율과 관측 저점수를 설명에서 구별 / 평가·판정 |
+| D03 v3-OPEN | 과거 첫 RECOMMEND 종료·나머지 not_evaluated는 v3 대상 아님 | B-1/D-3: 전 후보 처리 후 deterministic selector; 무적격은 selected=None+사유 보고서 | Graph+전원: label/score 우선, tie-break, 전부 WATCHLIST/PASS, 성공 평가 없음, 비교 대상 제외 기준·report mode. 임의 candidate_id/입력순 정렬 금지 / selector·종료 |
+| D04 v3-OPEN | 과거 5개 평가 뒤 직렬 Deal Terms안은 v3 대상 아님 | B-1/D-2: 5번째 Business & Deal가 실적·투자조건 함께 담당; 5 branch/6 dimension | 평가+Graph: `business_deal` branch의 `{traction, deal_terms}` atomic envelope, key·wrapper·schema version. 일부 실패 성공 승격 금지 / DTO·Join |
+| D05 v3-OPEN | 과거 고정 분모 100·not_applicable 미채택안은 v3 대상 아님 | C-3: Missing 포함, 해당 없음만 분모 제외; C-2의 근거부족 N/A 표기는 내부 충돌 | 데이터+지표: missing/not_applicable 구분 해석 승인, 적용성 근거·검증 주체, 전체/차원 0분모 결과. 최소 Evidence gate와 Coverage 충분성·gap 우선순위 / Coverage·집계 |
+| D06 v3-OPEN | 통합 원문 §7의 TIPS·프리/브릿지·추정 정규화는 확인 필요 | A-2/B-1: 비상장·Seed~C·Exit 미완료·최소 Evidence 확보 가능 | Discovery+전원: 최소 Evidence가 확보 가능성/현재 확보 중 무엇인지, Company Research 경계·unknown 보강/다음 후보, 프리시드 허용. TIPS/검색0건/unknown 자동 적격 금지 / Eligibility |
 | D07 OPEN | 과거 BGE/Jina/OpenAI 비교 참고는 v3 baseline이 아님 | B-3: BGE-M3 1차 선택, e5-large·KURE-v1과 동일 Chunk/Query의 Hit Rate@1/3/5·MRR·교차언어 비교 | RAG: 최종 선택, 모델 revision·접근/라이선스 실확인, MRR depth/cutoff·성능 기준·vector store·장비. 실험은 M2 / live index |
-| D08 OPEN | 과거 후보5·batch8calls·30초, 적격성/사후 보강 합산, 수정 소진 failed 일괄안은 승인되지 않음 | D-2/D-3: Coverage에서 Evidence 재조사 최대2회 후 평가; 구조·의미 수정 공유2회 후 Warning 현재 결과 반환 | Graph+전원: 초기 제외/포함·빈/오류 batch·네트워크 retry·Company Research 별도 회계, 실행 예산, Warning 결과/acceptance/publication·workflow_status/CLI/manifest 매핑 / live·종료 |
+| D08 v3-OPEN | 과거 후보5·batch8calls·30초, 적격성/사후 보강 합산, 수정 소진 failed 일괄안은 승인되지 않음 | D-2/D-3: Coverage에서 Evidence 재조사 최대2회 후 평가; 구조·의미 수정 공유2회 후 Warning 현재 결과 반환 | Graph+전원: 초기 제외/포함·빈/오류 batch·네트워크 retry·Company Research 별도 회계, 실행 예산, Warning 결과/acceptance/publication·workflow_status/CLI/manifest 매핑 / live·종료 |
 | D09 OPEN | 과거 SUMMARY+본문5개+REFERENCE안은 v3 대상 아님 | E-1/E-2의 다섯 목차·인용, 실제 PDF≤5·SUMMARY≤0.5 | 보고서: 렌더러·A4·폰트·여백·SUMMARY 측정, 무적격/Warning 목차 예외, 서지 누락 표기, layout 수정예산 / 보고서·제출 |
 | D10 OPEN | 통합 원문 §11/§12의 별명·역할 매핑 미확정 | v3 표지는 울산 4반 2조, 김근홍·정순욱·허지원·심혁·박태준·한유진 명시 | 전원: 표지 명단≠실제 역할/계정. 이슈·PR 수행 증거와 본인 확인으로 Contributors 기록, 자동 매칭 금지 / 기여 역할 |
 | D11 OPEN | 통합 원문 §10의 DAY 3 일정만 있음 | v3가 캠퍼스·반·조는 제공하지만 실제 제출일은 제공하지 않음 | 전원: DAY 3 10:00 설계/15:00 개발의 실제 날짜·시간대·Slack thread 확인 / 제출 |
@@ -37,7 +37,7 @@
 
 ## 승인 방법
 
-M0에서 결정할 수 없는 항목은 `OPEN`으로 남기고, 해당 기능은 fixture/인터페이스까지만 구현한다. `OPEN`을 기본값으로 감추거나 LLM이 실행 때 임의 결정하게 하지 않는다.
+v3 replacement에서 결정할 수 없는 항목은 `v3-OPEN`으로 남기고, 해당 기능은 fixture/인터페이스까지만 구현한다. baseline 승인 기록을 OPEN으로 되돌리거나, 반대로 이를 v3 replacement의 승인으로 읽지 않는다. `OPEN`을 기본값으로 감추거나 LLM이 실행 때 임의 결정하게 하지 않는다.
 
 결정마다 아래 양식을 채운다. 거절된 대안도 남겨 같은 논의를 반복하지 않게 한다.
 

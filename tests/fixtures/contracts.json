@@ -1,0 +1,47 @@
+{
+  "label": "Wholly synthetic DTO examples; not measured data or approved policy",
+  "RunInput": {
+    "schema_version": "synthetic-1", "investment_theme": "Synthetic Robotics", "countries": ["KR"], "languages": ["ko"], "as_of": "2026-09-01", "policy_version": "unapproved-fixture", "corpus_version": "synthetic-corpus", "execution_mode": "fixture"
+  },
+  "DiscoveryBundle": {"schema_version": "synthetic-1", "candidates": [], "sources": {}},
+  "RetrievalBundle": {"schema_version": "synthetic-1", "chunks": [], "sources": {}},
+  "ResearchGap": {
+    "schema_version": "synthetic-1", "gap_id": "gap-synthetic", "candidate_id": "co-synthetic", "criterion_id": "synthetic.criterion", "missing_fields": ["synthetic-field"], "reason": "Synthetic missing observation", "priority_weight": 0, "suggested_queries": ["Synthetic query"], "attempted_retrieval_ids": [], "status": "open"
+  },
+  "CoverageResult": {
+    "schema_version": "synthetic-1", "candidate_id": "co-synthetic", "evidence_revision": 0, "policy_version": "unapproved-fixture", "covered_criterion_ids": [], "missing_criterion_ids": [], "missing_weight": 0, "coverage_pct": 0, "research_ready": true, "unresolved_conflicts": []
+  },
+  "RetrievalRequest": {
+    "schema_version": "synthetic-1", "query": "Synthetic query", "candidate_id": "co-synthetic", "corpus_version": "synthetic-corpus", "index_version": "synthetic-index", "as_of": "2026-09-01", "top_k": 0, "allowed_source_ids": []
+  },
+  "RetrievalRecord": {
+    "schema_version": "synthetic-1", "retrieval_id": "retrieval-synthetic", "run_id": "run-synthetic", "tool_name": "synthetic-tool", "query": "Synthetic query", "arguments_without_secrets": {"synthetic": true}, "started_at": "2026-09-01T12:00:00Z", "finished_at": "2026-09-01T12:00:01Z", "status": "empty", "source_ids": [], "chunk_ids": [], "evidence_ids": [], "cache_hit": false
+  },
+  "EvidenceProvenance": {
+    "schema_version": "synthetic-1", "retrieval_id": "retrieval-synthetic", "method": "rag", "chunk_id": "chunk-synthetic"
+  },
+  "Evidence": {
+    "schema_version": "synthetic-1", "evidence_id": "ev-synthetic", "candidate_id": "co-synthetic", "scope": "company", "criterion_ids": ["synthetic.criterion"], "claim": "Synthetic unmeasured claim", "source_id": "src-synthetic", "locator": "https://fixture.invalid/report#page=1", "excerpt": "Synthetic excerpt", "provenance": [{"schema_version": "synthetic-1", "retrieval_id": "retrieval-synthetic", "method": "rag", "chunk_id": "chunk-synthetic"}], "evidence_kind": "reported", "confidence": "unknown", "limitations": ["Synthetic only"], "supporting_evidence_ids": [], "conflicts_with": []
+  },
+  "Source": {
+    "schema_version": "synthetic-1", "source_id": "src-synthetic", "title": "Synthetic document", "publisher": "Synthetic publisher", "author": null, "source_kind": "report", "url": "https://fixture.invalid/report", "retrieved_at": "2026-09-01T12:00:00+09:00", "content_hash": "synthetic-placeholder-not-measured", "language": "ko", "access_notes": "Synthetic only", "bibliographic_metadata": {"synthetic": true, "pages": [1, 2]}
+  },
+  "Chunk": {
+    "schema_version": "synthetic-1", "chunk_id": "chunk-synthetic", "source_id": "src-synthetic", "corpus_version": "synthetic-corpus", "text": "Synthetic excerpt", "locator": "https://fixture.invalid/report#page=1", "candidate_ids": ["co-synthetic"], "scope": "company", "language": "ko", "embedding_model": "synthetic-not-a-selection", "embedding_revision": "synthetic-revision"
+  },
+  "Candidate": {
+    "schema_version": "synthetic-1", "candidate_id": "co-synthetic", "canonical_name": "Synthetic Robotics", "aliases": [" Synthetic Alias "], "country": "KR", "homepage_url": "https://fixture.invalid/company", "legal_identifiers": {"synthetic-registry": " 001 "}, "discovery_source_ids": ["src-synthetic"]
+  },
+  "StageInfo": {
+    "schema_version": "synthetic-1", "normalized_round": "unknown", "bucket": "unknown", "method": "unknown", "source_ids": [], "confidence": "unknown", "rationale": "Synthetic unknown observation"
+  },
+  "MonetaryObservation": {
+    "schema_version": "synthetic-1", "value": 0, "currency": "KRW", "unit": "million", "as_of": "2026-09-01"
+  },
+  "CompanyProfile": {
+    "schema_version": "synthetic-1", "candidate_id": "co-synthetic", "stage": {"schema_version": "synthetic-1", "normalized_round": "unknown", "bucket": "unknown", "method": "unknown", "source_ids": [], "confidence": "unknown", "rationale": "Synthetic unknown"}, "as_of": "2026-09-01", "field_evidence_ids": {"is_listed": []}
+  },
+  "EligibilityResult": {
+    "schema_version": "synthetic-1", "eligibility_result_id": "elig-synthetic", "run_id": "run-synthetic", "candidate_id": "co-synthetic", "evidence_revision": 0, "policy_version": "unapproved-fixture", "as_of": "2026-09-01", "status": "unknown", "checks": {"synthetic-check": {"observation": null}}, "reason_codes": ["synthetic-only"], "evidence_ids": []
+  }
+}

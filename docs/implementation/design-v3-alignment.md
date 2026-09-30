@@ -17,27 +17,22 @@
 
 표지의 **울산 4반 2조 / 김근홍·정순욱·허지원·심혁·박태준·한유진**은 v3가 제공한 metadata다. 실제 역할·GitHub 계정 매핑·기여량 또는 달력상 제출일은 제공하지 않는다.
 
-## 2. 현재 구현과 미병합 제안 snapshot
+## 2. 현재 구현과 GitHub refresh
 
-| 구분 | 확인한 기준 | 포함 / 포함하지 않는 것 |
+**refresh cutoff: 2026-09-30 KST; local merge target `origin/main` = `25c7a1af22b651d880a929a62740c141a82c5a6a`.** 이 refresh는 read-only GitHub 조회와 현재 main checkout을 구분한다. 문서 정합화는 다른 PR의 구현·검증·병합을 대신하지 않는다.
+
+| 구분 | 현재 확인 | 경계 |
 | --- | --- | --- |
-| main 구현 | `a0b3608e3c0fc1f1a41f3dd189ae8caaf7bd513c` | `pyproject.toml`·`uv.lock`, Python `>=3.11`, 빈 패키지와 offline import/의존성 API smoke test. 업무 DTO·Graph·CLI·실 RAG·평가·보고서 없음 |
-| v3 목표 | §1의 HTML hash | Evidence Research 통합, 5 branch/6 dimension, 전 후보 처리·selector, 점수/보고서 목표. 아직 구현 증거 아님 |
-| 팀 승인 | [결정 목록](decisions.md) D01–D14 OPEN | 사용자 지정 목표는 반영하지만 승인자·승인일·거절된 대안을 생성하지 않음 |
-| 미병합 작업 | 아래 PR head와 이슈 snapshot | main 동작이 아니며 PR 작성자의 검증 보고도 #35의 재실행 결과와 별개 |
+| main 구현 | #5/PR #32와 #7/PR #39가 `25c7a1a`에 병합되어 `skala_rag.contracts` 구조 DTO, `InvestmentState`, `create_initial_state`, contract fixture/tests를 제공 | Coverage는 저장 DTO일 뿐 fixed100·N/A/weighted 계산을 구현하지 않는다. Graph/reducer wiring, CLI, live RAG, 평가·점수·보고서는 아직 이 사실만으로 구현됐다고 말할 수 없다 |
+| #3 승인 근거 | issue #3 comment [5902473875](https://github.com/rice-steamed-water/skala-rag/issues/3#issuecomment-5902473875), 2026-09-30T01:49:36Z, xxhigh | D01–D06·D08 **baseline**만 승인 기록. v3 replacement와 D07·D09–D14, live 총시간·LLM 호출·비용 상한은 자동 승인 아님 |
+| PR #41 | OPEN, non-Draft, head `7b9f6cee8f36a016d5f47191b41999430390e6ee` | 승인 기록의 문서 반영 PR이며 main 병합 전이다. PR 본문/머리는 v3 정책 승인을 대신하지 않는다 |
+| #35 / PR #36 | #35 assignee `luk0715`; PR #36 OPEN Draft, 이 작업 시작 head `790c8dc667d421e341f782803778f9a07dcaaae8` | source 보존/문서 정합화 작업. 이 문서의 이후 변경, review, gate, merge를 그 head에 소급해 주장하지 않는다 |
+| 열린 작업 | refresh 시 open issues 45개 | 아래 28개 영향표는 이전 historical snapshot이며 현재 assignment/count를 나타내지 않는다 |
 
-이 작업의 상위 검증 담당자가 보고한 baseline은 Python 3.12.14에서 `uv sync --frozen`, `ruff check`, `ruff format --check`(23 files), `pytest`(6 passed), `uv lock --check` 통과다. 이는 **기존 골격의 검증**이며 v3의 DTO·점수·Graph·PDF 테스트가 아니다. #35 최종 변경 head의 gate·독립 리뷰 결과는 해당 PR 검증란에 실제 실행 후 기록한다.
+### 현재 열린 PR 영향
 
-### 열린 PR 기준
-
-| PR / 관련 이슈 | 상태·base / 확인 head | 정합화 영향과 증거 경계 |
-| --- | --- | --- |
-| #32 / #5 | OPEN Draft, main / `b0451007d4fa6a4ad59f1228c9bce63ac8c36c4b` | DTO 진행 중. snapshot의 changed files는 비어 있고 본문은 최종 검증 전이다. Coverage의 적용성·분모/%와 소비자 계약 협의 필요. 로컬 미푸시 구현은 조사/복사하지 않음 |
-| #33 / #3 | OPEN Draft, main / `ca91eda9c85a7a24cbd9f3eb8c7041d8c6fec503` | decisions.md의 D01–D06·D08 승인기록 초안은 모두 OPEN. 모든 영역 저점수·첫 추천 종료·직렬 Deal·고정100·옛 예산 제안 재유입 방지. 같은 파일 충돌은 텍스트뿐 아니라 의미를 조정해야 함 |
-| #34 / #11 | OPEN Draft, main / `732fdc0baeeef3525c90afc818b3a7a7695e2eb8` | 재무 rubric·설정은 proposed. pre-revenue/Rule of 40을 missing으로 고정한 부분은 C-3 적용성과 재논의. 단위·derived·동일 라운드 보호는 유지. non_positive_burn을 자동 N/A로 바꾸지 않음. 본문 35 passed는 작성자 보고이며 #35 재검증 아님 |
-| #36 / #35 | OPEN Draft, main / 초기 source 보존 head `790c8dc667d421e341f782803778f9a07dcaaae8` | 이 문서 작업의 시작 기준. v3 source 보존만 담긴 당시 head이며 최종 문서·review·CI·병합 상태 주장이 아님 |
-
-#32–#34 snapshot의 reviews/comments는 비어 있으며 팀 승인 근거가 없다. 이슈 #5의 과거 “PR #31 미병합” 댓글보다 이후 병합 확인 댓글과 위 main을 기준으로 한다. 다른 작성자의 PR 코드를 가져오거나 그 이슈를 완료 처리하지 않는다.
+- #37/#6은 evaluation DTO Draft이며 #5 구조 타입을 기다린다는 body 상태다. #40/#10은 proposed core rubric Draft, #34/#11은 finance rubric Draft다. #38/#9 draft catalog는 merged이나 body가 v3 미반영임을 명시한다. 이 문서는 어느 PR의 코드를 복사하거나 완료 처리하지 않는다.
+- PR #41의 baseline 기록과 v3의 newer user-selected design input이 충돌한다. baseline을 지우지 않고, `v3-OPEN` 질문으로 별도 승인·supersession 범위를 요구한다.
 
 ## 3. v3 절별 추적과 이전 계약의 변경
 
@@ -69,9 +64,9 @@
 - Reporter/Validator/Judge는 같은 고정 context와 현재 draft hash를 사용하며 검색하거나 upstream 점수를 고치지 않는다. context 파손은 fatal이며 Warning 품질 경로로 덮지 않는다.
 - 실제 PDF 분량·인용 검증, 재배포/200페이지/as_of/권한·비밀 보호, fixture와 실측 구별.
 
-## 4. 열린 이슈별 영향과 acceptance migration
+## 4. historical 열린 이슈 snapshot의 acceptance migration
 
-조사한 open issue snapshot은 **28개(#3, #5–#30, #35)**이며 번호 중복이 없다. 당시 assignee는 #3=`heojiwon2`, #5/#35=`luk0715`, #11=`XXXXXim`; 나머지는 미할당이다. 이는 실제 수업 역할·실명 매핑이 아니다. 아래는 **필요한 후속 AC 변경**이지 이미 해당 이슈 본문을 수정/승인/완료했다는 기록이 아니다. 알림·PR 통합·read-back은 #35 상위 작업에서 처리한다.
+아래는 refresh 이전의 **28개(#3, #5–#30, #35) historical snapshot**이며, 최신 open-issue count/assignee는 §2 refresh를 따른다. 당시 assignee는 #3=`heojiwon2`, #5/#35=`luk0715`, #11=`XXXXXim`; 나머지는 미할당이었다. 이는 실제 수업 역할·실명 매핑이 아니다. 아래는 **필요한 후속 AC 변경**이지 이미 해당 이슈 본문을 수정/승인/완료했다는 기록이 아니다. 알림·PR 통합·read-back은 #35 상위 작업에서 처리한다.
 
 | 이슈 / snapshot 작업 | 필요한 acceptance migration | 문서·결정 / 검증 |
 | --- | --- | --- |

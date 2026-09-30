@@ -2,7 +2,7 @@
 
 [문서 홈](../README.md) · [공통 계약](contracts.md) · [결정 목록](decisions.md)
 
-근거: [v3](../design/design-v3.html) B-1, D-1–D-3, E. **Evidence Research 단일 책임, 5 branch/6 dimension, 전 후보 처리 후 selector, 재조사·수정 최대 2회와 Warning 반환은 v3 목표**다. snapshot·atomic envelope·오류 controller·PDF 경로 등 보완 계약은 D03·D04·D08·D09의 승인 전 제안이다. 현재 구현 여부는 [기준 snapshot](design-v3-alignment.md)과 구별한다.
+근거: [v3](../design/design-v3.html) B-1, D-1–D-3, E. **Evidence Research 단일 책임, 5 branch/6 dimension, 전 후보 처리 후 selector, 재조사·수정 최대 2회와 Warning 반환은 v3 목표**다. snapshot·atomic envelope·오류 controller·PDF 경로 등 보완 계약은 v3 replacement의 D03·D04·D08·D09 제안이다. issue #3의 D01–D06·D08 baseline 승인 기록은 남아 있으나, v3의 전 후보 selector·5 branch/6 dimension·Warning 경로를 자동 승인하지 않는다. 현재 구현 여부는 [기준 snapshot](design-v3-alignment.md)과 구별한다.
 
 ## 1. 역할을 나누는 기준
 
@@ -74,7 +74,7 @@ flowchart TD
     failed --> END
 ```
 
-오류 처리 공통 규칙은 §6이다. 그림은 승인 정책이 주입된 실행 형태를 설명하며 없는 정책을 노드가 생성하지 않는다. Company Research의 적격성 unknown 보강·최소 Evidence gate와 Evidence Research의 Coverage 재조사는 구별한다(D05·D06·D08 OPEN). 모든 normalize된 후보를 처리하고 적격 후보만 평가한다. 예산/취소 등의 예외 중단을 전 후보 정상 처리로 표시하지 않는다. 별도 Targeted Research나 평가 후 재조사 화살표는 v3 기본 흐름에 없다.
+오류 처리 공통 규칙은 §6이다. 그림은 승인 정책이 주입된 실행 형태를 설명하며 없는 정책을 노드가 생성하지 않는다. Company Research의 적격성 unknown 보강·최소 Evidence gate와 Evidence Research의 Coverage 재조사는 구별한다(D05·D06·D08 v3-OPEN). 모든 normalize된 후보를 처리하고 적격 후보만 평가한다. 예산/취소 등의 예외 중단을 전 후보 정상 처리로 표시하지 않는다. 별도 Targeted Research나 평가 후 재조사 화살표는 v3 기본 흐름에 없다.
 
 ## 3. 노드별 입출력과 완료 조건
 
@@ -94,7 +94,7 @@ flowchart TD
 | Score Aggregator | 여섯 영역, 승인된 정책 | ScoreSummary; 순수 함수로 구현 |
 | Decision Policy + 설명 | ScoreSummary, Eligibility | 정책이 label 결정, LLM은 근거·리스크·한계 서술만 추가 |
 | Candidate Archive / Advance | 판정 또는 적격성·오류 사유 | 후보 결과 보존; index를 정확히 한 번 증가 |
-| Best Candidate Selector | 전 후보 outcome, 적격 후보 판정·점수, 승인 selection policy | deterministic SelectionResult와 selected_candidate_id; 모든 후보 처리 전 호출 금지, 순위·동점 등 D03 OPEN |
+| Best Candidate Selector | 전 후보 outcome, 적격 후보 판정·점수, 승인 selection policy | deterministic SelectionResult와 selected_candidate_id; 모든 후보 처리 전 호출 금지, 순위·동점 등 D03 v3-OPEN |
 | ReportInput controller | SelectionResult, 전 후보 이력 | 적격 후보 없음은 selected=None 및 사유. 전부 WATCHLIST/PASS·평가 실패의 선택/mode는 D03 정책에 따름 |
 | Build ReportContext | ReportInput, 최종 State의 평가/판정·snapshot·출처 | 모든 참조를 해소한 payload context 고정. 불완전/모순이면 CONTEXT_INVALID로 실패 |
 | Report Generator | 검증된 ReportContext, 직전 feedback | ReportDraft; context의 실제 근거·서지정보만 사용 |
@@ -144,7 +144,7 @@ builder.add_edge(
 - `RECOMMEND_PRIORITY/RECOMMEND/WATCHLIST/PASS` 모두 결과 저장 후 다음 후보. index는 한 번만 증가한다.
 - 모든 후보 처리 뒤 selector: label 우선/점수 우선·동점·모두 WATCHLIST/PASS·성공 평가 없음의 선택 규칙은 D03 OPEN이다. candidate_id나 입력 순서 tie-break를 기본값으로 숨기지 않는다. 실패/unknown 후보를 추천으로 승격하지 않는다.
 - 적격 후보가 한 건도 없으면 selected=None과 “투자 평가 가능한 적격 후보 없음” 사유 보고서를 생성한다(v3 D-3). 후보 0건·전부 부적격·전부 unknown을 구별한다. 적격이었으나 평가 실패한 경우는 “적격 후보 없음”과 다르다.
-- 구조/의미 수정 2회 소진: Warning과 현재 draft/findings를 반환한다. 이는 **검증된 final 아님**이다. workflow_status·run_outcome·CLI/manifest 매핑은 [계약 §5](contracts.md)의 D08 OPEN 경계이며 임의 completed/새 enum으로 정하지 않는다.
+- 구조/의미 수정 2회 소진: Warning과 현재 draft/findings를 반환한다. 이는 **검증된 final 아님**이다. workflow_status·run_outcome·CLI/manifest 매핑은 [계약 §5](contracts.md)의 D08 v3-OPEN 경계이며 임의 completed/새 enum으로 정하지 않는다.
 
 Graph 전체 step 제한은 보조 안전장치다. 이를 정상 종료 정책이나 후보별 예산 대신 사용하지 않는다.
 
