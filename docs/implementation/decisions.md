@@ -2,7 +2,7 @@
 
 [문서 홈](../README.md) · 근거: [통합 원문](../raws/robotics_startup_agentic_rag_notion_integrated.md)
 
-이 문서는 원문에서 서로 다른 상태로 남아 있는 내용과 새 구현 제안을 분리한다. **D01–D06·D08은 APPROVED**, D07·D09–D14는 OPEN이다. 표의 승인 역할은 검토 대상이며, D01–D06·D08의 실제 문서 담당자는 아래 이슈 #3 기록에 명시한다.
+이 문서는 원문에서 서로 다른 상태로 남아 있는 내용과 새 구현 제안을 분리한다. **D01–D06·D08은 APPROVED**, D09의 목차·인용·구조 검증은 부분 APPROVED이며 PDF 선택은 OPEN이다. D07·D10–D14는 OPEN이다. 표의 승인 역할은 검토 대상이며, D01–D06·D08의 실제 문서 담당자는 아래 이슈 #3 기록에 명시한다.
 
 ## 구현 전에 합의할 항목
 
@@ -16,7 +16,7 @@
 | D06 | Seed~C 조건에 비해 TIPS·프리시드 정규화가 과도함; 추정 기준 미정              | §2.2, §7                                      | TIPS만으로 라운드 확정 금지. `unknown`/추정만으로 적격 처리하지 않음. 프리/브릿지는 근거로 이전 라운드를 확인                                    | Discovery + 전원 / Eligibility          |
 | D07 | embedding 최종 모델과 vector store 미선정                                     | §6.3, §11                                     | `BAAI/bge-m3` 우선 실험. 모델 비교·실행환경·라이선스 확인 후 확정. 저장소 제품은 아직 선택하지 않음                                              | RAG / 실데이터 인덱스                   |
 | D08 | 후보 수·반복 상한 미정; 후보 소진 시 §2.3은 Summary, §4 그림은 부적격이면 END | §2.3, §4 loop, §8, §11                        | 후보 5, 후보별 추가조사 총 2회, 보고서 수정 총 2회. 정상 조사 후 후보 고갈은 사유 있는 Summary로 통일. 비용·총 실행시간 상한은 live 실행 전 명시 | Graph + 전원 / 실 API 실행              |
-| D09 | 보고서 상세 목차·렌더러·페이지 측정 미정                                      | §9, §11                                       | [delivery](delivery.md)의 목차 사용. 렌더러와 A4·폰트·여백을 고정한 뒤 PDF로 검증                                                                | 보고서 / 최종 제출                      |
+| D09 | 보고서 상세 목차·렌더러·페이지 측정 미정                                      | §9, §11                                       | [reporting](reporting.md)의 목차·인용·구조 검증은 부분 승인. 렌더러·A4·폰트·여백·SUMMARY 측정은 OPEN | 보고서 / 최종 제출                      |
 | D10 | 팀원 명단과 원본 역할 표기가 불일치                                           | §11, §12 마지막 원본 L2904, L2924–2926, L2988 | 실제 수행 역할은 이슈 assignee와 PR 작성자 기록으로 확인. 원문의 별명/이름을 자동 매칭하지 않음                                                  | 전원 / Contributors                     |
 | D11 | DAY 3 마감의 실제 날짜·캠퍼스·반 미상                                         | §10 제출 원문                                 | DAY 3 10:00 / 15:00를 상대 일정으로 보존. 실제 날짜·시간대·제출 채널 확인                                                                        | 전원 / 제출 일정                        |
 | D12 | 국내 중심 API와 국내외 탐색 목표의 범위 차이                                  | §1.1, §5                                      | 계약에는 국가를 포함. 한국 fixture부터 연결하되 해외 미지원은 명시적으로 표시. 국내만으로 최종 범위를 줄이려면 승인                              | Discovery / 후보 범위                   |
@@ -132,7 +132,21 @@ Supersedes:
 
 ### 승인 반영 범위
 
-7개 항목의 승인자·승인일·승인 근거를 기록하고 scoring.md·architecture.md·contracts.md와 문서 홈에 승인 상태를 반영했다. 다른 결정(D07·D09–D14)의 OPEN 상태는 유지한다. 코드·정책 파일은 이 이슈에서 작성하지 않는다. PR 병합은 별도 요청 후 수행한다.
+7개 항목의 승인자·승인일·승인 근거를 기록하고 scoring.md·architecture.md·contracts.md와 문서 홈에 승인 상태를 반영했다. 이슈 #3 승인에서는 다른 결정을 변경하지 않았다. D09의 후속 부분 승인은 아래 이슈 #14 기록을 따른다. 코드·정책 파일은 이 이슈에서 작성하지 않는다. PR 병합은 별도 요청 후 수행한다.
+
+## D09 보고서 형식 승인 기록 — 이슈 #14
+
+- Decision ID: D09 (목차·인용·구조 검증 부분)
+- Status: APPROVED (목차·인용·구조 검증 부분)
+- Decision: [reporting.md](reporting.md)의 single_candidate/no_recommendation 각각 7개 섹션, Evidence 인용 token과 Source ID 기반 REFERENCE, 서지 미상 표기, SV01–SV09 체크리스트를 채택한다. PDF 전체 5페이지·SUMMARY 반 페이지 과제 조건은 유지한다.
+- Rationale and source: 원문 §9.1–9.3 및 contracts.md §5. 보고서 근거 추적·참고문헌 양방향 일치와 미평가/실패 후보 구분을 구현 가능하게 명시한다.
+- Rejected alternatives: 미채택 — 두 mode에 동일 기업 목차 강제; URL만으로 인용 대응; 검색한 모든 자료를 REFERENCE에 포함; 미상 날짜를 수집일로 대체; Markdown 길이로 PDF 분량 판정.
+- Affected documents / policy version / tests: reporting.md, delivery.md §5, docs/README.md. #26 ReportContext, #27 T14·T23, #28 fixture 보고서·수정 loop, #30 E2E. 보고서 형식 버전 식별자는 구현 이슈에서 부여.
+- Owner and reviewers: xxhigh / 보고서·Graph·검증 담당 검토 대상(별도 승인 받은 것으로 간주하지 않음).
+- Approval date: 2026-09-30 (Asia/Seoul), 승인자 xxhigh. [승인 근거](https://github.com/rice-steamed-water/skala-rag/issues/14#issuecomment-5902607679).
+- Supersedes: 없음.
+
+D09 중 렌더러·A4·폰트·여백·SUMMARY 측정 기준·인용 token 화면 변환은 M3까지 OPEN이다. 이 기록만 부분 APPROVED이며 PDF 선택과 D09 전체 완료 여부를 구별한다.
 
 ## D14 제안 기록 — founder·market·technology·moat (#10, OPEN)
 
