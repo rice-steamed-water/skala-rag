@@ -67,12 +67,14 @@ def run_fixture(
                     if isinstance(args[0], dict)
                     else getattr(args[0], "candidate_id", None)
                 )
+            status = "failed"
             output_ids = []
             input_ids = [cid] if cid else []
             if args and hasattr(args[0], "snapshot_id"):
                 input_ids.append(args[0].snapshot_id)
             try:
                 value = fn(*args)
+                status = "ok"
                 if isinstance(value, dict):
                     output_ids = [
                         value[k]
@@ -101,6 +103,7 @@ def run_fixture(
                                 run_id=run_id,
                                 candidate_id=cid,
                                 step=step,
+                                status=status,
                                 started_at=now,
                                 duration_seconds=perf_counter() - start,
                                 input_ids=input_ids,
@@ -260,5 +263,6 @@ def run_fixture(
         ),
         industry_evidence_dimensions=set(),
         clock=lambda: datetime(2026, 9, 1, tzinfo=timezone.utc),
+        trace_events=trace,
     )
     return result, calls

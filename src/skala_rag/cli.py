@@ -151,6 +151,14 @@ def run(
             "external_calls": "disabled",
             "reporting": terminal.reason or terminal.acceptance,
             "pdf": "not_run",
+            "index_version": snapshot["index_version"],
+            "fixture_hash": digest(fixture.read_bytes()),
+            "policy_hash": digest(Path(policy_path).read_bytes()),
+            "catalog_hash": digest(Path(catalog_path).read_bytes()),
+            "config_file_hash": digest(Path(config_path).read_bytes()),
+            "effective_input_hash": digest(
+                json.dumps(run_input.model_dump(mode="json"), sort_keys=True).encode()
+            ),
         },
         budgets={
             "research_additional_requests": research_budget,
