@@ -22,6 +22,9 @@ from skala_rag.run_finalization import ReportCompletion
 class FixtureReportLLM:
     """Deterministic offline responses, explicitly stub semantic proof."""
 
+    def __init__(self, *, judge_verdict="pass"):
+        self.judge_verdict = judge_verdict
+
     def generate(self, *, system, user, output_schema):
         del system
         payload = json.loads(user)
@@ -45,10 +48,12 @@ class FixtureReportLLM:
             )
         return ReportJudgement(
             schema_version=data["schema_version"],
-            verdict="pass",
+            verdict=self.judge_verdict,
             context_id=payload["context_id"],
             judged_artifact_hash=payload["artifact_hash"],
-            revision_instructions=[],
+            revision_instructions=["synthetic revision request"]
+            if self.judge_verdict == "revise"
+            else [],
             findings=[
                 dict(
                     schema_version=data["schema_version"],
@@ -76,12 +81,22 @@ def outcome_for(result):
 
 
 class FixtureReportAdapter:
-    def __init__(self, *, snapshots, run_input, destination, trace, pdf_profile):
+    def __init__(
+        self,
+        *,
+        snapshots,
+        run_input,
+        destination,
+        trace,
+        pdf_profile,
+        judge_verdict="pass",
+    ):
         self.snapshots = snapshots
         self.run_input = run_input
         self.destination = Path(destination)
         self.trace = trace
         self.pdf_profile = pdf_profile
+        self.judge_verdict = judge_verdict
         self.context = self.pipeline = self.rendered = None
 
     def _traced(self, step, fn, run_id):
@@ -146,7 +161,7 @@ class FixtureReportAdapter:
         self.trace[-1]["input_ids"] = [
             result.scores[cid].score_summary_id for cid in sorted(result.scores)
         ]
-        llm = FixtureReportLLM()
+        llm = FixtureReportLLM(judge_verdict=self.judge_verdict)
         generate = self._traced(
             "report_generate", ReportGeneratorV3(llm), result.run_id
         )
