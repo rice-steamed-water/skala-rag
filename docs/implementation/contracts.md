@@ -2,9 +2,11 @@
 
 [문서 홈](../README.md) · [아키텍처](architecture.md) · [점수 정책](scoring.md)
 
-근거: 원문 §7의 StageInfo, §8의 InvestmentState. 원문은 대부분 타입 이름만 정의하므로, 아래 DTO 필드와 검증 규칙은 **구현 제안**이다. M0에서 schema를 고정한 뒤 각 담당자가 별도로 같은 타입을 재정의하지 않는다.
+근거: [v3](../design/design-v3.html) B-1, C-1–C-4, D-1–D-3, E 및 이전 원문 §7의 StageInfo. v3의 5 branch/6 dimension·수집 책임·점수·종료 목표를 구체화한 DTO 필드와 검증 규칙은 **아래 구현 범위에 명시된 것은 가용 구조, 그 외는 구현 제안**이다. pinned 통합 기준 `906312a`에는 baseline DTO/State와 별도 `skala_rag.contracts.v3` 구조 DTO가 함께 있으며, 그 import·검증 범위와 v3 목표는 구별한다([정합화 기록](design-v3-alignment.md)). #3의 기록된 baseline 승인과 v3 대체안도 별개이므로, D04·D05·D08 등의 v3 세부 선택을 이 문서가 자동 승인하지 않는다.
 
-D01–D06·D08의 정책 의미는 2026-09-30 xxhigh가 승인했다([승인 기록](decisions.md#m0-승인-검토-기록--이슈-3)). DTO의 전체 필드나 모든 구현 선택을 승인한 것은 아니다.
+**현재 구현 방향 — v3 전환 승인:** [사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)에 따라 새 작업은 기존 baseline의 계속 구현이 아니라 v3에 정합화한다. baseline 코드·승인 기록은 호환성과 이력으로 보존하며 새 구현의 우선 방향이 아니다. 방향 승인에 이어 #82 및 #35 comment 5903505208에서 N/A·0분모·최종 selector·재조사 회계·Warning 종료의 운영 규칙을 별도 승인했다. #35 comment 5903574761의 무작위 선정은 평가 전 조사·평가 대상 집합에만 적용하며 최종 selector는 무작위가 아니다. 승인과 구현 완료는 별개이며 rubric 상세·provider·corpus·시간/비용 예산 등 남은 세부 선택만 [결정 목록](decisions.md)의 OPEN gate를 따른다.
+
+**기존 baseline 승인 범위:** 다음 네 bullet은 2026-09-30 xxhigh가 승인한 D01–D06·D08의 요약이다([승인 기록](decisions.md#m0-승인-검토-기록--이슈-3)). baseline의 승인 상태는 역사 기록으로 유지된다. §1 이후의 N/A 분모·atomic Business & Deal·전체 후보 selector·Warning 방향은 별도 사용자 전환 승인에 근거하며, 과거 승인을 v3 세부 정책에 전이하지 않는다. DTO의 전체 필드나 모든 구현 선택을 승인한 것도 아니다.
 
 - StageInfo/EligibilityResult: 직접 확인된 Seed~C만 단계 조건 통과. TIPS만으로 Seed 확정 금지, 명시적 프리시드·엔젤은 out_of_scope, 프리·브릿지는 직전 완료 라운드 근거로 판정. 추정/unknown만으로 eligible 처리 금지(D06).
 - CriterionAssessment/ScoreSummary: 1..5 정수 rating 또는 null, 비중 `5/30/25/20/10/10`, 총 분모 100 고정. 상위 영역 관측 가중평균 rating ≤2와 최종 결측 비중 ≥30은 WATCHLIST(D01·D02·D05).
@@ -27,12 +29,13 @@ D01–D06·D08의 정책 의미는 2026-09-30 xxhigh가 승인했다([승인 기
 `CompanyProfile`, `EligibilityResult`, `Source`, `Chunk`, `Evidence`,
 `EvidenceProvenance`, `DiscoveryBundle`, `RetrievalRequest`, `RetrievalBundle`,
 `RetrievalRecord`, `ResearchGap`, `CoverageResult`와 보조 `MonetaryObservation`을
-import할 수 있다. 이는 이 문서의 **구현 제안에 대한 구조 검증**이며 정책 승인
+import할 수 있다. 이는 이 문서의 **구현 제안 중 #5가 제공한 구조 검증 범위**다. #3의
+D01–D06·D08 baseline은 기록상 승인되었지만, v3 selector·N/A/0분모·재시도·Warning 운영 규칙도 #82에서 별도로 승인되었다. 실제 rubric rule·live 예산 등 남은 세부만 `v3-OPEN`이다. D09 후속 부분 승인을 포함한 정책 승인
 상태는 [결정 목록](decisions.md)을 따른다. `eligible`, `research_ready`, 단계·bucket·confidence·status는
 호출자가 공급한 관측을 저장할 뿐, 서로를 계산하거나 정당화하지 않는다.
 `execution_mode="live"`의 schema 통과도 정책·예산·도구 readiness 승인과 무관하다.
 State, reducer, stable ID 생성, snapshot/controller 참조 검증, 평가·점수·보고서·
-manifest, 수집·환율·근거 병합 함수는 이 구현에 포함하지 않는다.
+manifest, 수집·환율·근거 병합 함수는 #5 구현에 포함하지 않는다. State와 초기화는 별도로 병합된 #7이 제공한다. 이후 #15의 reducer/State 연결, #16 baseline 집계·판정, #53 재무 helper 추가 범위는 §7과 정합화 기록을 따른다.
 
 **타입과 결측**
 
@@ -131,17 +134,31 @@ nonblank 문자열이며 알려지지 않은 저자/기관은 생성하지 않�
   허용한다. 후보 동일성·출처 승인·검색 cutoff 등은 schema 밖의 책임이다.
 
 가상 예제는 `tests/fixtures/contracts.json`, 구조·거절·JSON roundtrip 검증은
-`tests/contract/`에 있다. `fixture.invalid`/`fixture://`, synthetic hash/model/version은
+`tests/contract/`에 있다.
+
+**v3 B-2 metadata filter 확장 제안 — 현재 #5 DTO에는 없음:** `Source.source_kind`는
+기존 broad kind이고 `bibliographic_metadata`는 확보한 서지 JSON을 보존할 뿐이다. v3의
+문서 우선순위는 이를 중복한 Evidence `source_type`으로 만들지 않고, Source에서 유도할
+`document_class`(예: official_technical/ir_or_pitch/product_material/paper/public_or_market/news_or_interview)와
+그 근거를 `bibliographic_metadata`의 versioned shape로 추가하는 안이다. `Chunk`에는
+`document_class`, `year`, `slide_no`, `patent_no`/`ipc`/`claim_no` 같은 source-derived metadata를
+복사·참조하는 shape, `RetrievalRequest`에는 `document_classes?`, `published_years?`의 허용 filter를
+추가하는 안을 검토한다. unknown은 추정 class나 year를 만들지 않는다. priority는 1→2→3의
+검색 fallback 정책이며 hard exclusion은 승인된 request filter만 적용한다. 현재 DTO는 `extra=forbid`라
+새 필드를 받지 않으며, schema 확장과 T12 fixture가 선행되기 전 metadata filter를 구현됐다고 말하지 않는다. `fixture.invalid`/`fixture://`, synthetic hash/model/version은
 실제 수집·hash 계산·모델 선택·정책 승인 또는 실측 결과가 아니다. 아래 §3의
 JSON 설명 예제는 명시적 fixture validation context로 검증한다.
 
 ### #6 평가 이후 DTO 구현 범위 — 구조 계약
+
+**현재 baseline shape와 v3 제안의 경계:** PR #37의 DTO는 dimension 기반 `EvaluationResult.evaluation` 단건과 observed/missing, 세 label을 검증한다. baseline 생성자에는 v3 필드를 공급할 수 없다. PR #74로 별도 `skala_rag.contracts.v3`에 세 상태·atomic branch·적용가능 분모/정규화 관측·네 label 구조가 제공된다. 아래 목표 명칭 `EvaluationResult`에 대응하는 실제 v3 이름은 `EvaluationBranchResult`다. `SelectionResult`·`RunResult`·`ReportInput.selection_result`는 아직 구현 제안이다. namespace를 혼용하지 않는다.
 
 `skala_rag.contracts`에서 `CriterionAssessment`, `EvaluationSnapshot`, `Evaluation`,
 `EvaluationResult`, `ScoreSummary`, `InvestmentDecision`, `CandidateOutcome`,
 `ReportInput`, `ReportContext`, `ReportDraft`, `ValidationResult`, `ReportJudgement`,
 `WorkflowError`, `RunManifest`를 import할 수 있다. 보조 payload인
 `ValidationErrorDetail`, `ReportFinding`, `ArtifactMetadata`도 같은 public API로 제공한다.
+후속 #68/PR #69의 `scoring.summary.build_score_summary`·`build_investment_decision`은 #16 baseline 계산과 이 DTO를 연결한다. 전자는 여섯 dimension 성공 결과를 받고 후자는 summary·policy로 판정을 계산하며, v3 N/A/복합 branch/네 label 전환을 구현하지 않는다.
 모든 중첩 DTO는 #5의 `Contract`를 사용하여 schema_version을 명시하고, strict
 nonblank 문자열·유한 수치·aware timestamp·ISO date·미지 필드 거절·instance
 재검증·명시적 fixture context 규칙을 공유한다. 앞뒤 공백은 보존한다.
@@ -203,6 +220,15 @@ workflow_status/RunOutcome 값은 #7 State enum을 재사용한다.
 공통 회귀·JSON 왕복은 `tests/contract/`에서 검증한다. ID 인코딩은 아래 §4의
 규칙과 `contracts.ids`를 사용한다. DTO는 ID를 자동 생성하거나 재계산하지 않는다.
 
+### #73 / PR #74 독립 v3 구조 DTO — 통합됨, 운영 실행 아님
+
+통합 기준 `906312ae91a1d0473100c2a8a94029d52ac7c9fe`에는 head `45bef02f3cff8977fdabe383c1b5674f918d83fe`의 `contracts/v3.py`가 있다. 명시적으로 `from skala_rag.contracts.v3 import ...`를 사용한다. exports는 `CriterionAssessment`, `ApplicabilityAssessment`, `Evaluation`, `EvaluationBranchResult`, `DimensionScore`, `ScoreSummary`, `InvestmentDecision`, `CoverageResult`와 재사용하는 `Source`, `Chunk`, `Evidence`, `EvaluationSnapshot`, `WorkflowError`다. baseline public API·State/reducer를 대체하지 않는다([v3 구조 계약](v3-schema.md)).
+
+- N/A CriterionAssessment는 `applicability_reason`, `applicability_rule_id`, 별도 **`applicability_evidence_ids`**를 요구한다. Coverage의 ApplicabilityAssessment는 `evidence_ids`를 쓴다. 실제 근거/승인 rule 판단은 controller 책임이다.
+- EvaluationBranchResult는 정확한 dimension 집합·후보/세대/snapshot/policy·success/failure 원자성을 검사한다. 다섯 branch→여섯 dimension의 Graph Join 저장은 별도다.
+- Decimal 관측·nullable 비율·네 label은 구조 검증만 한다. catalog 완전성·계산·0분모 후보 라우팅·selector·Warning/CLI·live 연결은 미구현이다.
+- #82 운영 규칙은 승인되었지만 PR #85 OPEN Draft의 config/loader는 이 기준에 없다. 미병합 코드를 import하지 않는다.
+
 ## 2. 입력과 후보
 
 | DTO | 필드 계약 | 검증 |
@@ -214,6 +240,12 @@ workflow_status/RunOutcome 값은 #7 State enum을 재사용한다.
 | `EligibilityResult` | eligibility_result_id, run_id, candidate_id, evidence_revision, policy_version, as_of, status (`eligible/ineligible/unknown`), checks, reason_codes, evidence_ids | 모든 필수 조건 근거 확인 시 eligible; 하나라도 명백히 불일치하면 ineligible; 나머지는 unknown |
 
 `last_round_date`는 가능하면 실제 라운드 사건일이다. 최신 게시물이 과거 라운드를 회고한 것인지 구별하고, 사건일 미상은 `null`로 둔다. `source_ids`는 Source 테이블 참조, `field_evidence_ids`는 Evidence 참조다.
+
+### 평가 전 조사 대상 집합 선정 — 승인 방식과 현재 API
+
+발견 → 정규화/동일 법인 dedup → **조사·평가 대상 집합 무작위 선정** → Iterator → Company Research/Eligibility 순의 목표다. 상한 초과 시 남길 기업도 이 범위이며 단순 순서 shuffle이 아니다. 선정 후 적격성을 검사하고 적격 후보만 평가한다. 비선정 기업의 제외 기록을 조사·평가 outcome으로 만들지 않는다. 최종 selector는 #82의 결정적 순위를 유지한다.
+
+현재 `agents.discovery.normalize_candidates(candidates, *, max_candidates, limit_policy=None)`는 dedup 후 상한 이내면 모두 남기고 초과 시 주입 `CandidateLimitPolicy`가 없으면 `CandidateLimitUnresolved`를 낸다. Protocol은 후보와 상한에서 candidate_id 부분집합을 반환하며 중복·미지 ID·상한을 검증한다. `NormalizeResult.merges/dropped_candidate_ids`와 발견 Source 보존은 제공하지만 **기본 random 정책은 없다**. 새 후보 수·난수 알고리즘·seed/재현 방식·보충 선정은 OPEN이다. RNG 주입, 모집단/선정/제외 ID·정책 버전·replay metadata 보존은 후속 구현 제안이며 State/manifest 필드가 이미 있다는 뜻이 아니다.
 
 ## 3. Source → Chunk → Evidence
 
@@ -309,6 +341,8 @@ Web으로 먼저 얻은 근거를 RAG로 재검색해도 근거는 하나이고 
 
 ## 4. 수집·Coverage·평가
 
+아래는 목표 계약 표다. 실제 v3 branch DTO 이름은 EvaluationBranchResult이며 위 #73 절을 따른다. SelectionResult와 v3 State/보고서 연결은 아직 제안이다.
+
 | DTO | 최소 필드 / 규칙 |
 | --- | --- |
 | `DiscoveryBundle` | candidates (`Candidate[]`), sources (`dict[source_id, Source]`); 모든 discovery_source_ids를 해소하는 payload 포함 |
@@ -316,15 +350,18 @@ Web으로 먼저 얻은 근거를 RAG로 재검색해도 근거는 하나이고 
 | `RetrievalBundle` | chunks (`Chunk[]`), sources (`dict[source_id, Source]`); 반환된 Chunk의 모든 Source payload 포함 |
 | `RetrievalRecord` | retrieval_id, run_id, candidate_id?, tool_name, query/arguments_without_secrets, started_at, finished_at, status (`ok/empty/unavailable/failed`), source_ids, chunk_ids, evidence_ids, error_id?, cost?, cache_hit |
 | `ResearchGap` | gap_id, candidate_id, criterion_id 또는 eligibility_field, missing_fields, reason, priority_weight, suggested_queries, attempted_retrieval_ids, status (`open/resolved/exhausted`) |
-| `CoverageResult` | candidate_id, evidence_revision, policy_version, covered_criterion_ids, missing_criterion_ids, missing_weight, coverage_pct, research_ready, unresolved_conflicts |
-| `CriterionAssessment` | criterion_id, status (`observed/missing`), rating (`1..5` 정수 또는 null), evidence_ids, rationale, missing_reason?, applicability_note? |
+| `CoverageResult` | candidate_id, evidence_revision, policy_version, covered_criterion_ids, missing_criterion_ids, not_applicable_criterion_ids, applicability_assessments, applicable_weight, not_applicable_weight, missing_weight, weighted_missing_pct?, coverage_pct?, research_ready?, unresolved_conflicts; 0분모 guard는 D05 |
+| `CriterionAssessment` | criterion_id, status (`observed/missing/not_applicable`), rating (`1..5` 정수 또는 null), evidence_ids, rationale, missing_reason?, applicability_reason?, applicability_rule_id?, applicability_evidence_ids?, applicability_note? |
 | `EvaluationSnapshot` | snapshot_id, run_id, candidate_id, evaluation_round, evidence_revision, policy_version, corpus_version, index_version, as_of, evidence_ids, evidence (`dict[evidence_id, Evidence]`), sources (`dict[source_id, Source]`), chunks (`dict[chunk_id, Chunk]`), retrieval_records (`dict[retrieval_id, RetrievalRecord]`) |
 | `Evaluation` | run_id, candidate_id, dimension, evaluation_round, snapshot_id, evidence_revision, policy_version, rubric_version, criteria, research_gaps, caveats |
-| `EvaluationResult` | run_id, candidate_id, dimension, evaluation_round, snapshot_id, evidence_revision, policy_version, status (`success/failure`), evaluation?, errors (`WorkflowError[]`) |
-| `ScoreSummary` | score_summary_id, run_id, candidate_id, evaluation_round, snapshot_id, evidence_revision, policy_version, criterion_points, dimension_ratings, observed_score, missing_weight, coverage_pct, low_score_dimensions, hold_reasons |
-| `InvestmentDecision` | decision_id, run_id, candidate_id, label (`RECOMMEND/WATCHLIST/PASS`), report_grade, score_summary_id, reason_codes, evidence_ids, rationale, risks, limitations |
+| `EvaluationResult` | run_id, candidate_id, branch_id, evaluation_round, snapshot_id, evidence_revision, policy_version, status (`success/failure`), evaluations (`dict[dimension, Evaluation]` 또는 null), errors (`WorkflowError[]`); branch terminal envelope |
+| `ScoreSummary` | score_summary_id, run_id, candidate_id, evaluation_round, snapshot_id, evidence_revision, policy_version, criterion_points, dimension_scores, observed_score, applicable_weight, not_applicable_weight, missing_weight, normalized_score?, weighted_missing_pct?, coverage_pct?, low_score_dimensions, hold_reasons |
+| `InvestmentDecision` | decision_id, run_id, candidate_id, label (`RECOMMEND_PRIORITY/RECOMMEND/WATCHLIST/PASS`), report_grade, score_summary_id, reason_codes, evidence_ids, rationale, risks, limitations |
+| `SelectionResult` | run_id, policy_version, considered_candidate_ids, selected_candidate_id?, reason_codes, rationale, compared_score_summary_ids; selector 전용 결과, 순위·동점·전부 WATCHLIST/PASS 무선택 비교 보고서는 #82 승인; DTO 자체는 제안 |
 
-`research_ready`는 조사량 기준이고 `observed`는 평가 가능한 근거의 질까지 검증한 결과다. 최종 ScoreSummary의 coverage는 최종 평가 기준으로 다시 계산한다.
+`research_ready`는 평가 전 조사 충분성 정책이며 Eligibility의 최소 Evidence와 같지 않다(D05·D06). covered/missing/not_applicable ID는 catalog를 중복 없이 분할한다. v3 applicability_assessments는 criterion_id별 ApplicabilityAssessment(reason·rule ID·evidence_ids) map으로 N/A 근거 ID 구조를 해소한다. 실제 rule 승인·근거 품질은 controller가 검증한다. Coverage의 covered도 최종 observed를 보장하지 않는다. 최종 ScoreSummary의 분모·결측률은 최종 평가에서 다시 계산하며 사전 Coverage는 별도로 보존한다.
+
+v3 `dimension_scores[d]`의 DimensionScore는 observed_score, applicable_weight, missing_weight, not_applicable_weight, dimension_score_pct?를 담는다. 원배점 missing_weight와 정규화 weighted_missing_pct는 다른 수다. Missing은 분모에 남고 not_applicable만 제외한다. 핵심 보류 대상 low_score_dimensions에는 market/technology만 들어간다. 분모 0의 nullable 숫자는 구조상의 미정의 표시다. 운영 규칙은 점수 미생성·명시 후보 오류·archive → advance로 승인되었다. 점수 공식·소수 정책·reason 구별은 [scoring §3–§5](scoring.md)에 따른다.
 
 ### 불변 평가 snapshot
 
@@ -335,21 +372,31 @@ Freeze controller는 `(run_id, candidate_id, evaluation_round, evidence_revision
 - 참조 폐쇄성: 포함 Evidence의 Source, 파생값 입력 Evidence, provenance의 RetrievalRecord와 RAG Chunk를 snapshot 안에서 모두 해소한다. provenance가 가리키는 검색 기록에 실제 해당 chunk_id가 있는지도 검증한다. 하나라도 없으면 `SNAPSHOT_INVALID` 오류를 기록하고 해당 후보만 failed → archive → advance한다. LLM에 불완전한 snapshot을 보내지 않는다.
 - 적격성 재확인: 최종 EligibilityResult의 evidence_ids가 정정·승계로 무효화됐으면 같은 오류로 평가하지 않는다. 무효 근거를 보고서 단계까지 가져가 전체 workflow를 실패시키지 않으며, 적격성 자동 재판정은 MVP 범위 밖 제안이다.
 - 수집 controller는 RetrievalBundle의 Source/Chunk와 이력을 저장한 후 Evidence를 병합한다. 새 근거·정정·새 provenance 등 snapshot에서 보이는 변경마다 해당 후보 evidence_revision을 증가시킨다.
-- 이후 State.evidence에 근거나 provenance를 추가해도 기존 snapshot은 불변이다. 재평가는 새 evaluation_round와 snapshot으로 수행하고 모든 branch에 같은 객체 내용을 전달한다.
+- 이후 State.evidence에 근거나 provenance를 추가해도 기존 snapshot은 불변이다. 향후 별도 승인된 재평가 기능을 추가하더라도 새 evaluation_round와 snapshot을 사용하고 모든 branch에 같은 객체 내용을 전달해야 한다. 이 세대 보호 규칙이 v3에 평가 후 재조사 loop를 추가하는 것은 아니다.
 
 ### 평가 성공과 기술적 실패
 
-각 평가 node의 wrapper는 **terminal result**인 `EvaluationResult`를 반환한다. LLM은 `Evaluation` 내용만 생성하며, wrapper가 transport·timeout·schema 검증과 허용된 재시도를 처리한다.
+각 평가 branch wrapper가 **terminal result**인 `EvaluationResult`를 반환한다. LLM은 차원별 `Evaluation` 내용만 만들고 wrapper가 transport·timeout·schema·허용 재시도를 처리한다. 5개 branch/6개 차원과 Business & Deal 원자적 성공/실패는 승인된 v3 방향이다. branch shape는 별도 v3 EvaluationBranchResult로 제공된다. 아래 EvaluationResult 목표 명칭은 baseline 단건 DTO가 아니다. wrapper/Join/State 연결은 후속 범위다.
 
-- `success`: evaluation 필수, errors는 빈 배열. envelope와 Evaluation의 후보·세대·snapshot·policy가 모두 일치해야 한다. 자료 부족은 유효한 Evaluation 내부의 missing이다.
-- `failure`: evaluation=null, errors는 하나 이상의 WorkflowError. 기술적 실패를 missing이나 0점으로 변환하지 않는다.
-- 병렬 branch는 `evaluation_results`의 자기 key 하나만 반환한다. join controller는 이번 세대의 다섯 terminal result를 수집한다. 실패가 하나라도 있으면 오류를 State.errors에 옮기고 후보 failed → archive → advance; 다섯 성공일 때만 `evaluations`에 검증된 값과 gap을 저장한다.
-- 직렬 Deal Terms도 같은 wrapper/결과 계약을 사용한다. 성공을 저장한 뒤 여섯 영역을 집계하며, 실패하면 해당 후보를 archive → advance한다.
-- 프로세스 중단·전체 실행 취소로 wrapper가 결과를 돌려주지 못한 경우는 후보 결측이 아니다. 전체 실행 timeout/오류 controller가 workflow failed로 종료한다.
+| branch_id (fan-out/result key) | success payload의 dimension key 집합 |
+| --- | --- |
+| `founder` | `{founder}` |
+| `market` | `{market}` |
+| `technology` | `{technology}` |
+| `moat` | `{moat}` |
+| `business_deal` | `{traction, deal_terms}` |
+
+- `success`: evaluations map이 위 집합과 정확히 같고 errors는 빈 배열. 각 map key는 Evaluation.dimension과 같으며 envelope와 모든 payload의 후보·세대·snapshot·revision·policy가 일치한다. 자료 부족은 유효한 Evaluation 내부의 missing이다.
+- `failure`: evaluations=null, errors는 하나 이상의 WorkflowError. 기술적 실패를 missing이나 0점으로 바꾸지 않는다. Business & Deal의 한 차원만 누락·schema 실패여도 **branch 전체 실패**이며 성공한 차원만 점수에 넣지 않는다. 원시 진단 출력은 성공 State와 분리한다.
+- 병렬 branch는 `evaluation_results`에 자기 branch key 하나만 반환한다. join은 이번 세대의 다섯 terminal result를 검증하고 모두 성공일 때만 여섯 dimension payload를 `evaluations`에 **함께 승격**한다. 실패가 하나라도 있으면 errors로 옮기고 후보 failed → archive → advance한다. 별도의 직렬 투자조건 노드는 없다.
+- evaluation의 research_gaps는 최종 결측 설명/감사용이다. Coverage가 만든 actionable research_gaps와 혼동하거나 평가 뒤 Evidence Research를 재호출하지 않는다.
+- 프로세스 중단·전체 실행 취소로 wrapper가 결과를 돌려주지 못하면 후보 결측이 아니다. 전체 timeout/오류 controller가 workflow failed로 종료한다.
+
+예시(가상 구조 설명, 완전한 DTO JSON 아님): `evaluation_results["co-fixture-001:1:business_deal"]`은 `branch_id="business_deal"`, `status="success"`, `evaluations={"traction": Evaluation(dimension="traction", ...), "deal_terms": Evaluation(dimension="deal_terms", ...)}`를 담는다. join 후에는 `evaluations["co-fixture-001:1:traction"]`과 `evaluations["co-fixture-001:1:deal_terms"]`로 분리한다. `Evaluation.dimension="business_deal"` 또는 여섯 번째 branch key `deal_terms`는 허용하지 않는다. 새 schema_version 값은 M0에서 고정한다.
 
 ### ID와 참조
 
-ID 생성은 controller의 공통 함수가 소유하며 LLM이 만들지 않는다. 아래 튜플은 **유일성 범위**다. 실제 문자열 인코딩은 M0 공통 구현에서 고정하고 각 WP가 임의로 연결하지 않는다.
+ID 생성은 controller의 공통 함수가 소유하며 LLM이 만들지 않는다. 아래 튜플은 **유일성 범위**다. 현재 문자열 인코딩은 아래 #6 구현 규칙을 사용하고 각 WP가 임의로 연결하지 않는다. v3 branch 결과 key 확장은 별도 계약 변경이다.
 
 | ID | 결정적 생성 key | 참조 규칙 |
 | --- | --- | --- |
@@ -378,7 +425,7 @@ missing_reason을 요구한다. 실제 근거 존재·snapshot 포함 여부와 
 **검증 불변식**
 
 - Evaluation에는 해당 영역의 모든 criterion이 정확히 한 번 나타나야 한다. 누락은 schema 오류이지 자동 결측 처리 아님.
-- `observed`이면 rating·rationale·실존 Evidence가 필요하다. `missing`이면 rating=null, missing_reason 필수.
+- `observed`이면 rating·rationale·실존 Evidence가 필요하다. `missing`이면 rating=null, missing_reason 필수. `not_applicable`이면 rating=null, 적용 사유·승인 rule·적용성 Evidence가 필요하다(#82 승인). v3 DTO는 별도 applicability_evidence_ids를 쓴다. rule 목록/품질 검증(D14)은 OPEN이며 자료 부재는 missing이다.
 - 근거 ID가 존재하고, 같은 후보 또는 적용 가능한 산업 scope이며, 평가 snapshot에 포함되어야 한다.
 - 금융 숫자에 단위·기간이 없거나 상충 근거가 미해결이면 해당 criterion은 missing으로 남긴다.
 - 점수·비중은 모델 출력값을 신뢰하지 않고 승인된 catalog와 rating에서 재계산한다.
@@ -389,17 +436,28 @@ missing_reason을 요구한다. 실제 근거 존재·snapshot 포함 여부와 
 | DTO | 최소 필드 |
 | --- | --- |
 | `CandidateOutcome` | candidate_id, status, eligibility_result_id?, decision_id?, failure_ids, summary_reason |
-| `ReportInput` | run_id, mode (`single_candidate/no_recommendation`), selected_candidate_id?, candidate_outcomes, permitted_evidence_ids, as_of, corpus_version, policy_version |
+| `ReportInput` | run_id, mode (`single_candidate/no_recommendation` 제안), selection_result, selected_candidate_id?, candidate_outcomes, permitted_evidence_ids, as_of, corpus_version, policy_version; no_recommendation 명칭이 전부 WATCHLIST/PASS의 선택 정책을 결정하지 않음 |
 | `ReportContext` | context_id, input (`ReportInput`), snapshots, eligibility_results, evaluations, score_summaries, decisions, evidence, sources, chunks, retrieval_records, errors; 아래 payload 계약 적용 |
 | `ReportDraft` | report_id, context_id, revision, markdown, cited_evidence_ids, reference_source_ids, limitations |
 | `ValidationResult` | valid, context_id, checks, errors (`code/location/message`), artifact_hash |
 | `ReportJudgement` | verdict (`pass/revise/fail`), context_id, findings (`severity/claim_location/evidence_ids/reason`), revision_instructions, judged_artifact_hash |
 | `WorkflowError` | error_id, run_id, candidate_id?, node, error_code, message_redacted, retryable, attempt, timestamp |
-| `RunManifest` | 실행 입력, 코드 revision 또는 uncommitted 표시, schema/policy/prompt/model 버전, corpus hash, 도구 상태, 예산/사용량, artifact 경로·hash, 검증 결과, workflow_status, run_outcome |
+| `RunManifest` | 실행 입력, 코드 revision 또는 uncommitted 표시, schema/policy/prompt/model 버전, corpus hash, 도구 상태, 예산/사용량, artifact 경로·hash, 검증 결과, workflow_status, run_outcome; Warning completed·CLI2·final 금지는 승인; manifest 필드 연결은 후속 |
+| `RunResult` | 제안: run_id, execution_terminated, current_draft?, validated_report?, validation_findings, warnings, acceptance, publication_allowed; completed Warning·CLI exit=2·final 금지는 승인; payload/manifest 연결은 후속 |
+
+### #23 후보 Graph 인계 — 현재 baseline 구현, v3 목표 아님
+
+InvestmentState에 nullable `report_input` JSON payload를 추가하며 초기값은 null이다.
+후보 controller가 첫 추천의 single_candidate 또는 정상 후보 소진의
+no_recommendation 입력을 작성한다. 전 후보 기술 실패나 Discovery 실패는
+workflow failed로 종료하며 정상 보고서 입력을 만들지 않는다. 후보 Graph 종료는
+보고서 완료가 아니므로 정상 인계의 workflow_status는 running, report는 null이다.
+failed 후보는 failure_ids만 인계하고 무효 적격성·점수/판정 참조는 포함하지 않는다.
+후속 build_report_context는 이 입력과 State payload의 참조를 검증한다(#26).
 
 ### ReportContext — 보고서 단계에 전달할 실제 내용
 
-보고서 controller가 `ReportInput`과 완료된 State로부터 context를 조립·검증하고 고정한다. 각 필드는 ID만 나열한 목록이 아니라 **해소된 DTO payload map**이다.
+보고서 controller가 전 후보 처리가 끝난 `SelectionResult`, `ReportInput`과 완료된 State로 context를 조립·검증하고 고정한다. candidate_outcomes는 사전 무작위 선정된 처리 대상 모든 후보의 최종 결과를 포함한다. 비선정 모집단 제외 기록은 별도다. selected ID·selection policy·비교한 score ID가 State와 일치해야 한다. 적격 후보가 없으면 selected=None과 사유를 제공한다(v3 D-3). all-WATCHLIST/PASS는 무선택 비교 보고서로 승인되었다. 성공 평가 없음/기술실패의 mode 연결은 별도이며 임의 추천하지 않는다. 각 context 필드는 ID 목록이 아닌 **해소된 DTO payload map**이다.
 
 - snapshots는 snapshot_id, eligibility_results는 eligibility_result_id, score_summaries는 score_summary_id, decisions는 decision_id, errors는 error_id로 접근한다. evaluations는 후보·세대·dimension key를 사용한다.
 - evidence/sources/chunks/retrieval_records는 각각 해당 DTO ID로 접근한다. 평가된 후보마다 최종 ScoreSummary가 참조하는 세대의 snapshot·여섯 Evaluation만 넣고 이전 세대는 넣지 않는다. 그 snapshot과 적격성/제외 사유에 필요한 근거만 복사한다. ReportInput.permitted_evidence_ids와 context.evidence의 key는 일치해야 한다.
@@ -408,31 +466,44 @@ missing_reason을 요구한다. 실제 근거 존재·snapshot 포함 여부와 
 - Generator·Structural Validator·Semantic Judge는 **동일한 고정 ReportContext**를 받는다. 허용되지 않은 State/전역 저장소/인터넷을 추가 조회하여 사실을 보충하지 않는다. 생성에는 excerpt·서지정보, 구조 검증에는 원래 점수·판정, 의미 검증에는 실제 근거·평가 내용이 모두 제공된다.
 - 보고서 문장·형식 오류만 같은 context에서 revise한다. upstream 평가·점수·근거 자체가 잘못됐으면 보고서 LLM이 고치지 않고 workflow failed로 종료한다. 이를 수정하려면 별도 실행에서 해당 단계를 다시 수행한다.
 
-출력 문장을 수정하면 구조·의미 검증 결과를 다시 생성한다. 이전 draft의 통과 결과를 새 draft에 붙이지 않는다. context_id와 artifact_hash가 일치하는 검증 결과만 사용한다. `ReportJudgement.fail`은 회복 불가능한 context/upstream 오류 또는 이 실행에서 신뢰할 수 있는 보고서를 만들 수 없다는 판정이며, 즉시 실패한다. 수정 가능한 문장/구성 문제는 `revise`다.
+출력 문장을 수정하면 구조·의미 검증 결과를 다시 생성한다. 이전 draft의 통과 결과를 새 draft에 붙이지 않는다. context_id와 artifact_hash가 일치하는 검증 결과만 사용한다. context/upstream 파손은 #82 승인에 따라 failed다. 이를 ReportJudgement.fail로 연결하고 즉시 종료하는 구체 controller 매핑은 구현 대상이다. 수정 가능한 문장/구성/근거 설명 문제는 `revise`로 공유 수정 예산을 사용한다. 품질 문제가 끝내 해결되지 않은 상태를 fatal fail로 재분류하여 v3 Warning 반환을 우회하지 않는다.
+
+### Warning 반환과 final 발행 — #82 운영 승인, PDF 상세 OPEN
+
+최초 생성 제외 구조·의미 공유 수정2회 후 completed + Warning·현재 draft/findings·CLI exit=2·validated final 금지는 승인되었다. **실행 종료, 결과 반환, 검증 수용(acceptance), 최종 발행(publication)은 별개**다. 제안하는 RunResult는 현재 draft와 그 hash에 묶인 findings·Warning을 반환하되, 실패/미검증 draft를 validated_report나 State.report로 승격하지 않는다.
+
+| 경로 | 반환/보존 제안 | 검증·발행 경계 |
+| --- | --- | --- |
+| 구조·의미·실제 PDF 모두 통과 | 동일 context/hash의 validated_report와 manifest | 이 산출물만 validated final 후보 |
+| 구조/의미 revise 한도 소진 | current_draft, 기존 검증 결과·미실행 검사 표시, warnings | failed/not-run 검사를 pass로 바꾸지 않음; final 발행 불가 |
+| context/upstream 참조 파손·실행 오류 | 오류·진단·있다면 draft 보존, fatal 종료 | Warning 품질 경로로 복구하거나 투자 결론을 지어내지 않음 |
+
+`workflow_status`는 `running/completed/failed`를 유지한다. 구조·의미 수정 소진은 completed + Warning 및 CLI exit=2, context/upstream 파손은 failed다. acceptance payload/manifest/파일명·PDF layout 회계는 별도 연결·승인 대상이다. 이 문서가 `completed_with_warning` 같은 enum을 추가 승인하지 않는다. `report_revision_count=0`으로 최초 생성, 각 재작성 직전에 +1, 구조·의미 합산 2회, 두 번째 수정도 실패하면 세 번째 수정 없이 Warning을 반환하는 승인 규칙을 테스트한다. 실제 renderer 실패·깨진 context는 별도 fatal로 다루며 그 구체적 경계도 D08·D09에 기록한다.
 
 ## 6. InvestmentState 계약과 단독 writer
 
-원문 필드 이름은 유지하되 `sources`, `chunks`, `evaluation_results`, `evaluation_rounds`, `evidence_revisions`, `snapshots`, `candidate_outcomes`, `report_context`, `report_draft`, `pdf_validation`, 실행 metadata를 추가하는 제안이다. 성공 평가와 실패 envelope를 분리하므로 evaluations의 writer는 아래처럼 controller로 한정한다.
+현재 baseline State는 sources/chunks/evaluation_results/evaluation_rounds/evidence_revisions/snapshots/candidate_outcomes/report_input/report_context/report_draft/pdf_validation과 실행 metadata를 제공한다. 아래 표는 이를 v3 branch-key·selection_result·run_result에 연결할 목표다. 독립 v3 DTO 병합이 State 전환을 구현하지는 않았다. 성공 평가와 실패 envelope를 분리하므로 evaluations의 writer는 controller로 한정한다.
 
 | State 묶음 | 필드 | 갱신 규칙 |
 | --- | --- | --- |
 | 실행 입력 | investment_theme, search_queries, run_input, run_manifest | controller 작성, 실행 중 정책 불변 |
-| 후보 | candidates, current_candidate_id, candidate_index, candidate_status, selected_candidate_id | 후보 controller만 변경 |
+| 후보 | candidates, current_candidate_id, candidate_index, candidate_status | Normalize/사전 무작위 선정/Iterator/Archive 등 단계별 단독 writer; Iterator가 현재 후보 지정 |
+| 최종 선택 | selection_result, selected_candidate_id | 모든 후보 처리 뒤 Best Candidate Selector만 작성; Iterator/Decision은 선택 불가 |
 | 기본 조사 | company_profiles, eligibility_results | 해당 후보 조사/판정 노드 단독 writer |
 | 출처/근거 | sources, chunks, evidence, retrieval_history | ID 기반 merge; Source/Evidence의 허용된 병합은 §3 규칙 적용 |
-| 조사 제어 | coverage_results, research_gaps, research_retry_count, evidence_revisions | coverage/controller만 변경 |
-| 평가 | evaluation_results, evaluations, evaluation_rounds, snapshots | evaluation_results만 병렬 merge; 성공 evaluations는 join/직렬 평가 controller, rounds·snapshots는 Freeze controller |
+| 조사 제어 | coverage_results, research_gaps, research_retry_count, evidence_revisions | Coverage가 사전 gap/충족 기록, retry controller가 횟수, Evidence Research merge controller가 revision; 평가 후 조사 재진입 없음 |
+| 평가 | evaluation_results, evaluations, evaluation_rounds, snapshots | branch-key evaluation_results만 병렬 merge; dimension-key 성공 evaluations는 Join 단독 writer, rounds·snapshots는 Freeze controller |
 | 판정/이력 | score_summaries, investment_decisions, candidate_outcomes | 단계별 단독 writer; 후보 결과 덮어쓰기 금지 |
-| 보고서 | report_context, report_draft, report, report_validation, report_judgement, pdf_validation, report_revision_count | context는 controller가 최초 고정, 나머지는 순차 갱신 |
-| 오류/종료 | errors, workflow_status, run_outcome | 오류는 ID 병합; 종료 상태는 controller만 변경 |
+| 보고서 | report_input, report_context, report_draft, report, report_validation, report_judgement, pdf_validation, report_revision_count | context는 controller가 최초 고정, 나머지는 순차 갱신 |
+| 오류/종료 | errors, workflow_status, run_outcome, run_result | 오류는 ID 병합; 종료/acceptance/publication은 controller만 변경; 수정 소진은 completed + Warning, CLI exit=2 |
 
-- 평가 key: `{candidate_id}:{evaluation_round}:{dimension}`. 원문의 `{candidate_id}:{dimension}`을 확장한 이유는 재평가 세대 혼입 방지다. `evaluation_results`도 같은 key를 쓰며 key와 envelope 필드가 일치해야 한다.
-- candidate_status: `discovered/researching/ineligible/eligibility_unknown/evaluating/recommend/watchlist/pass/failed/not_evaluated`.
-- workflow_status는 원문대로 `running/completed/failed`.
-- run_outcome은 `recommended/no_recommendation/no_candidates/insufficient_evidence/technical_failure` 중 하나. 완료와 투자 추천은 별개다.
-- 실행 시작 시 `research_retry_count={}`, `evaluation_rounds={}`, `evidence_revisions={}`, `snapshots={}`와 나머지 map/list를 비운다. `candidate_index=0`, `report_revision_count=0`; current/selected ID, report_context, report_draft, report는 null이다.
+- `evaluation_results` key는 `{candidate_id}:{evaluation_round}:{branch_id}`(5개), 성공 `evaluations` key는 `{candidate_id}:{evaluation_round}:{dimension}`(6개)다. 각각 envelope/payload와 일치해야 한다. 원문의 후보+차원 key에 세대를 더하는 것은 혼입 방지용이며 사후 재평가 loop를 새로 요구하지 않는다.
+- candidate_status 제안: `discovered/researching/ineligible/eligibility_unknown/evaluating/recommend_priority/recommend/watchlist/pass/failed`. 실행 중단 시 미처리 후보의 `not_evaluated` 필요 여부는 D03·D08에서 결정하며 정상 첫 추천의 결과로 사용하지 않는다. 상태와 네 대문자 투자 label은 별개 필드다.
+- workflow_status는 v3의 `running/completed/failed`를 보존한다. 구조·의미 수정 소진은 completed + Warning이며 CLI exit=2, context/upstream 파손은 failed다.
+- run_outcome의 과거 제안은 `recommended/no_recommendation/no_candidates/insufficient_evidence/technical_failure`였다. 이 목록은 현재 baseline State enum이며 v3 네 label·selection·acceptance 연결은 후속이다. Warning workflow=completed·CLI2 승인과 구별한다. 완료와 투자 추천은 별개다.
+- 실행 시작 시 `research_retry_count={}`, `evaluation_rounds={}`, `evidence_revisions={}`, `snapshots={}`와 나머지 map/list를 비운다. `candidate_index=0`, `report_revision_count=0`; current/selected ID, selection_result, report_input, report_context, report_draft, report, run_result는 null이다.
 - 후보 최초 선택 시 후보별 map인 `research_retry_count`, `evaluation_rounds`, `evidence_revisions`에 각각 `setdefault(candidate_id, 0)`을 적용한다. 다른 후보로 이동해도 기존 후보의 count를 지우지 않는다. Freeze마다 해당 후보 evaluation_round를 증가시키며, 보고서 수정 횟수만 실행 단위 scalar다.
-- 완료 시 검증된 Markdown을 `report`에 넣는다. 실패 시 `report=null`, `report_draft`와 오류를 보존한다.
+- 구조·의미·PDF 검증을 모두 통과한 현재 artifact만 `report`에 넣는다. Warning 반환 또는 fatal 실패 시 `report=null`, draft·findings·오류를 별도 보존한다. Warning=검증 통과로 해석하지 않는다.
 - `candidate_index`는 처리 순서이지 기업 ID가 아니다. 후보 변경 시 평가 controller의 현재 세대 참조도 바꾼다.
 
 ## 7. 팀 사이의 함수 경계 — 구현할 인터페이스
@@ -443,25 +514,34 @@ research_company(candidate, budget) -> ToolResult[CompanyResearchBundle]
 retrieve(request: RetrievalRequest) -> ToolResult[RetrievalBundle]
 collect_evidence(candidate, gaps, budget) -> ToolResult[EvidenceBundle]
 check_eligibility(profile, evidence, policy) -> EligibilityResult
-check_coverage(candidate_id, evidence, catalog) -> CoverageResult
+check_coverage(candidate_id, evidence, catalog, policy) -> CoverageResult
 freeze_snapshot(candidate_id, state, run_input) -> EvaluationSnapshot
-evaluate_dimension(dimension, snapshot, rubric) -> EvaluationResult
+evaluate_branch(branch_id, snapshot, rubrics, policy) -> EvaluationResult
+join_evaluations(branch_results, snapshot, catalog) -> dict[dimension, Evaluation]
 aggregate_scores(evaluations, policy) -> ScoreSummary
 decide(score_summary, eligibility, policy) -> DecisionPolicyResult
+select_best_candidate(candidate_outcomes, decisions, score_summaries, policy) -> SelectionResult
 build_report_context(report_input, state) -> ReportContext
 generate_report(context, feedback) -> ReportDraft
 validate_report(draft, context, policy) -> ValidationResult
 judge_report(draft, context) -> ReportJudgement
 render_pdf(draft, template) -> RenderResult
+finalize_run(current_artifacts, validations, warnings, policy) -> RunResult
 ```
 
 ToolResult는 `status`, typed `data`, `retrieval_records`, `errors`를 가진다. Discovery controller는 `DiscoveryBundle.sources`를 먼저 검증·저장하고 각 후보의 discovery_source_ids가 모두 해소되는지 확인한 뒤 Normalize로 넘긴다. Company Research가 실패해도 발견 출처는 남아야 한다. 검색은 `RetrievalRequest.as_of`를 반드시 사용하고, query·기업·corpus/index·allowed_source_ids·as_of를 모두 cache key에 포함한다. returned Chunk가 요청 밖의 기업/출처/기준일을 위반하면 반환을 거절한다. `CompanyResearchBundle`은 profile+sources+evidence, `EvidenceBundle`은 sources+evidence, `DecisionPolicyResult`는 label+grade+reason_codes, `RenderResult`는 artifact_path+page_count+layout_measurements+errors를 가진다.
 
-**#8 구현 범위:** `skala_rag.contracts`의 `ToolResult`·`ToolBudget`·`CompanyResearchBundle`·`EvidenceBundle`·`DecisionPolicyResult`·`RenderResult`, `contracts.error_codes`, `contracts.interfaces`(위 15개 경계와 `Clock`·`StructuredLLM` Protocol), `skala_rag.fakes`(fake Tool/LLM/clock)다.
+`collect_evidence`는 Evidence Research의 초기·gap 조사 공통 경계다. gaps가 비어 있으면 최초 수집, 있으면 Coverage의 부족자료 조사라는 제안이며 별도 Targeted Research API를 요구하지 않는다. `EvidenceBundle`에 RAG Chunk가 필요하면 RetrievalBundle에서 먼저 Source/Chunk를 저장하고 Evidence 참조를 해소한다. branch 내부 차원 해석 helper를 둘 수 있어도 외부 terminal boundary는 evaluate_branch이며 business_deal의 두 차원을 원자적으로 검증한다.
+
+**현재 baseline 계산 범위:** #15의 reducer/State 연결, #16 `aggregate_scores`·`decide`, #53 재무 helper 및 #68 DTO adapter가 제공된다. 집계는 고정100·observed/missing·여섯 영역 관측 rating·세 label이며 v3 N/A 분모·핵심차원40%·네 label 구현이 아니다. 실제 #16 API는 `aggregate_scores(evaluations, policy) -> ScoreBreakdown`, `decide(observed_score, missing_weight, dimension_ratings, thresholds) -> Decision`이며 위 목표 표와 같지 않다. 현재 State 평가 key는 dimension 기반이고 v3 branch-key/atomic Business & Deal은 별도 전환 대상이다. #53의 `Derived | Unavailable` 결과는 단위·기간·provenance 검증이며 N/A나 rating을 결정하지 않는다.
+
+**#8 구현 범위:** `skala_rag.contracts`의 `ToolResult`·`ToolBudget`·`CompanyResearchBundle`·`EvidenceBundle`·`DecisionPolicyResult`·`RenderResult`, `contracts.error_codes`, `contracts.interfaces`(baseline 함수 경계와 `Clock`·`StructuredLLM` Protocol), `skala_rag.fakes`(fake Tool/LLM/clock)다. `CollectEvidence` Protocol은 존재하며 #19의 fixture EvidenceCollector와 live 수집 구현을 구별한다. `EvaluateDimension`은 dimension 단위이며 위 v3 `evaluate_branch`/join/selector/finalize 경계는 구현하지 않는다. Protocol 선언 자체를 runtime 구현으로 보지 않는다. `CheckCoverage`는 catalog만 받고 위 제안의 별도 policy 인자는 없으므로 실제 타입 정의와 대조한다.
 
 - ToolResult status: `ok`는 data 필수·errors 없음. `empty`는 조회 성공·0건으로, 빈 bundle을 data로 주고 errors 없음. `unavailable`/`failed`는 data=null·WorkflowError 1개 이상.
 - 도구 오류의 error_code는 `ErrorCode` 도구 코드만 허용하며, 코드별 status와 retryable이 고정된다. 401/403은 `unavailable`+`TOOL_AUTH_FAILED`(재시도 불가), timeout은 `failed`+`TOOL_TIMEOUT`(재시도 가능)이다.
 - `SNAPSHOT_INVALID`·`CONTEXT_INVALID`·`UPSTREAM_INVALID`와 LLM 코드는 controller·wrapper용이라 ToolResult에 쓰지 않는다. 재시도 횟수·backoff는 wrapper가 ToolBudget으로 정한다(M2).
 - 아직 타입이 없는 적격성·보고서 검증 policy와 rubric은 `JSONMap`, PDF template은 `str`로 둔다. 담당 이슈가 타입을 만들면 교체한다.
 
-위 #5·#6·#8 구현 범위에 명시한 import 외의 이름과 함수는 설계 계약이지 사용 가능한 API가 아니다. M0에서 schema와 fixture, M1에서 adapter stub, M2 이후 실제 구현을 연결한다. 각 기능은 주입된 Tool/LLM/clock을 사용해 외부 호출 없이 테스트할 수 있어야 한다.
+**#21 구현 범위:** `graph.snapshot.freeze_snapshot`은 snapshot 복사·참조 검증을 구현한다. 위 축약 경계 외에 `run_id`, `index_version`, `schema_version`, `allowed_source_ids`, `industry_evidence_ids`, `clock` keyword 인자가 필수다([실제 사용 계약](../../src/skala_rag/graph/README.md#평가-snapshot--21)). Graph의 후보 실패 라우팅은 별도다.
+
+현재 #17 발견/Normalize, #18 fixture 조사·Eligibility, #19 GuardedRetriever/EvidenceCollector, #22 evaluate_dimension wrapper, #23 build_candidate_graph, #26 build_report_context, #27 validate_report도 병합되어 있다([통합 기록](design-v3-alignment.md)). 후보 Graph는 fixture/baseline 첫 추천 인계이며 v3 selector가 아니다. #26/27은 baseline 보고서 계약이고 CLI·생성/Judge·실 PDF·live 및 v3 runtime 연결은 미완료다. 승인된 selector·0분모·Warning과 미구현을 구별하며 남은 rubric·provider·예산/readiness 부재는 live 시작 전에 차단한다.

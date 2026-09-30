@@ -130,6 +130,7 @@ class InvestmentState(TypedDict, total=False):
     candidate_outcomes: dict[str, JsonObject]  # candidate_id -> CandidateOutcome
 
     # 보고서
+    report_input: JsonObject | None  # ReportInput: candidate graph handoff
     report_context: JsonObject | None  # ReportContext
     report_draft: JsonObject | None  # ReportDraft
     report: str | None  # 검증된 최종 Markdown
@@ -179,6 +180,7 @@ def create_initial_state(run_input: Mapping[str, Any]) -> InvestmentState:
         score_summaries={},
         investment_decisions={},
         candidate_outcomes={},
+        report_input=None,
         report_context=None,
         report_draft=None,
         report=None,

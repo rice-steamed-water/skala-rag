@@ -2,7 +2,11 @@
 
 [문서 홈](../README.md) · [공통 계약](contracts.md) · [작업 분담](delivery.md)
 
-근거: 원문 §1.3, §5, §6, §7. 도구 목록은 원문 설계이고, 우선순위·adapter·검증 방식은 **구현 제안**이다. 이 문서는 API 계정 발급이나 접근 성공을 보장하지 않는다.
+근거: [v3](../design/design-v3.html) B-1–B-3 및 이전 통합 원문 §1.3·§5–§7. Evidence Research 책임·문서 우선순위·BGE-M3 1차 선택과 비교 계획은 **v3 목표**, adapter·페이지 산정·실험 설정의 보완은 **구현 제안**이다. 실제 API 접근·모델 다운로드·라이선스 적합성·성능을 확인 완료로 주장하지 않는다.
+
+**현재 구현 방향 — v3 전환 승인:** [사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)에 따라 새 작업은 기존 baseline의 계속 구현이 아니라 v3에 정합화한다. baseline 코드·승인 기록은 호환성과 이력으로 보존하며 새 구현의 우선 방향이 아니다. 방향 승인에 이어 #82 및 #35 comment 5903505208에서 N/A·0분모·최종 selector·재조사 회계·Warning 종료의 운영 규칙을 별도 승인했다. #35 comment 5903574761의 무작위 선정은 평가 전 조사·평가 대상 집합에만 적용하며 최종 selector는 무작위가 아니다. 승인과 구현 완료는 별개이며 rubric 상세·provider·corpus·시간/비용 예산 등 남은 세부 선택만 [결정 목록](decisions.md)의 OPEN gate를 따른다.
+
+**현재 경계:** pinned `906312a`의 #19는 fixture 검색·GuardedRetriever·EvidenceCollector와 RAG provenance 연결을 제공한다. live 인덱스/embedding·추출·Technology 실평가 완료가 아니다. 조사 대상 기업은 정규화·dedup 후 평가 전에 무작위 선정하고 Company Research/Eligibility를 거친다. 이는 문서 우선순위나 평가 후 최종 selector를 무작위화하는 승인이 아니다. #82의 추가 Evidence 조사2회는 최초 제외·요청 전 차감·empty/failure 소비이며 평가 뒤 재조사는 없다.
 
 ## 1. 첫 번째로 연결할 RAG 경로
 
@@ -12,15 +16,25 @@
 → 구조 기반 Chunk
 → 오픈소스 embedding
 → 검색 가능한 인덱스
-→ Evidence Collector가 실제 retrieve 호출
+→ Evidence Research가 실제 retrieve 호출
 → 검색 Chunk로부터 Evidence 추출
 → Technology Evaluation의 기술 요약 / 판단
 → 보고서 문장에 Evidence / Source / 페이지 인용
 ```
 
-이 경로를 과제 가이드의 **기술 요약 에이전트 RAG 적용**에 대응시킨다. 별도 Technology 이름을 쓰더라도 “검색된 기술 문서를 요약하고 장단점을 평가”하는 책임과 trace를 보여줘야 한다. vector DB를 만들거나 검색 API만 호출한 것으로 RAG 완료 처리하지 않는다.
+v3 B-2의 **Primary RAG Agent는 Evidence Research**다. 같은 Agent가 최초 수집과 Coverage의 부족 Evidence 재조사를 RAG/Web/API로 수행한다. 평가 branch와 Reporter는 검색하지 않고 고정 snapshot/context만 사용한다. 위 검색→Evidence→Technology 기술 요약/장단점 평가→인용 trace를 통해 이전 과제 가이드의 기술 요약 RAG 요구도 추적한다. vector DB 구축이나 검색 API 호출만으로 RAG 완료 처리하지 않는다.
 
 최종 시연에서는 실제 자료 검색 결과가 실제 평가 입력과 보고서 근거에 사용되어야 한다. 해당 기업에 맞는 문서가 없으면 다른 기업 문서를 재활용하지 말고 missing으로 처리한다.
+
+### 문서 선정 우선순위 — v3 B-2
+
+| 순위 | 문서 | 선정 기준 |
+| --- | --- | --- |
+| 1 | 기업 공식 기술문서·IR/Pitch Deck·특허·공식 제품 자료 | 대상 기업과 직접 관련되고 평가 항목을 뒷받침하는 Primary Evidence |
+| 2 | 논문·정부/공공기관 자료·산업/시장 보고서 | 발행 주체·시점 확인, 기술 검증·시장 규모/성장/경쟁 맥락 |
+| 3 | 언론 기사·공식 인터뷰 | 다른 근거가 부족할 때 투자 이력·사업화·고객/파트너·최근 동향 보완 |
+
+우선순위가 권한·품질 검증을 면제하지 않는다. 공식 IR의 자기주장을 독립 검증으로 바꾸지 않고 기업/산업 scope, 기준일, 최소 발췌와 출처를 보존한다.
 
 ## 2. 자료 수집 adapter
 
@@ -67,10 +81,10 @@
 
 | 자료 | 기본 분할 | 보존할 정보 |
 | --- | --- | --- |
-| Pitch Deck | 슬라이드 | 슬라이드 번호, 제목, 표/그림 설명 |
-| IR/PDF | section/page | 페이지, 기업명, 표 제목·단위·주석 |
-| 기술 백서/논문 | heading/section | 방법·실험 조건·결과 구분 |
-| 특허 | 청구항/발명 설명 | 공개번호, 출원인, 권리 상태, 정확한 용어 |
+| Pitch Deck / IR | 슬라이드(v3); 비슬라이드 IR은 section/page 보완 제안 | 기업, slide_no, topic, 페이지, 표 단위·주석 |
+| 기술 백서·제품 문서 | heading/section | 기업·제품·section·source_date, 연결 구조 |
+| 논문 | Abstract / Method / Experiment / Result / Conclusion section | 기업, 제목, section, year, 실험 조건·결과 |
+| 특허 | 발명 설명/청구항 | 기업, patent_no, IPC, claim_no, 출원인·권리 상태 |
 | 시장 보고서 | section/table 주변 | 시장 정의, 지역, 연도, 통화, 전망 기간 |
 | 홈페이지 | heading | URL, 수집일, snapshot locator |
 | 뉴스 | 기사 또는 원문 제안의 500~800 token | 발행일, 사건일, 원출처 |
@@ -79,43 +93,39 @@ Chunk 크기·overlap·top_k는 실험 설정으로 기록한다. 원문에 없�
 
 **검색 순서 제안**
 
-1. collector는 query·candidate_id·corpus/index_version·as_of·top_k·allowed_source_ids를 담은 `RetrievalRequest`를 만든다([공통 계약](contracts.md)). 승인된 manifest에서 대상 기업과 관련 industry 출처를 선택하고, 검색 adapter는 그 허용 목록과 실행 기준일을 함께 적용한다. 같은 질의라도 as_of가 다르면 별도 검색/cache 항목이다.
+1. collector는 현재 `RetrievalRequest`의 query·candidate_id·corpus/index_version·as_of·top_k·allowed_source_ids를 만든다([공통 계약](contracts.md)). 승인된 manifest에서 대상 기업과 관련 industry 출처를 선택하고, 검색 adapter는 그 허용 목록과 실행 기준일을 함께 적용한다. 같은 질의라도 as_of가 다르면 별도 검색/cache 항목이다. v3의 doc_type/year metadata filter는 아직 DTO에 없다: Source의 versioned bibliographic metadata에서 유도한 document class/year와 request filter 확장 proposal을 schema로 승인한 뒤 cache key·returned result 검증에 함께 넣는다. class unknown은 우선순위 승격에 쓰지 않으며, 1→2→3은 hard filter가 아닌 명시적 fallback 정책이다.
 2. 같은 embedding 모델·revision·차원으로 query와 document를 표현한다.
 3. dense 검색 결과를 반환하고 source/chunk/page metadata와 RetrievalRecord를 보존한다. Web→RAG 재발견은 [EvidenceProvenance 병합 계약](contracts.md)으로 추적하며 근거의 내용과 수집 경로를 분리한다.
-4. 특허를 실제 범위에 넣는 단계에서는 원문 요구대로 keyword/sparse 검색과 merge·reranking을 추가한다. dense-only 상태를 특허 hybrid 구현 완료로 표현하지 않는다.
+4. MVP는 dense 중심이다(v3 B-3). 특허번호·IPC·모델명 등 exact match가 필요한 경우 keyword/sparse를 **필요 시 확장**하며 특허를 포함한다는 이유만으로 hybrid·reranker를 필수화하지 않는다. 적용 여부·merge·reranking 설정과 실측을 기록하고 dense-only를 hybrid 완료로 표시하지 않는다.
 5. 검색 결과의 숫자는 LLM 구조화 추출 + 코드 검증으로 Evidence에 옮긴다. similarity 값은 CAGR·수익률·신뢰도 점수가 아니다.
 
-재인덱싱할 때 모델 revision, tokenizer, chunk 설정, 정규화 설정이 바뀌면 새 index_version을 만든다. 서로 다른 embedding 공간을 같은 collection에 섞지 않는다. vector store 제품과 배포 방식은 D07에서 정한다.
+재인덱싱할 때 모델 revision, tokenizer, chunk 설정, 정규화 설정이 바뀌면 새 index_version을 만든다. 문서별 manifest/Chunk에는 document class·year와 자료 유형별 slide/patent metadata를 보존할 확장 shape를 별도 승인하며, 현재 `Source`/`Chunk` DTO에 그 필드가 이미 있다고 가정하지 않는다. 서로 다른 embedding 공간을 같은 collection에 섞지 않는다. vector store 제품과 배포 방식은 D07에서 정한다.
 
 ## 5. Embedding 후보와 선택 절차
 
-### 확인한 사실과 선택 제안
+### v3의 1차 선택과 최종 선택을 구별한다
 
-2026-09-29의 제공자 원문 확인 기준이다. 아래는 **벤치마크 결과가 아니다.**
+**1차 선택은 `BAAI/bge-m3`**이며 D07의 최종 모델 확정은 동일 평가셋 비교 뒤다. 아래 검증 포인트는 제공된 v3 B-3의 실험 계획이지 라이선스/접근/성능 실측 결과가 아니다. 다운로드할 revision의 모델 카드·이용조건·실행환경 적합성은 도입 시 별도 확인한다.
 
-| 후보 | 확인 내용 / 근거 | 이번 프로젝트에서의 처리 |
+| 후보 | v3가 요구하는 프로젝트 검증 포인트 | 현재 판단 상태 |
 | --- | --- | --- |
-| `BAAI/bge-m3` | 제공자 모델 카드에 MIT, multilingual, dense/sparse/ColBERT 계열 표현 지원 표기 [EM1] | 한/영 기술 문서 baseline 실험 우선 후보. 성능·메모리·지연 측정 후 최종 승인 |
-| `jinaai/jina-embeddings-v4` | 모델 카드는 multimodal/multilingual을 설명. 확인한 revision의 LICENSE에는 Qwen Research License와 비상업적 사용 제한이 기재됨 [EM2, EM3] | 원문의 시각 문서 후보로 보존하되, 공개 weights만으로 오픈소스 필수 조건 충족을 선언하지 않음. 과제 적합성과 이용조건 확인 전 채택 보류 |
-| 원문 OpenAI embedding 후보 | 원문 §6.3에서 비교/참고 모델로만 남김 | 과제의 오픈소스 최종 선택을 대체하지 않음; 유료 비교 실험 필수 아님 |
+| `BAAI/bge-m3` | 한국어→영문 기술문서, 긴 문서·기술/특허 용어, dense 중심 운영 | 1차 선택; 최종 성능·비용·운영 비교 미실행 |
+| `intfloat/multilingual-e5-large` | 짧은 Chunk와 한/영 cross-lingual 검색 | 비교 후보; 접근·revision·라이선스·실행 미검증 |
+| `nlpai-lab/KURE-v1` | 한국어 질의 정확도와 한국어→영문 문서 검색 | 비교 후보; 접근·revision·라이선스·실행 미검증 |
 
-확인한 모델 revision:
-
-```text
-BAAI/bge-m3: 5617a9f61b028005a4858fdac845db406aefb181
-jinaai/jina-embeddings-v4: 853c867b65b749f3c3c72a06868140d842e04f06
-```
-
-위 revision은 문서 확인 snapshot이지 프로젝트 lockfile이나 모델 다운로드 완료 증거가 아니다. 비교 후보가 이용조건 때문에 제외되면 그 이유를 기록한다. 실행 가능한 대안이 필요하면 별도 오픈소스 모델을 추가 검토하되 출처·라이선스·비교 조건을 같은 표에 남긴다.
+이전 원문 §6.3의 Jina/OpenAI는 **과거 참고 후보**이며 현재 비교 baseline을 대체하거나 추가 유료 실험을 요구하지 않는다. 과거 가이드의 pinned 모델 카드 참고 [EM1–EM3]도 실제 다운로드·라이선스 승인·측정 기록이 아니다. 후보가 권한·이용조건·장비 때문에 실행 불가하면 실패/미실행 이유를 기록하고 대체 실험 계획을 승인받는다. 결과를 임의로 채우지 않는다.
 
 ### 비교 실험 — RAG 담당 산출물
 
-- 같은 corpus와 사람이 정답 Chunk를 지정한 질의 집합 사용.
+- 세 후보에 **동일한 문서 Chunk와 동일한 평가 Query**를 사용한다. corpus/chunk/query version·정답 Chunk ID를 고정하고 모델별 필수 입력 포맷만 기록한다. 모델마다 유리하게 재청킹하지 않는다.
 - 한국어 질의→영문 문서, 한국어 기술용어, 시장 숫자·표, 동명이인/다른 기업 오검색, exact identifier를 포함.
 - tuning용 질의와 최종 확인용 질의를 분리한다.
-- **Hit Rate@K:** 상위 K개에 정답 Chunk가 하나라도 있는 질의 비율.
-- **MRR@K:** 첫 정답 rank의 역수 평균; K 안에 정답이 없으면 0.
+- **Hit Rate@1, Hit Rate@3, Hit Rate@5:** 각 상위 K개에 정답 Chunk가 하나라도 있는 질의 비율을 각각 보고한다.
+- **MRR:** 첫 정답 rank 역수의 전체 질의 평균. 검색 깊이/cutoff를 D07 실험 설정에 명시하고 해당 범위에 정답이 없으면 0으로 계산하는 안이다. cutoff가 있으면 `MRR@depth`로 함께 표시하여 전체 순위 MRR로 오해하지 않게 한다.
+- **Cross-lingual:** 한국어 질의→영문 논문/기술문서 subset을 별도 구성하고 같은 지표를 분리 보고한다. 전체 평균으로 교차언어 실패를 숨기지 않는다.
 - retrieval latency, indexing time, peak memory, 실제 비용도 같은 하드웨어·설정에서 측정한다.
+- **입력 길이/절단:** 모델별 최대 입력 길이와 실제 chunk token 분포·truncation 발생/방식을 측정해 기록한다.
+- **통합·운영 복잡도:** 현재 pipeline과의 입력 포맷·의존성·index migration·배포/관측 부담을 정성 기준으로 비교한다. 이는 성능 수치가 아니며 실측 결과 없이 우열을 선언하지 않는다.
 - 출처/페이지 복원 가능 여부와 기술 평가에 실제로 쓰인 근거를 확인한다.
 - 임계값은 D07에서 사전에 정한다. 이 문서에는 측정 결과나 통과 수치를 기입하지 않는다.
 
@@ -125,7 +135,10 @@ jinaai/jina-embeddings-v4: 853c867b65b749f3c3c72a06868140d842e04f06
 모델 / revision / 라이선스 확인:
 코퍼스 / 질의셋 version:
 실행환경 / library lock / embedding·chunk·retrieval 설정:
-Hit Rate@K / MRR@K / latency / memory / cost: [실측 후 입력]
+입력 길이 / chunk token 분포 / truncation 발생·방식: [실측 후 입력]
+통합·운영 복잡도(입력 포맷·의존성·migration·관측): [확인 후 입력]
+Hit Rate@1 / Hit Rate@3 / Hit Rate@5 / MRR(검색 depth·cutoff 포함): [실측 후 입력]
+한국어→영문 subset 지표 / latency / indexing time / memory / cost: [실측 후 입력]
 실패 사례 / 기술 평가에 사용된 evidence_ids:
 최종 선택 / 제외 이유 / 승인자:
 ```
