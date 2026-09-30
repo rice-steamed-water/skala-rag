@@ -136,7 +136,16 @@ def validate_report(draft: ReportDraft, context: ReportContext) -> ValidationRes
             found[rows["후보"]] = rows
     summaries = {s.candidate_id: s for s in context.score_summaries.values()}
     for cid, summary in summaries.items():
-        want = score_rows(summary, decided[cid])
+        decision = decided.get(cid)
+        if decision is None or decision.score_summary_id != summary.score_summary_id:
+            f.add(
+                "SV01",
+                "fail",
+                summary.score_summary_id,
+                f"{cid} 점수에 대응하는 판정 없음",
+            )
+            continue
+        want = score_rows(summary, decision)
         got = found.get(cid)
         if got is None:
             f.add("SV04", "revise", score_title, f"{cid} 평가 결과 표 없음")

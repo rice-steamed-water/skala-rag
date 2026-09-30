@@ -7,14 +7,13 @@ retrieval_id·chunk_id는 collector가 그 검색 결과로 채운다 — extrac
 
 Chunk → 주장 추출은 ``ExtractClaims``로 주입한다. fixture에서는
 ``fixture_extract_claims``(문자열 일치)를, M2에서는 LLM 구조화 추출 wrapper를 쓴다.
-excerpt가 Chunk 원문에 그대로 없으면 ``EvidenceExtractionError``를 낸다.
+excerpt가 Chunk 원문에 그대로 없으면 ``EvidenceExtractionError``를 낸다. Evidence ID는
+``contracts.ids.evidence_id``(식별 core, 수집 경로 제외)이고 병합은 #15 reducer를 쓴다.
 
 호출 수는 ``ToolBudget.max_calls``까지만 쓴다. 남은 질의는 실행하지 않고, gap의
 attempted_retrieval_ids에는 실제 호출만 남는다(gap 갱신은 controller 몫).
 """
 
-import hashlib
-import json
 from collections.abc import Callable, Sequence
 from datetime import date
 from typing import Literal
@@ -26,10 +25,12 @@ from skala_rag.contracts.candidates import Candidate
 from skala_rag.contracts.common import JSONMap
 from skala_rag.contracts.coverage import ResearchGap
 from skala_rag.contracts.error_codes import ERROR_SPECS, ErrorCode, is_retryable
+from skala_rag.contracts.ids import evidence_id, normalize_claim
 from skala_rag.contracts.interfaces import Clock, Retrieve
 from skala_rag.contracts.retrieval import RetrievalRecord, RetrievalRequest
 from skala_rag.contracts.sources import Chunk
 from skala_rag.contracts.tools import EvidenceBundle, ToolBudget, ToolResult
+from skala_rag.graph.reducers import merge_evidence
 
 
 class ExtractedClaim(BaseModel):
@@ -71,14 +72,8 @@ def fixture_extract_claims(chunk: Chunk, gap: ResearchGap) -> list[ExtractedClai
     ]
 
 
-def evidence_id(candidate_id: str | None, chunk_id: str, gap_target: str, claim: str):
-    """같은 Chunk의 같은 주장은 검색 경로가 달라도 같은 ID(provenance만 합친다)."""
-    payload = json.dumps(
-        ["skala-rag-evidence-v1", candidate_id, chunk_id, gap_target, claim],
-        ensure_ascii=False,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return f"ev-v1-{hashlib.sha256(payload).hexdigest()[:32]}"
+def _iso(value: date | None) -> str | None:
+    return None if value is None else value.isoformat()
 
 
 class EvidenceCollector:
@@ -173,7 +168,6 @@ class EvidenceCollector:
         evidence: dict[str, JSONMap],
         sources: dict[str, JSONMap],
     ) -> None:
-        target = gap.criterion_id or gap.eligibility_field
         for chunk in bundle.chunks:
             if chunk.chunk_id not in record.chunk_ids:
                 raise EvidenceExtractionError(f"Chunk {chunk.chunk_id} 검색 기록 없음")
@@ -184,31 +178,46 @@ class EvidenceCollector:
                     )
                 company = chunk.scope == "company"
                 owner = candidate.candidate_id if company else None
-                key = evidence_id(owner, chunk.chunk_id, target, claim.claim)
-                provenance = {
-                    "schema_version": self._schema_version,
-                    "retrieval_id": record.retrieval_id,
-                    "method": "rag",
-                    "chunk_id": chunk.chunk_id,
+                # 공통 ID는 식별 core만 쓴다. 같은 주장을 다른 gap·검색으로 다시
+                # 얻으면 같은 ID이고 reducer가 provenance·criterion_ids를 합친다.
+                core = {
+                    "source_id": chunk.source_id,
+                    "locator": chunk.locator,
+                    "claim": normalize_claim(claim.claim),
+                    "candidate_id": owner,
+                    "scope": chunk.scope,
+                    "value": claim.value,
+                    "unit": claim.unit,
+                    "currency": claim.currency,
+                    "value_as_of": claim.value_as_of,
+                    "period": claim.period,
+                    "geography": claim.geography,
+                    "event_date": claim.event_date,
+                    "evidence_kind": "reported",
+                    "supporting_evidence_ids": [],
+                    "derivation": None,
+                    "supersedes": None,
                 }
-                if key in evidence:
-                    if provenance not in evidence[key]["provenance"]:
-                        evidence[key]["provenance"].append(provenance)
-                else:
-                    evidence[key] = {
-                        "schema_version": self._schema_version,
-                        "evidence_id": key,
-                        "candidate_id": owner,
-                        "scope": chunk.scope,
-                        "criterion_ids": [gap.criterion_id] if gap.criterion_id else [],
-                        **claim.model_dump(mode="json"),
-                        "source_id": chunk.source_id,
-                        "locator": chunk.locator,
-                        "provenance": [provenance],
-                        "evidence_kind": "reported",
-                        "supporting_evidence_ids": [],
-                        "conflicts_with": [],
-                    }
+                key = evidence_id(**core)
+                payload = {
+                    "schema_version": self._schema_version,
+                    "evidence_id": key,
+                    **claim.model_dump(mode="json"),
+                    **core,
+                    "value_as_of": _iso(claim.value_as_of),
+                    "event_date": _iso(claim.event_date),
+                    "criterion_ids": [gap.criterion_id] if gap.criterion_id else [],
+                    "provenance": [
+                        {
+                            "schema_version": self._schema_version,
+                            "retrieval_id": record.retrieval_id,
+                            "method": "rag",
+                            "chunk_id": chunk.chunk_id,
+                        }
+                    ],
+                    "conflicts_with": [],
+                }
+                evidence.update(merge_evidence(evidence, {key: payload}))
                 if key not in record.evidence_ids:
                     record.evidence_ids.append(key)
                 sources[chunk.source_id] = bundle.sources[chunk.source_id].model_dump(

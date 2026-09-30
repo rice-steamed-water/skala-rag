@@ -11,6 +11,7 @@ extra 필드를 거절). 점수는 이후 scoring.aggregate_scores가 rating으�
 """
 
 import json
+import re
 from collections.abc import Callable, Mapping
 from typing import Literal
 
@@ -70,6 +71,15 @@ class EvaluationValidationError(ValueError):
     def __init__(self, violations: list[str]) -> None:
         super().__init__("; ".join(violations))
         self.violations = violations
+
+
+def _safe_violation_codes(violations: list[str]) -> str:
+    """내부 진단 코드만 남기고 모델이 만든 ID·문장을 버린다."""
+    codes = set()
+    for violation in violations:
+        code = violation.partition(":")[0]
+        codes.add(code if re.fullmatch(r"[A-Z][A-Z0-9_]*", code) else "OUTPUT_INVALID")
+    return ", ".join(sorted(codes))
 
 
 def _industry_dimensions(rubric: Mapping[str, object]) -> set[str] | None:
@@ -335,11 +345,11 @@ def evaluate_dimension(
                     clock=clock,
                     schema_version=schema_version,
                 )
-            last_problem = err.message_redacted
+            last_problem = ErrorCode.LLM_OUTPUT_INVALID.value
         except ValidationError as err:
             last_problem = f"schema 오류 {err.error_count()}건"
         except EvaluationValidationError as err:
-            last_problem = "; ".join(err.violations)
+            last_problem = _safe_violation_codes(err.violations)
         else:
             return EvaluationResult(
                 schema_version=schema_version,
