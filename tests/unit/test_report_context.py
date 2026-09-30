@@ -203,6 +203,15 @@ def test_malformed_state_payload_is_upstream_invalid(world):
     assert _code(world, state=state) == ErrorCode.UPSTREAM_INVALID
 
 
+@pytest.mark.parametrize(
+    "field,bad", [("evaluation_rounds", []), ("sources", []), ("chunks", None)]
+)
+def test_explicit_falsey_state_map_is_upstream_invalid(world, field, bad):
+    state = copy.deepcopy(world["state"])
+    state[field] = bad
+    assert _code(world, state=state) == ErrorCode.UPSTREAM_INVALID
+
+
 def test_superseded_eligibility_evidence_is_context_invalid(world):
     state = copy.deepcopy(world["state"])
     target = state["eligibility_results"]["co-fixture-ineligible"]["evidence_ids"][0]
