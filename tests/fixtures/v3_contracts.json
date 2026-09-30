@@ -1,0 +1,462 @@
+{
+  "description": "Entirely synthetic offline structural observations, not approved policy or live measurements",
+  "criteria": [
+    {
+      "schema_version": "v3-fixture",
+      "criterion_id": "technology.integration",
+      "status": "observed",
+      "rating": 4,
+      "evidence_ids": [
+        "ev-synthetic"
+      ],
+      "rationale": "Synthetic structural example"
+    },
+    {
+      "schema_version": "v3-fixture",
+      "criterion_id": "technology.integration",
+      "status": "missing",
+      "rating": null,
+      "evidence_ids": [],
+      "rationale": "Synthetic structural example",
+      "missing_reason": "Unavailable synthetic observation"
+    },
+    {
+      "schema_version": "v3-fixture",
+      "criterion_id": "technology.integration",
+      "status": "not_applicable",
+      "rating": null,
+      "evidence_ids": [],
+      "rationale": "Synthetic structural example",
+      "applicability_reason": "Synthetic applicability observation",
+      "applicability_rule_id": "rule-synthetic-not-approved",
+      "applicability_evidence_ids": [
+        "ev-applicability-synthetic"
+      ]
+    }
+  ],
+  "branches": [
+    {
+      "schema_version": "v3-fixture",
+      "run_id": "run-synthetic",
+      "candidate_id": "candidate-synthetic",
+      "evaluation_round": 1,
+      "snapshot_id": "snapshot-synthetic",
+      "evidence_revision": 1,
+      "policy_version": "synthetic-not-approved",
+      "branch_id": "founder",
+      "status": "success",
+      "evaluations": {
+        "founder": {
+          "schema_version": "v3-fixture",
+          "run_id": "run-synthetic",
+          "candidate_id": "candidate-synthetic",
+          "evaluation_round": 1,
+          "snapshot_id": "snapshot-synthetic",
+          "evidence_revision": 1,
+          "policy_version": "synthetic-not-approved",
+          "dimension": "founder",
+          "rubric_version": "synthetic",
+          "criteria": [
+            {
+              "schema_version": "v3-fixture",
+              "criterion_id": "technology.integration",
+              "status": "observed",
+              "rating": 4,
+              "evidence_ids": [
+                "ev-synthetic"
+              ],
+              "rationale": "Synthetic structural example"
+            }
+          ],
+          "research_gaps": [],
+          "caveats": [
+            "Not live evidence"
+          ]
+        }
+      },
+      "errors": []
+    },
+    {
+      "schema_version": "v3-fixture",
+      "run_id": "run-synthetic",
+      "candidate_id": "candidate-synthetic",
+      "evaluation_round": 1,
+      "snapshot_id": "snapshot-synthetic",
+      "evidence_revision": 1,
+      "policy_version": "synthetic-not-approved",
+      "branch_id": "market",
+      "status": "success",
+      "evaluations": {
+        "market": {
+          "schema_version": "v3-fixture",
+          "run_id": "run-synthetic",
+          "candidate_id": "candidate-synthetic",
+          "evaluation_round": 1,
+          "snapshot_id": "snapshot-synthetic",
+          "evidence_revision": 1,
+          "policy_version": "synthetic-not-approved",
+          "dimension": "market",
+          "rubric_version": "synthetic",
+          "criteria": [
+            {
+              "schema_version": "v3-fixture",
+              "criterion_id": "technology.integration",
+              "status": "observed",
+              "rating": 4,
+              "evidence_ids": [
+                "ev-synthetic"
+              ],
+              "rationale": "Synthetic structural example"
+            }
+          ],
+          "research_gaps": [],
+          "caveats": [
+            "Not live evidence"
+          ]
+        }
+      },
+      "errors": []
+    },
+    {
+      "schema_version": "v3-fixture",
+      "run_id": "run-synthetic",
+      "candidate_id": "candidate-synthetic",
+      "evaluation_round": 1,
+      "snapshot_id": "snapshot-synthetic",
+      "evidence_revision": 1,
+      "policy_version": "synthetic-not-approved",
+      "branch_id": "technology",
+      "status": "success",
+      "evaluations": {
+        "technology": {
+          "schema_version": "v3-fixture",
+          "run_id": "run-synthetic",
+          "candidate_id": "candidate-synthetic",
+          "evaluation_round": 1,
+          "snapshot_id": "snapshot-synthetic",
+          "evidence_revision": 1,
+          "policy_version": "synthetic-not-approved",
+          "dimension": "technology",
+          "rubric_version": "synthetic",
+          "criteria": [
+            {
+              "schema_version": "v3-fixture",
+              "criterion_id": "technology.integration",
+              "status": "observed",
+              "rating": 4,
+              "evidence_ids": [
+                "ev-synthetic"
+              ],
+              "rationale": "Synthetic structural example"
+            }
+          ],
+          "research_gaps": [],
+          "caveats": [
+            "Not live evidence"
+          ]
+        }
+      },
+      "errors": []
+    },
+    {
+      "schema_version": "v3-fixture",
+      "run_id": "run-synthetic",
+      "candidate_id": "candidate-synthetic",
+      "evaluation_round": 1,
+      "snapshot_id": "snapshot-synthetic",
+      "evidence_revision": 1,
+      "policy_version": "synthetic-not-approved",
+      "branch_id": "moat",
+      "status": "success",
+      "evaluations": {
+        "moat": {
+          "schema_version": "v3-fixture",
+          "run_id": "run-synthetic",
+          "candidate_id": "candidate-synthetic",
+          "evaluation_round": 1,
+          "snapshot_id": "snapshot-synthetic",
+          "evidence_revision": 1,
+          "policy_version": "synthetic-not-approved",
+          "dimension": "moat",
+          "rubric_version": "synthetic",
+          "criteria": [
+            {
+              "schema_version": "v3-fixture",
+              "criterion_id": "technology.integration",
+              "status": "observed",
+              "rating": 4,
+              "evidence_ids": [
+                "ev-synthetic"
+              ],
+              "rationale": "Synthetic structural example"
+            }
+          ],
+          "research_gaps": [],
+          "caveats": [
+            "Not live evidence"
+          ]
+        }
+      },
+      "errors": []
+    },
+    {
+      "schema_version": "v3-fixture",
+      "run_id": "run-synthetic",
+      "candidate_id": "candidate-synthetic",
+      "evaluation_round": 1,
+      "snapshot_id": "snapshot-synthetic",
+      "evidence_revision": 1,
+      "policy_version": "synthetic-not-approved",
+      "branch_id": "business_deal",
+      "status": "success",
+      "evaluations": {
+        "traction": {
+          "schema_version": "v3-fixture",
+          "run_id": "run-synthetic",
+          "candidate_id": "candidate-synthetic",
+          "evaluation_round": 1,
+          "snapshot_id": "snapshot-synthetic",
+          "evidence_revision": 1,
+          "policy_version": "synthetic-not-approved",
+          "dimension": "traction",
+          "rubric_version": "synthetic",
+          "criteria": [
+            {
+              "schema_version": "v3-fixture",
+              "criterion_id": "technology.integration",
+              "status": "observed",
+              "rating": 4,
+              "evidence_ids": [
+                "ev-synthetic"
+              ],
+              "rationale": "Synthetic structural example"
+            }
+          ],
+          "research_gaps": [],
+          "caveats": [
+            "Not live evidence"
+          ]
+        },
+        "deal_terms": {
+          "schema_version": "v3-fixture",
+          "run_id": "run-synthetic",
+          "candidate_id": "candidate-synthetic",
+          "evaluation_round": 1,
+          "snapshot_id": "snapshot-synthetic",
+          "evidence_revision": 1,
+          "policy_version": "synthetic-not-approved",
+          "dimension": "deal_terms",
+          "rubric_version": "synthetic",
+          "criteria": [
+            {
+              "schema_version": "v3-fixture",
+              "criterion_id": "technology.integration",
+              "status": "observed",
+              "rating": 4,
+              "evidence_ids": [
+                "ev-synthetic"
+              ],
+              "rationale": "Synthetic structural example"
+            }
+          ],
+          "research_gaps": [],
+          "caveats": [
+            "Not live evidence"
+          ]
+        }
+      },
+      "errors": []
+    }
+  ],
+  "failure": {
+    "schema_version": "v3-fixture",
+    "run_id": "run-synthetic",
+    "candidate_id": "candidate-synthetic",
+    "evaluation_round": 1,
+    "snapshot_id": "snapshot-synthetic",
+    "evidence_revision": 1,
+    "policy_version": "synthetic-not-approved",
+    "branch_id": "business_deal",
+    "status": "failure",
+    "evaluations": null,
+    "errors": [
+      {
+        "schema_version": "v3-fixture",
+        "error_id": "error-synthetic",
+        "run_id": "run-synthetic",
+        "candidate_id": "candidate-synthetic",
+        "node": "synthetic",
+        "error_code": "SYNTHETIC_TIMEOUT",
+        "message_redacted": "Synthetic failure",
+        "retryable": false,
+        "attempt": 1,
+        "timestamp": "2026-09-30T10:00:00+09:00"
+      }
+    ]
+  },
+  "score": {
+    "schema_version": "v3-fixture",
+    "run_id": "run-synthetic",
+    "candidate_id": "candidate-synthetic",
+    "evaluation_round": 1,
+    "snapshot_id": "snapshot-synthetic",
+    "evidence_revision": 1,
+    "policy_version": "synthetic-not-approved",
+    "score_summary_id": "score-synthetic",
+    "criterion_points": {
+      "technology.integration": "4.00000000000000000001",
+      "missing": null
+    },
+    "dimension_scores": {
+      "founder": {
+        "schema_version": "v3-fixture",
+        "observed_score": "0",
+        "applicable_weight": "0",
+        "not_applicable_weight": "5",
+        "missing_weight": "0",
+        "dimension_score_pct": null
+      },
+      "market": {
+        "schema_version": "v3-fixture",
+        "observed_score": "0",
+        "applicable_weight": "0",
+        "not_applicable_weight": "5",
+        "missing_weight": "0",
+        "dimension_score_pct": null
+      },
+      "technology": {
+        "schema_version": "v3-fixture",
+        "observed_score": "0",
+        "applicable_weight": "0",
+        "not_applicable_weight": "5",
+        "missing_weight": "0",
+        "dimension_score_pct": null
+      },
+      "moat": {
+        "schema_version": "v3-fixture",
+        "observed_score": "0",
+        "applicable_weight": "0",
+        "not_applicable_weight": "5",
+        "missing_weight": "0",
+        "dimension_score_pct": null
+      },
+      "traction": {
+        "schema_version": "v3-fixture",
+        "observed_score": "0",
+        "applicable_weight": "0",
+        "not_applicable_weight": "5",
+        "missing_weight": "0",
+        "dimension_score_pct": null
+      },
+      "deal_terms": {
+        "schema_version": "v3-fixture",
+        "observed_score": "0",
+        "applicable_weight": "0",
+        "not_applicable_weight": "5",
+        "missing_weight": "0",
+        "dimension_score_pct": null
+      }
+    },
+    "observed_score": "4.00000000000000000001",
+    "applicable_weight": null,
+    "not_applicable_weight": null,
+    "missing_weight": null,
+    "normalized_score": null,
+    "weighted_missing_pct": null,
+    "coverage_pct": null,
+    "low_score_dimensions": [],
+    "hold_reasons": []
+  },
+  "coverage": {
+    "schema_version": "v3-fixture",
+    "candidate_id": "candidate-synthetic",
+    "evidence_revision": 1,
+    "policy_version": "synthetic-not-approved",
+    "covered_criterion_ids": [
+      "observed"
+    ],
+    "missing_criterion_ids": [
+      "missing"
+    ],
+    "not_applicable_criterion_ids": [
+      "na"
+    ],
+    "applicability_assessments": {
+      "na": {
+        "schema_version": "v3-fixture",
+        "applicability_reason": "synthetic",
+        "applicability_rule_id": "rule-synthetic",
+        "evidence_ids": [
+          "ev-synthetic"
+        ]
+      }
+    },
+    "unresolved_conflicts": []
+  },
+  "decisions": [
+    {
+      "schema_version": "v3-fixture",
+      "decision_id": "decision-synthetic",
+      "run_id": "run-synthetic",
+      "candidate_id": "candidate-synthetic",
+      "label": "RECOMMEND_PRIORITY",
+      "report_grade": "Caller observation only",
+      "score_summary_id": "score-synthetic",
+      "reason_codes": [],
+      "evidence_ids": [],
+      "rationale": "Synthetic observation",
+      "risks": [],
+      "limitations": [
+        "Not a computed decision"
+      ]
+    },
+    {
+      "schema_version": "v3-fixture",
+      "decision_id": "decision-synthetic",
+      "run_id": "run-synthetic",
+      "candidate_id": "candidate-synthetic",
+      "label": "RECOMMEND",
+      "report_grade": "Caller observation only",
+      "score_summary_id": "score-synthetic",
+      "reason_codes": [],
+      "evidence_ids": [],
+      "rationale": "Synthetic observation",
+      "risks": [],
+      "limitations": [
+        "Not a computed decision"
+      ]
+    },
+    {
+      "schema_version": "v3-fixture",
+      "decision_id": "decision-synthetic",
+      "run_id": "run-synthetic",
+      "candidate_id": "candidate-synthetic",
+      "label": "WATCHLIST",
+      "report_grade": "Caller observation only",
+      "score_summary_id": "score-synthetic",
+      "reason_codes": [],
+      "evidence_ids": [],
+      "rationale": "Synthetic observation",
+      "risks": [],
+      "limitations": [
+        "Not a computed decision"
+      ]
+    },
+    {
+      "schema_version": "v3-fixture",
+      "decision_id": "decision-synthetic",
+      "run_id": "run-synthetic",
+      "candidate_id": "candidate-synthetic",
+      "label": "PASS",
+      "report_grade": "Caller observation only",
+      "score_summary_id": "score-synthetic",
+      "reason_codes": [],
+      "evidence_ids": [],
+      "rationale": "Synthetic observation",
+      "risks": [],
+      "limitations": [
+        "Not a computed decision"
+      ]
+    }
+  ]
+}

@@ -1,31 +1,79 @@
-# 결정 목록 — 승인 전에는 제안이다
+# 결정 목록 — v3 방향·운영 승인과 남은 세부 정책
 
-[문서 홈](../README.md) · 근거: [통합 원문](../raws/robotics_startup_agentic_rag_notion_integrated.md)
+[문서 홈](../README.md) · [v3 원문](../design/design-v3.html) · [이전 통합 원문](../raws/robotics_startup_agentic_rag_notion_integrated.md) · [정합화·영향표](design-v3-alignment.md)
 
-이 문서는 원문에서 서로 다른 상태로 남아 있는 내용과 새 구현 제안을 분리한다. **D01–D06·D08은 APPROVED**, D09의 목차·인용·구조 검증은 부분 APPROVED이며 PDF 선택은 OPEN이다. D07·D10–D14는 OPEN이다. 표의 승인 역할은 검토 대상이며, D01–D06·D08의 실제 문서 담당자는 아래 이슈 #3 기록에 명시한다.
+새 구현은 v3를 따른다. **방향 승인, 운영 규칙 승인, 구조 DTO 가용성, 실제 runtime 구현은 별개**다. #3의 D01–D06·D08, #14의 D09 부분 승인과 D14 OPEN 원본 10개 레코드는 아래에 byte-identical 이력으로 보존한다. 과거 기록의 상태·날짜·근거를 소급 변경하지 않는다. 아래 후속 승인이 현재 v3 범위를 정하며, 남은 `v3-OPEN`만 기본값 설치/live 실행의 gate다.
 
-## 구현 전에 합의할 항목
+## v3 전환 방향 승인 — 별도 기록
 
-| ID  | 충돌 / 미정 사항                                                              | 원문 근거                                     | 결정안 (상태는 승인 기록 참조)                                                                                                                                 | 승인 역할 / 차단 대상                   |
-| --- | ----------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------- |
-| D01 | 현재 팀 가중치, 교수님 예시 가중치, 단계별 가중치가 공존                      | §3.1, §3 단계별 제안, §7.1, §11               | 고정 `5/30/25/20/10/10`만 baseline으로 사용. unknown stage도 가중치를 자동 변경하지 않음                                                         | 지표 담당 / 점수 정책                   |
-| D02 | 점수 척도와 “특정 항목 2점 이하”의 항목 단위가 없음                           | §3.1–3.2                                      | 세부항목 rating은 1~5, 가중점수는 별도 계산. 저점수 보류는 여섯 **상위 영역의 관측 가중평균 rating ≤2**에 적용                                   | 지표 담당 / 평가 prompt와 임계값 테스트 |
-| D03 | 팀 Graph는 WATCHLIST 즉시 보고서, 교수님은 보류 시 다음 후보                  | §4.3; §12 교수님 노션 D, 원문 L2741–2746      | `WATCHLIST`와 `PASS` 모두 다음 후보. 첫 `RECOMMEND`에서 보고서, 모두 미추천이면 비교 요약. 첫 추천이 전체 최우수라는 표현 금지                   | Graph + 전원 / 라우팅                   |
-| D04 | 가중치 영역은 6개지만 병렬 평가 노드는 5개                                    | §3.1, §3.3, §4.2                              | 5개 노드 유지 + 합류 뒤 별도 `deal_terms_evaluation` structured-output 노드. Aggregator는 숫자만 합산                                            | 평가 + Graph / State·집계               |
-| D05 | 최소 데이터 / coverage 충분성 / 결측 분모가 미정                              | §2.2, §3.2, §11                               | 전체 세부항목 비중 100을 분모로 고정. 직접 근거·필수 맥락이 없는 항목은 결측. 조사 전후 기준을 분리                                              | 데이터 + 지표 / Coverage                |
-| D06 | Seed~C 조건에 비해 TIPS·프리시드 정규화가 과도함; 추정 기준 미정              | §2.2, §7                                      | TIPS만으로 라운드 확정 금지. `unknown`/추정만으로 적격 처리하지 않음. 프리/브릿지는 근거로 이전 라운드를 확인                                    | Discovery + 전원 / Eligibility          |
-| D07 | embedding 최종 모델과 vector store 미선정                                     | §6.3, §11                                     | `BAAI/bge-m3` 우선 실험. 모델 비교·실행환경·라이선스 확인 후 확정. 저장소 제품은 아직 선택하지 않음                                              | RAG / 실데이터 인덱스                   |
-| D08 | 후보 수·반복 상한 미정; 후보 소진 시 §2.3은 Summary, §4 그림은 부적격이면 END | §2.3, §4 loop, §8, §11                        | 후보 5, 후보별 추가조사 총 2회, 보고서 수정 총 2회. 정상 조사 후 후보 고갈은 사유 있는 Summary로 통일. 비용·총 실행시간 상한은 live 실행 전 명시 | Graph + 전원 / 실 API 실행              |
-| D09 | 보고서 상세 목차·렌더러·페이지 측정 미정                                      | §9, §11                                       | [reporting](reporting.md)의 목차·인용·구조 검증은 부분 승인. 렌더러·A4·폰트·여백·SUMMARY 측정은 OPEN | 보고서 / 최종 제출                      |
-| D10 | 팀원 명단과 원본 역할 표기가 불일치                                           | §11, §12 마지막 원본 L2904, L2924–2926, L2988 | 실제 수행 역할은 이슈 assignee와 PR 작성자 기록으로 확인. 원문의 별명/이름을 자동 매칭하지 않음                                                  | 전원 / Contributors                     |
-| D11 | DAY 3 마감의 실제 날짜·캠퍼스·반 미상                                         | §10 제출 원문                                 | DAY 3 10:00 / 15:00를 상대 일정으로 보존. 실제 날짜·시간대·제출 채널 확인                                                                        | 전원 / 제출 일정                        |
-| D12 | 국내 중심 API와 국내외 탐색 목표의 범위 차이                                  | §1.1, §5                                      | 계약에는 국가를 포함. 한국 fixture부터 연결하되 해외 미지원은 명시적으로 표시. 국내만으로 최종 범위를 줄이려면 승인                              | Discovery / 후보 범위                   |
-| D13 | HTML·PPT·추출 PDF의 200페이지 산정 규칙 미정                                  | §1.3, §6.2                                    | manifest에 원본·허용 페이지 구간 기록. HTML은 고정 PDF snapshot, PPT는 슬라이드 수. 승인 전 페이지 미상 자료는 인덱싱 보류                       | RAG + 과제 확인 담당 / 코퍼스           |
-| D14 | 세부항목별 1~5점 rubric과 재무 지표 적용 조건 미정                            | §3 상세 기준                                  | [scoring](scoring.md)의 공통 척도를 바탕으로 각 항목의 근거·점수 예시 작성. SaaS 경험칙과 투자 단계 순서를 자동 점수 규칙으로 쓰지 않음          | 지표 / 실제 평가·추천                   |
+- Decision ID: V3-TRANSITION
+- Status: APPROVED (전환 방향)
+- Decision: baseline 계속 구현 대신 v3로 전환한다. 전 후보 처리 후 deterministic selector, 5 branch/6 dimension과 atomic Business & Deal, Missing 포함/N/A 제외 분모, 네 label, market/technology 40% 보류, 추가 조사·보고서 수정 최대2회와 Warning, E-1 다섯 섹션을 새 방향으로 한다.
+- Rationale and source: [#35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317), luk0715가 사용자 확인 응답을 기록.
+- Rejected alternatives: 새 구현에서 baseline 방향을 계속 적용하지 않는다.
+- Affected documents / policy version / tests: #35 가이드 및 후속 구현. 방향 승인 자체는 schema/policy 버전 확정이나 runtime 검증이 아니다.
+- Owner and reviewers: 사용자 승인, 기록자 luk0715. 다른 담당자 승인을 추정하지 않는다.
+- Approval date: 2026-09-30T02:29:07Z (근거 기록 시각).
+- Supersedes: 새 작업의 baseline 계속 구현 방향. 역사적 레코드의 상태는 유지한다. 아래 V3-OPERATIONS와 V3-PRE-EVALUATION-RANDOM이 후속 상세 범위를 정한다.
+
+## v3 운영 규칙 승인 — 별도 기록
+
+- Decision ID: V3-OPERATIONS
+- Status: APPROVED (아래 운영 규칙 한정; 구현 완료 아님)
+- Decision:
+  - 자료 부재는 `missing`. `not_applicable`은 적용 사유·승인된 applicability rule·적용성 Evidence가 있을 때만 허용한다. Missing은 분모에 남기며 정당한 N/A만 제외한다.
+  - 전체 또는 차원의 분모가 0이면 점수를 생성하지 않고 명시적 후보 오류를 남겨 archive → advance한다. 임의 0/100점·추천 label을 만들지 않는다.
+  - 최종 selector는 적격·정상 평가 후보 중 `RECOMMEND_PRIORITY` 우선, 다음 `RECOMMEND`; 같은 label이면 `normalized_score DESC`, `weighted_missing_pct ASC`, **원본 `candidate_id ASC`** 순이다. 입력 순서는 기준이 아니다. 전부 WATCHLIST/PASS면 선택 없이 비교 보고서를 만든다. 부적격/unknown/failed를 추천하지 않는다.
+  - Evidence 추가 재조사는 최초 수집 제외 후보별 2회, 요청 전에 예산 차감(count 증가), empty/failure도 소비하며 평가 후 재조사는 없다.
+  - 보고서 구조·의미 수정은 최초 생성 제외 공유 2회. 소진 시 `workflow_status=completed` + Warning, 현재 draft/findings 반환, validated final 발행 금지, **CLI exit=2**. context/upstream 파손은 `failed`다.
+  - 기존 catalog 23 ID·6차원·비중 `5/30/25/20/10/10`, 결측률 `>=30%`, Market/Technology 적용가능 배점 비율 `<=40%`, normalized_score의 `80/70/60` 경계·네 label을 보존한다. 비교에는 반올림 전 exact 수치를 쓰고 표시 반올림은 계산에 넣지 않는다.
+- Rationale and source: [#35 comment 5903505208](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5903505208), [#82 명시 승인 본문](https://github.com/rice-steamed-water/skala-rag/issues/82). 사용자 확인 UI에서 운영 세부안을 전체 승인했다는 기록.
+- Rejected alternatives: 미상 자료를 N/A로 제외, 0분모 임의 점수, 입력순/무작위 최종 selector, 오류 batch 환불, 평가 후 재조사, 미검증 draft의 validated final 승격.
+- Affected documents / policy version / tests: D01·D02·D03·D05·D08·D09 중 위 범위; scoring/contracts/architecture/delivery의 T01–T03/T07–T09/T16/T20. #82/PR #85는 별도 versioned config/loader/fixture 작업이며 pinned snapshot에서 OPEN Draft, head `05bc4318abee114b4adc85de73a61f04b7e9a778`. 이 문서의 통합 기준에는 없고 runtime 연결 완료도 아니다.
+- Owner and reviewers: 사용자 승인; #82·#35 근거 기록. 다른 담당자 승인을 추정하지 않는다.
+- Approval date: 2026-09-30 (근거 기록일; 확인 UI의 별도 시각은 추정하지 않음).
+- Supersedes: 새 v3 실행 정책에서 baseline 고정100·모든 영역 관측 rating 보류·첫 추천 종료·평가 후 조사·보고서 소진 일괄 failed 대신 위 운영 규칙을 적용한다. baseline 원본 기록은 그대로 보존한다.
+- Still OPEN: 실제 rubric/applicability rule 목록·품질 검증, 최소 Evidence/사전 Coverage gate, Company Research 보강·transport retry 회계 변경, 대표 reason 표시·표시 반올림 형식, runtime schema/manifest 연결, PDF renderer/layout 회계, provider·corpus·모델 실험·live 시간/호출/비용 예산.
+
+## 평가 전 후보 무작위 선정 승인 — 최종 selector와 분리
+
+- Decision ID: V3-PRE-EVALUATION-RANDOM
+- Status: APPROVED (평가 전 조사·평가 대상 기업 선정 방식만)
+- Decision: 사용자의 “후보 선택은 무작위로 진행하면 될 것 같아.”와 단계 확인 응답 “평가 시작 전, 조사·평가할 후보 기업 선택”에 따라, 발견·정규화·중복 제거된 후보에서 **조사·평가할 집합을 무작위 선정**한다. 상한 초과 시 남길 집합 선정도 이 범위다. 단순 Iterator 순서 shuffle로 축소하지 않는다. 선정된 모든 후보는 Company Research·Eligibility를 거치며 적격 후보만 평가한다.
+- Rationale and source: [#35 comment 5903574761](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5903574761), 사용자 응답과 범위 확인 기록.
+- Rejected alternatives: 최종 Best Candidate Selector를 무작위로 변경; dedup/Eligibility 생략; 조사 대상 집합은 그대로 둔 채 처리 순서만 섞어 요구 충족으로 표시.
+- Affected documents / policy version / tests: #17/#48의 사전 선정 경계, architecture 흐름·contracts·delivery T24/T19. PR #77은 `CandidateLimitPolicy` 주입 경계만 제공하며 기본 random 정책은 없다. RNG 주입, 모집단/선정·제외 ID·정책 버전·replay metadata 기록은 구현 제안이다.
+- Owner and reviewers: 사용자 승인; 근거 기록자 luk0715.
+- Approval date: 2026-09-30T03:39:05Z (근거 코멘트 기록 시각).
+- Supersedes: 평가 전 상한 초과 후보를 어떤 방식으로 남길지에 대한 미결정 중 무작위 방식만 승인. V3-OPERATIONS의 최종 순위·동점 규칙은 변경하지 않는다.
+- Still OPEN: 새 `max_candidates` 값, 구체 난수 알고리즘·seed/재현 기록 방식, 추가 표본/보충 선정, 실행 예산. baseline 후보5 승인 이력은 보존하지만 이 응답으로 새로운 5 또는 다른 수치 기본값을 승인하지 않는다.
+
+## 구현 전에 합의할 남은 세부 항목
+
+표의 `v3-OPEN`은 **위 승인 규칙을 다시 OPEN으로 돌리는 뜻이 아니다**. 승인된 정책도 후속 코드 연결·검증은 별도이며, #74의 독립 v3 DTO 병합이 이를 실행하지 않는다.
+
+| ID / 상태 | 승인된 v3 범위 | 남은 결정·제안 / 차단 대상 |
+| --- | --- | --- |
+| D01 운영 APPROVED / 연결 OPEN | 기존 23 ID·6차원·비중 보존 | 정책 버전 연결·catalog 완전성 검증 |
+| D02 운영 APPROVED / 표현 OPEN | 네 label·80/70/60·결측30%·핵심40%·exact 비교 | 표시 반올림 형식·다중 reason 대표 표시; missing 유래 비율 저하와 부정 관측 구별 |
+| D03 selector APPROVED / 예외 연결 OPEN | label → score DESC → missing ASC → 원본 candidate_id ASC, 전부 WATCHLIST/PASS 무선택 비교 보고서 | 성공 평가 없음/전부 기술실패의 결과 payload와 보고서 mode 매핑; 기술실패를 비추천으로 바꾸지 않음 |
+| D04 방향 APPROVED / runtime 연결 OPEN | atomic Business & Deal, 5 branch/6 dimension; #74 EvaluationBranchResult 구조 제공 | State/reducer·wrapper·Join 원자적 저장·schema version 연결 |
+| D05 운영 APPROVED / rule·gate OPEN | missing와 정당한 N/A 분리, 0분모 후보 오류/archive/advance | applicability rule 목록·실제 근거 검증, Coverage 충분성·gap 우선순위 |
+| D06 v3-OPEN | 비상장·Seed~C·Exit 미완료, baseline 정규화 이력 보존 | 최소 Evidence 확보 가능/현재 확보 gate·unknown 보강 경로·Company Research 경계. TIPS/검색0건 자동 적격 금지 |
+| D07 OPEN | BGE-M3 1차 선택, e5/KURE 비교 방향 | 최종 모델·revision·라이선스·MRR cutoff·장비/vector store·실험 승인 |
+| D08 운영/무작위 방식 APPROVED / 예산 OPEN | 추가 조사2회·요청 전 소비·empty/failure 소비·평가 후 조사 없음; 구조/의미 공유 수정2회·completed Warning·CLI2; 사전 후보 집합 무작위 선정 | 새로운 후보 수·난수/seed/replay·보충 선정, Company Research/도구 retry 회계 변경, live 총시간·LLM 호출·비용. baseline 5/2/2·8calls/retry2/30초 이력 보존 |
+| D09 방향/Warning APPROVED / 형식 OPEN | E-1 다섯 목차, Warning draft/findings·final 금지; 과제 PDF≤5·SUMMARY≤0.5 | mode별 섹션 예외·구조 검증 상세, renderer·A4·폰트·여백·SUMMARY 측정·layout 회계 |
+| D10 OPEN | v3 표지 명단 보존 | 실제 역할·계정 매핑은 수행 증거와 본인 확인 필요 |
+| D11 OPEN | 원문 DAY 3 일정 보존 | 실제 제출 날짜·시간대·Slack thread |
+| D12 OPEN | Physical AI / Robotics 도메인 | 국가 범위·지원 provider·미지원 표시·live 탐색 |
+| D13 REJECTED | 전체 RAG 문서≤200페이지 한도 적용 제외 ([기록](#d13--200페이지-산정-규칙-적용-제외-91)) | 없음. 승인 corpus manifest gate(#44)는 페이지 산정 없이 유지 |
+| D14 OPEN | N/A에 승인 rule·사유·근거 필요 | criterion별 rating·rule·품질 기준, 재무 단위/기간/동일 라운드·burn 적용성 |
+
+승인되지 않은 세부는 가상 정책 주입/인터페이스로 검증하며 live 기본값으로 숨기지 않는다. 승인된 운영 규칙의 기대값 테스트와 남은 OPEN gate 테스트를 분리한다. 현재 구현 가용성은 [공통 계약](contracts.md)과 pinned [정합화 기록](design-v3-alignment.md)을 따른다.
 
 ## 승인 방법
 
-M0에서 결정할 수 없는 항목은 `OPEN`으로 남기고, 해당 기능은 fixture/인터페이스까지만 구현한다. `OPEN`을 기본값으로 감추거나 LLM이 실행 때 임의 결정하게 하지 않는다.
+승인된 v3 방향만으로 결정할 수 없는 세부 항목은 `v3-OPEN`으로 남기고, 해당 기능은 fixture/인터페이스까지만 구현한다. baseline 승인 기록을 OPEN으로 되돌리거나, 반대로 이를 v3 replacement의 승인으로 읽지 않는다. `OPEN`을 기본값으로 감추거나 LLM이 실행 때 임의 결정하게 하지 않는다.
 
 결정마다 아래 양식을 채운다. 거절된 대안도 남겨 같은 논의를 반복하지 않게 한다.
 
@@ -174,11 +222,24 @@ D09 중 렌더러·A4·폰트·여백·SUMMARY 측정 기준·인용 token 화�
 - Approval date: -
 - Supersedes: 없음.
 
+## D13 — 200페이지 산정 규칙 적용 제외 (#91)
+
+- Decision ID: D13
+- Status: REJECTED
+- Decision: 이 프로젝트는 원문 §1.3·v3 B-2의 RAG 코퍼스 200페이지 한도(R05)를 적용하지 않는다. 따라서 페이지 산정 규칙(HTML·PPT·부분 PDF)을 정하지 않으며, corpus manifest gate는 문서 승인·추출 상태·버전 고정·인덱스 입력 대조만 검사한다.
+- Rationale and source: 팀 결정 — 이 프로젝트에서 200페이지 제한 규칙이 필요 없다고 판단했다(heojiwon2, 2026-09-30 작업 대화).
+- Rejected alternatives: 미채택 — 전체 코퍼스 200페이지 합계 gate; 형식별 페이지 산정 규칙 승인 후 적용.
+- Affected documents / policy version / tests: data-rag.md §3, delivery.md §3·T11, docs/README.md R05, design-v3-alignment.md(후속 변경 메모); #44 / PR #88 `rag/corpus.py`·`tests/unit/test_corpus_gate.py`; #13·#62의 200페이지 관련 할 일.
+- Owner and reviewers: heojiwon2 / RAG 담당·팀 전원 검토 요청 대상.
+- Approval date: 2026-09-30 (Asia/Seoul), 결정자 heojiwon2.
+- 과제 담당자 확인 근거: **미기록.** 과제 필수 조건 완화에 해당하므로 아래 승인 방법에 따라 확인 근거 링크를 추가해야 한다.
+- Supersedes: v3 남은 세부 항목 표의 `D13 OPEN`.
+
 ## 조용히 바꾸면 안 되는 원문
 
 - 현재 팀 가중치를 교수님 예시 `30/25/15/10/10/10`으로 되돌리지 않는다.
 - `PASS`를 적격성 통과나 보고서 검증 통과라는 의미로 재사용하지 않는다.
-- 5개 병렬 노드를 구현했다고 투자조건 10%를 누락하거나 나머지를 100으로 재정규화하지 않는다.
+- 5개 branch라는 이유로 투자조건 차원을 누락하지 않는다. 승인된 v3 방향은 해당 없음 N/A만 분모에서 제외하고 Missing은 남기는 것이다. 적용 사유·승인 rule·Evidence 요건과 0분모 후보 오류는 V3-OPERATIONS에서 승인되었다. 실제 rule 목록·품질 검증만 `v3-OPEN`이다. 기존 고정100 + `missing + applicability_note`는 baseline 호환성·역사이며 새 구현의 우선 방향이 아니다.
 - “특정 항목 2점”을 비중이 1점인 세부항목의 획득점수와 직접 비교하지 않는다.
 - 최종 embedding 후보가 공개되어 있다는 사실만으로 과제의 오픈소스 요구 충족을 선언하지 않는다.
 - 원문의 도구 비용·접근성 표는 당시 메모다. 키 발급, 이용조건, 접근 성공은 구현 시 다시 확인해야 한다.

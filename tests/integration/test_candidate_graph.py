@@ -1,4 +1,4 @@
-"""T08/T09 on real LangGraph, wholly synthetic stage outputs and evidence."""
+"""T07/T08/T09/T20 on real LangGraph, wholly synthetic stage outputs and evidence."""
 
 import json
 from copy import deepcopy
@@ -527,3 +527,194 @@ def test_explanation_cannot_cite_other_candidate_evidence(harness):
     assert result["candidate_outcomes"]["co-0"]["status"] == "watchlist"
     assert result["candidate_outcomes"]["co-1"]["status"] == "failed"
     assert result["selected_candidate_id"] is None
+
+
+# --- #25 coverage retry loop: per-candidate budget (T07, T20 fixture part) ---
+
+
+def _gap(cid, status="open"):
+    base = json.loads(
+        (Path(__file__).parents[1] / "fixtures/contracts.json").read_text()
+    )
+    gap = deepcopy(base["ResearchGap"])
+    gap.update(gap_id=f"gap-{cid}", candidate_id=cid, status=status)
+    return gap
+
+
+def _always_gap(state):
+    cid = state["current_candidate_id"]
+    return {"research_gaps": {cid: [_gap(cid)]}}
+
+
+def _tracked_collect(nodes, calls, failing_retry=None):
+    """Record the retry count each Evidence Research call sees."""
+    original = nodes.collect
+
+    def collect(state):
+        cid = state["current_candidate_id"]
+        n = state["research_retry_count"][cid]
+        calls.append(("collect", cid, n))
+        if n and failing_retry:
+            raise failing_retry(cid, n)
+        return original(state)
+
+    return collect
+
+
+def test_coverage_gap_retries_stop_at_candidate_budget(harness):
+    make, execute, calls, _, policy = harness
+    nodes = make(["recommend"])
+    nodes = replace(nodes, coverage=_always_gap, collect=_tracked_collect(nodes, calls))
+    result = execute(nodes)
+    limit = policy.budgets.max_research_retries_per_candidate
+    # Initial collection is excluded; each retry sees the count spent beforehand.
+    assert [c for c in calls if c[0] == "collect"] == [
+        ("collect", "co-0", n) for n in range(limit + 1)
+    ]
+    assert result["research_retry_count"]["co-0"] == limit
+    assert [g["status"] for g in result["research_gaps"]["co-0"]] == ["exhausted"]
+    # Exhaustion keeps the gap missing and proceeds to a single evaluation.
+    assert [c for c in calls if c[0] == "evaluate"] == [("evaluate", "co-0")]
+    assert result["selected_candidate_id"] == "co-0"
+
+
+def test_coverage_gap_resolved_after_one_retry(harness):
+    make, execute, calls, _, _ = harness
+    nodes = make(["recommend"])
+
+    def coverage(state):
+        status = "open" if state["research_retry_count"]["co-0"] == 0 else "resolved"
+        return {"research_gaps": {"co-0": [_gap("co-0", status)]}}
+
+    result = execute(
+        replace(nodes, coverage=coverage, collect=_tracked_collect(nodes, calls))
+    )
+    assert [c[2] for c in calls if c[0] == "collect"] == [0, 1]
+    assert result["research_retry_count"]["co-0"] == 1
+    assert result["research_gaps"]["co-0"][0]["status"] == "resolved"
+
+
+def test_no_gap_makes_no_retry(harness):
+    make, execute, calls, _, _ = harness
+    nodes = make(["recommend"])
+    result = execute(replace(nodes, collect=_tracked_collect(nodes, calls)))
+    assert [c for c in calls if c[0] == "collect"] == [("collect", "co-0", 0)]
+    assert result["research_retry_count"]["co-0"] == 0
+    assert result["research_gaps"]["co-0"] == []
+
+
+def test_evaluation_gaps_do_not_start_research(harness):
+    make, execute, calls, _, _ = harness
+    nodes = make(["recommend"])
+    original = nodes.evaluate
+
+    def evaluate(state):
+        delta = original(state)
+        for result in delta["evaluation_results"].values():
+            result["evaluation"]["research_gaps"] = [_gap("co-0")]
+        return delta
+
+    result = execute(
+        replace(nodes, evaluate=evaluate, collect=_tracked_collect(nodes, calls))
+    )
+    # v3 (#82): post-evaluation research is forbidden.
+    assert [c for c in calls if c[0] == "collect"] == [("collect", "co-0", 0)]
+    assert result["research_retry_count"]["co-0"] == 0
+    assert result["evaluation_rounds"]["co-0"] == 1
+
+
+def test_budget_is_per_candidate_and_history_preserved(harness):
+    make, execute, calls, _, policy = harness
+    nodes = make(["watchlist", "recommend"])
+    nodes = replace(nodes, coverage=_always_gap, collect=_tracked_collect(nodes, calls))
+    result = execute(nodes)
+    limit = policy.budgets.max_research_retries_per_candidate
+    seen = [c[1:] for c in calls if c[0] == "collect"]
+    assert seen == [("co-0", n) for n in range(limit + 1)] + [
+        ("co-1", n) for n in range(limit + 1)
+    ]
+    assert result["research_retry_count"] == {"co-0": limit, "co-1": limit}
+    assert result["research_gaps"]["co-0"][0]["status"] == "exhausted"
+    ids = {r["retrieval_id"] for r in result["retrieval_history"]}
+    assert {"ret-co-0", "ret-co-1"} <= ids
+
+
+def test_failed_retry_is_spent_without_refund(harness):
+    make, execute, calls, _, policy = harness
+    nodes = make(["recommend"])
+
+    def timeout(cid, n):
+        return StageFailure(
+            [
+                WorkflowError(
+                    schema_version="synthetic-1",
+                    error_id=f"retry-timeout-{n}",
+                    run_id="run-synthetic",
+                    candidate_id=cid,
+                    node="collect",
+                    error_code="TOOL_TIMEOUT",
+                    message_redacted="Synthetic timeout",
+                    retryable=True,
+                    attempt=1,
+                    timestamp=datetime(2026, 9, 1, tzinfo=timezone.utc),
+                )
+            ]
+        )
+
+    nodes = replace(
+        nodes,
+        coverage=_always_gap,
+        collect=_tracked_collect(nodes, calls, failing_retry=timeout),
+    )
+    result = execute(nodes)
+    limit = policy.budgets.max_research_retries_per_candidate
+    assert [c[2] for c in calls if c[0] == "collect"] == list(range(limit + 1))
+    assert result["research_retry_count"]["co-0"] == limit
+    assert [e["error_id"] for e in result["errors"]] == [
+        f"retry-timeout-{n}" for n in range(1, limit + 1)
+    ]
+    # The failed retry keeps the gap missing instead of failing the candidate.
+    assert result["candidate_status"]["co-0"] == "recommend"
+    assert result["research_gaps"]["co-0"][0]["status"] == "exhausted"
+
+
+def test_initial_collect_failure_still_fails_candidate(harness):
+    make, execute, _, _, _ = harness
+    nodes = make(["recommend", "recommend"])
+    original = nodes.collect
+
+    def failing_first(state):
+        if state["current_candidate_id"] == "co-0":
+            raise RuntimeError("secret initial failure")
+        return original(state)
+
+    result = execute(replace(nodes, collect=failing_first, coverage=_always_gap))
+    assert result["candidate_outcomes"]["co-0"]["status"] == "failed"
+    assert result["research_retry_count"]["co-0"] == 0
+    assert result["selected_candidate_id"] == "co-1"
+
+
+def test_zero_research_budget_makes_no_retry(harness):
+    make, execute, calls, _, policy = harness
+    nodes = make(["recommend"])
+    nodes = replace(nodes, coverage=_always_gap, collect=_tracked_collect(nodes, calls))
+    zero = policy.model_copy(
+        update={
+            "budgets": policy.budgets.model_copy(
+                update={"max_research_retries_per_candidate": 0}
+            )
+        }
+    )
+    graph = build_candidate_graph(
+        nodes,
+        zero,
+        run_id="run-synthetic",
+        schema_version="synthetic-1",
+        clock=lambda: datetime(2026, 9, 1, tzinfo=timezone.utc),
+    ).compile()
+    result = graph.invoke(
+        create_initial_state(harness[3].model_dump(mode="json")),
+        {"recursion_limit": 200},
+    )
+    assert [c for c in calls if c[0] == "collect"] == [("collect", "co-0", 0)]
+    assert result["research_gaps"]["co-0"][0]["status"] == "exhausted"
