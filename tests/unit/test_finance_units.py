@@ -241,8 +241,8 @@ def test_missing_value_is_not_disclosed():
 # --- 통화 환산 provenance -----------------------------------------------------
 
 
-def _rate(value=1400, unit="USD/KRW", as_of="2025-12-31", **kw):
-    return ev("ev-fx", value, unit=unit, currency="KRW", as_of=as_of, **kw)
+def _rate(value=1400, unit="USD/KRW", as_of="2025-12-31", currency="KRW", **kw):
+    return ev("ev-fx", value, unit=unit, currency=currency, as_of=as_of, **kw)
 
 
 def test_currency_conversion_records_rate_provenance():
@@ -265,3 +265,24 @@ def test_currency_conversion_wrong_pair():
     assert convert_currency(amount, _rate(unit="EUR/KRW"), "KRW").reason == (
         "currency_mismatch"
     )
+
+
+def test_currency_conversion_rate_currency_matches_target():
+    amount = ev("ev-usd", 2, unit="million", currency="USD", as_of="2025-12-31")
+    result = convert_currency(amount, _rate(currency="USD"), "KRW")
+    assert isinstance(result, Unavailable)
+    assert result.reason == "currency_mismatch"
+
+
+def test_currency_conversion_rejects_other_company_rate():
+    amount = ev("ev-usd", 2, unit="million", currency="USD", as_of="2025-12-31")
+    result = convert_currency(amount, _rate(candidate_id="co-other"), "KRW")
+    assert isinstance(result, Unavailable)
+    assert result.reason == "attribution_mismatch"
+
+
+def test_currency_conversion_accepts_industry_rate():
+    amount = ev("ev-usd", 2, unit="million", currency="USD", as_of="2025-12-31")
+    result = convert_currency(amount, _rate(scope="industry", candidate_id=None), "KRW")
+    assert isinstance(result, Derived)
+    assert result.value == Decimal(2800) * 10**6
