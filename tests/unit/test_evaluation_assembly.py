@@ -24,12 +24,19 @@ CORE = yaml.safe_load((ROOT / "configs/rubrics/core.yaml").read_text())
 FINANCE = yaml.safe_load((ROOT / "configs/rubrics/finance.yaml").read_text())
 BASE = json.loads((ROOT / "tests/fixtures/contracts.json").read_text())["Evidence"]
 SV = "synthetic-1"
+ALL_IDS = [c.criterion_id for c in POLICY.criteria]
 CAND = "cand-1"
 
 
 def _ev(eid, *, candidate=CAND, scope="company"):
     return Evidence.model_validate(
-        {**BASE, "evidence_id": eid, "candidate_id": candidate, "scope": scope}
+        {
+            **BASE,
+            "evidence_id": eid,
+            "candidate_id": candidate,
+            "scope": scope,
+            "criterion_ids": ALL_IDS,
+        }
     )
 
 
