@@ -2,18 +2,18 @@
 
 [문서 홈](../README.md) · [결정 목록](decisions.md) · [데이터와 RAG](data-rag.md) · [공통 계약](contracts.md)
 
-> 작성·공식 자료 조회일: 2026-09-30 (Asia/Seoul). **부분 승인: A·B APPROVED, C DEFERRED.** 사용자 확인 UI 응답을 [#43 승인 기록](https://github.com/rice-steamed-water/skala-rag/issues/43#issuecomment-5903724740)에 보존했다. 기록 담당: luk0715, 기록 시각: 2026-09-30T12:53:38+09:00(응답의 정확한 발생 시각을 주장하지 않음). 실행 설정/credential/readiness 또는 실측 증거가 아니다. 실제 provider API 호출, 모델 다운로드, index 생성, 비교 실험은 실행하지 않았다.
+> 작성·공식 자료 조회일: 2026-09-30 (Asia/Seoul). **A·B APPROVED; C 3종 비교 실험은 진행하지 않음; embedding 모델은 BGE-M3로 사용자 선정.** [#43 최초 승인 기록](https://github.com/rice-steamed-water/skala-rag/issues/43#issuecomment-5903724740)의 당시 C 보류를 보존한다. 이후 사용자가 C 실험은 수행하지 않고 BGE-M3를 선택한다고 명확히 했다([오해 정정](https://github.com/rice-steamed-water/skala-rag/issues/43#issuecomment-5904136945)). 기록 담당: luk0715, 2026-09-30 (Asia/Seoul; 응답의 정확한 발생 시각을 주장하지 않음). 실행 설정/credential/readiness 또는 실측 증거가 아니다. 실제 provider API 호출, 모델 다운로드, index 생성, 비교 실험은 실행하지 않았다.
 
 ## 1. 승인 경계와 관측
 
-- #43 목적은 D07 실험 허용/저장소, D08 미정 live 예산, D12 국가·언어를 한 번에 검토할 제안이다. **실험 승인과 측정 후 최종 모델 승인은 별개**다. 최종 모델 OPEN 때문에 이미 승인된 비교 실험을 순환 차단하지 않는다.
+- #43은 D07 모델·실험 경계, D08 미정 live 예산, D12 국가·언어를 기록한다. 사용자가 **BGE-M3를 직접 선정하고 3종 비교 실험은 수행하지 않기로 했다.** 과거의 실험 후 최종 선정 제안은 이 사용자 결정으로 대체한다. 모델 revision·라이선스·실제 동작·품질은 아직 검증되지 않았다.
 - [#35 v3 전환 승인](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)은 정합화 방향 승인이다. provider·모델·코퍼스·비용·시간·benchmark 설정 승인을 포함하지 않는다. 현재 worktree의 baseline 문서는 v3 전체 반영 완료가 아니므로 병합된 정책·계약과 실행 전에 다시 대조한다.
-- #13(D13 코퍼스 등록/페이지 산정)과 #35는 다른 담당자의 진행 중 작업이다. 이 문서는 corpus_manifest 필드·등록규칙·승인권을 새로 정하지 않는다. 총 200페이지 조건을 보존하고 #13의 승인된 corpus_version/hash/권한·페이지 산정 결과만 소비한다.
+- #13(코퍼스 후보/readiness)과 #35(v3 문서 정합화)는 병합·종료되었다. #13 후보는 아직 승인된 실제 corpus가 아니다. 이 문서는 corpus_manifest 필드·등록규칙·승인권을 새로 정하지 않는다. #91의 D13 페이지 제한 적용 제외 기록에는 과제 담당자 확인 근거가 미기록이므로 과제 요건 충족 주장과 별개로 다룬다.
 - #8 주입 경계와 #73 versioned 구조 DTO를 재정의하지 않는다. #73은 runtime/정책 실행 구현이 아니다. #82에 별도 명시 승인된 v3 운영 규칙도 live provider·비용·시간·corpus 승인을 포함하지 않는다. 아래 표는 후속 runtime의 **승인값과 미승인 제안**을 구분하며 새로운 DTO/API 계약이 아니다. transport 재시도는 #45, schema 구조 보정은 #22 wrapper 소유다.
 - 공식 문서의 기능 설명은 관측했으나 계정 접근 성공은 관측하지 않았다. 실제 `.env`·credential 파일·secret store를 읽지 않았으며 **credential 존재 boolean도 미확인**이다. key/model/index readiness, 계정별 quota, 실제 사용량·과금·성능은 모두 미확인이다. mock/fixture 성공을 live 성공으로 표시하지 않는다.
 - Hermes의 OpenAI Codex 로그인과 앱의 OpenAI API 인증·billing은 별개다. 이 세션의 모델/provider를 앱 기본값으로 전용하지 않는다. 비밀값은 문서·이슈·로그에 기록하지 않는다.
 
-## 2. 경로·지원 범위 (A 승인, 대안 OPEN, RAG 실험 C 보류)
+## 2. 경로·지원 범위 (A 승인, 모델 BGE-M3 선정)
 
 **승인된 A:** 첫 M2 연결은 한국(KR)·미국(US), 한국어(ko)·영어(en) 자료/질의로 제한한 *pilot*이다. 국내외 최종 과제 범위를 국내만으로 축소하는 승인이 아니다. 다른 국가·언어는 `unsupported` 사유를 남기고 자동 번역/자동 확대하지 않는다. 검색 엔진의 국가 옵션은 법인 소재국 판정이 아니다. 후보의 법인 식별·Seed~C·비상장·Exit 여부는 별도 직접 근거를 요구하며 0건으로 확정하지 않는다.
 
@@ -26,7 +26,7 @@
 | US 적격성·재무 보강 | 회사 공식 공개자료 + SEC EDGAR submissions/companyfacts | SEC optional; 미국 스타트업 전체 포괄 경로로 주장하지 않음 | `SEC_USER_AGENT`(연락처 포함 정책용 앱 이름 제안); SEC 접근 정책 준수 [S8] | SEC 미등록/0건은 비상장·Exit 없음·재무 0의 증거 아님. private-company 자료 부족은 unknown/missing |
 | structured-output LLM | OpenAI API `gpt-4.1-mini-2025-04-14` 고정 snapshot, JSON Schema structured output | 추출/평가 LLM smoke에서 required | `OPENAI_API_KEY`, `SKALA_LLM_MODEL`(앱 이름 제안). 실제 project billing/quota 미확인 [S9,S10] | key/model/schema 지원 미준비면 smoke 시작 거절; refusal/전송/구조 실패를 missing·빈 성공·0점으로 바꾸지 않음 |
 | LLM 대안 | Anthropic Claude API structured outputs; **model ID는 OPEN, 대안 선택 시 추가 고정 필요** | 현재 안에서는 미연결 optional | `ANTHROPIC_API_KEY`(대안 이름 제안) [S11] | 자동 fallback 금지. 별도 모델·요금·지역/데이터 정책·schema 호환 승인 후만 사용 |
-| 기술 RAG | 승인 corpus + BGE-M3 dense index/검색 | 기술 RAG smoke에서 corpus/model/index required | `SKALA_EMBEDDING_MODEL`, `SKALA_EMBEDDING_REVISION`, `SKALA_INDEX_PATH`(모두 이름 제안) | 파일/모델/index 부재나 corpus 승인·버전/차원 불일치는 시작 거절. 다른 기업 문서 재사용 금지 |
+| 기술 RAG | 승인 corpus + 사용자가 선정한 BGE-M3 dense index/검색 | 기술 RAG smoke에서 corpus/model/index required | `SKALA_EMBEDDING_MODEL`, `SKALA_EMBEDDING_REVISION`, `SKALA_INDEX_PATH`(모두 이름 제안) | 파일/모델/index 부재나 corpus 승인·버전/차원 불일치는 시작 거절. 다른 기업 문서 재사용 금지 |
 
 환경변수는 **이 문서의 이름 제안**일 뿐 기존 `.env.example`·코드에 존재하거나 설정되어 있다는 뜻이 아니다. 설정 파일은 이 작업에서 수정하지 않는다. 모든 API 동시 연결을 요구하지 않는다. Tavily/Naver/LLM/공공 API 각각 선택된 smoke에 필요한 도구만 required로 판정한다.
 
@@ -54,9 +54,9 @@ provider가 제공하는 default retry/auto 옵션은 명시적으로 끄거나 
 
 현재 provider별 요금표/계정 tier·부가세·환율·free credit 잔액을 확정하지 않았다. 따라서 견적 합계도 **None**이다. [S9]에 가격 정보가 있더라도 계정 과금 관측을 대신하지 않는다. 승인 후 실행 직전에 dated 공식 요금/계정 조건과 최대 청구량 계산을 확보하고 그 상한을 enforcement할 수 있을 때만 과금 요청을 한다. 무료로 보이는 공공 API도 무조건 0 비용이라고 기록하지 않는다.
 
-## 4. D07 실험 승인안과 최종 선정 분리 (C DEFERRED)
+## 4. D07 모델 직접 선정과 미실행 실험안 (C 미수행)
 
-사용자 응답은 **다운로드·실험은 보류, 코드/fixture만 진행**이다. 아래 시간·자원·저장소·질의셋·품질 기준은 제안으로 남는다. 실제 weights/tokenizer 다운로드, 실제 embedding/index/benchmark 실행은 허용되지 않았다. A/B 외부 API smoke 승인으로 C를 우회하거나 fixture 성공으로 필수 실측을 대체하지 않는다.
+사용자는 **3종 비교 실험을 수행하지 않고 `BAAI/bge-m3`를 embedding 모델로 선정**했다. 이 직접 선정은 측정에 따른 성능 우위나 특정 revision/운영용 store 승인으로 해석하지 않는다. 아래 비교 계획은 실행 승인안이 아닌 과거 제안·후속 참고로만 보존한다. 실제 weights/tokenizer 다운로드, embedding/index/benchmark 실행은 이 결정의 완료 증거가 아니다. BGE-M3를 실제 연결하려면 별도 담당 이슈에서 revision/LICENSE/library lock·corpus·자원·품질 검증을 확인한다.
 
 ### 4.1 모델 source cards — 공식 제공자 설명, 실측 아님
 
@@ -70,9 +70,9 @@ provider가 제공하는 default retry/auto 옵션은 명시적으로 끄거나 
 
 ### 4.2 저장소·고정 환경 승인 요청안
 
-- **우선안: SQLite metadata + 명시 float32 dense vectors, exhaustive cosine 검색.** SQLite 내장 vector extension 지원을 주장하지 않는다. 애플리케이션이 저장된 벡터를 읽어 L2-normalized dot product를 계산하고 동점은 chunk_id 정렬로 처리하는 deterministic local store 구현안이다. 최대 200페이지의 소규모 비교에서 외부 DB daemon·cloud 비용을 피하려는 설계 판단이며 속도 우위는 미측정이다.
+- **과거 제안: SQLite metadata + 명시 float32 dense vectors, exhaustive cosine 검색.** SQLite 내장 vector extension 지원을 주장하지 않는다. 애플리케이션이 저장된 벡터를 읽어 L2-normalized dot product를 계산하고 동점은 chunk_id 정렬로 처리하는 실험용 store 안이었다. 현재 비교 실험을 진행하지 않으며 제품 store도 미선정이다. D13의 페이지 제한 적용 제외는 과제 담당자 확인 근거가 미기록이다.
 - 대안: FAISS flat dense index + 별도 metadata. 추가 native 의존성·serialization/platform 검증 부담을 이유로 이번 우선안에서는 보류한다. Chroma/운영용 vector DB·hybrid는 범위 밖이다. **SQLite는 실험용 선택 요청이며 product 최종 선택이 아니다.**
-- 사용자 제공 M5 Pro / 16GB / 여러 병렬 작업을 전제로 **BGE-M3 → E5-large → KURE-v1 순차 로딩·실행·종료**한다. 모델 3종 동시 상주 금지. 독립 프로세스 종료로 자원을 반환하고 resource 중단 시 로그·미측정 상태를 남긴다. 자동 후보 제외/승인 한도 증액 금지.
+- 과거 비교 제안: 사용자 제공 M5 Pro / 16GB / 여러 병렬 작업을 전제로 **BGE-M3 → E5-large → KURE-v1 순차 로딩·실행·종료**한다는 안이었다. 현재 이 3종 비교는 수행하지 않는다. 향후 실제 BGE-M3 연결은 별도 이슈의 자원 점검을 따른다.
 - 실행 전 기록: 실제 OS/architecture/칩/총·가용 메모리, Python/uv/torch/transformers/sentence-transformers/필요 시 FlagEmbedding 버전·lock, CPU device/dtype/thread 수, batch/seed·정규화·tokenizer revision·길이/초과 처리, corpus/query/Chunk hash, store 설정, 코드 revision. 지금 실제 하드웨어·설치 버전을 측정했다고 주장하지 않는다.
 - Chunk는 #49 승인 설정을 고정 소비한다. 비교에서는 동일 Chunk 텍스트·페이지·기업 귀속·allowed source/as_of 필터를 유지한다. 공통안은 **각 후보 tokenizer로 prefix+special tokens 포함 512 token 이하임을 사전 확인**하는 비교 입력이다. 초과 Chunk는 한 후보에서만 자르지 않고 공통 재분할 후 새 Chunk/query version으로 전 후보 재실행한다. 본문 구조·표/단위 보존 조건과 충돌하면 실험을 보류한다. #49 설정 변경은 별도 소유자와 승인한다.
 - 모델별 독립 index, model/revision/tokenizer/전처리/정규화/dtype/corpus hash/Chunk 설정/store version을 index metadata에 기록한다. 변경 시 새 index_version; embedding 공간을 섞지 않는다. 원문과 모델/index는 Git 제외 경로에만 둔다.
@@ -83,18 +83,18 @@ provider가 제공하는 default retry/auto 옵션은 명시적으로 끄거나 
 - 타기업 범주는 올바른 기업의 정답 Chunk가 있는 질의로 구성하고, 별도 no-answer negative fixture는 오검색 안전성 검증에 사용한다. no-answer 질의를 HitRate/MRR의 정답 질의 분모에 섞지 않는다.
 - top_k=5 dense-only, 동일 기업/산업 허용 목록·as_of·Chunk 집합, 모델별 필수 prefix만 다르게 적용. reranking/hybrid/fine-tuning과 최종 질의셋에 대한 tuning 금지.
 - HitRate@1/3/5: 상위 K에 정답 Chunk 하나 이상인 최종 질의 비율. MRR@5: 처음 맞은 rank 역수 평균, 5 안에 없으면 0. cross-lingual subset도 같은 산식과 실제 분모를 따로 보고한다. 작은 수작업 fixture로 산식을 먼저 확인한다.
-- **품질 승인 요청안:** 최종 전체 HitRate@1 ≥0.60, @3 ≥0.80, @5 ≥0.90, MRR@5 ≥0.70; cross-lingual HitRate@5 ≥0.80; 모든 반환 Chunk의 Source/page 복원 가능, 허용 범위 밖 기업·cutoff 이후 source 반환 0건. 임계값은 실측이나 기존 승인값이 아니다. 전 후보 미달이면 최종 선택하지 않고 실패 분석/새 승인 요청한다.
+- **과거 비교 품질 제안(미승인·미측정):** 최종 전체 HitRate@1 ≥0.60, @3 ≥0.80, @5 ≥0.90, MRR@5 ≥0.70; cross-lingual HitRate@5 ≥0.80; 모든 반환 Chunk의 Source/page 복원 가능, 허용 범위 밖 기업·cutoff 이후 source 반환 0건. 이 수치를 BGE-M3의 실측 성능이나 현재 최종 선정의 통과 근거로 쓰지 않는다.
 - 모델별 indexing wall time·peak process memory·disk, retrieval query embedding 포함 latency(모델 로딩 별도), retrieval-only latency, warm-up 1회/측정 반복 3회 p50/p95, actual usage/cost를 기록하는 안. 본문/표 추출·정답 오류와 모델 검색 실패를 분리한다. cost 미상은 None; CPU 로컬 실행도 전력비를 0으로 꾸미지 않는다.
-- 후보 실행 실패·라이선스/환경 부적합·자원 한도 초과는 결과를 지어내지 않고 reason/log·미측정 셀을 남긴다. 필수 비교 미측정이면 #56 blocked이며 skip만으로 완료하지 않는다. 후보 제외는 팀 확인을 별도 받는다.
-- **최종 선정은 #56 실측 후 재승인:** 기준 통과 후보의 cross-lingual·전체 품질, 실패 사례, latency/memory와 병렬 작업 영향으로 모델/revision/store를 제안하고 승인자·시각·거절 대안을 기록한다. 카드의 benchmark 순위를 본 프로젝트 실측으로 쓰지 않는다.
+- 과거 비교 제안에서는 실행 실패·라이선스/환경 부적합·자원 한도 초과의 reason/log·미측정 셀을 남기도록 했다. 현재 #56의 3종 비교 완료를 주장하지 않으며, 담당자가 사용자 결정에 따라 범위를 조정해야 한다.
+- 과거의 **#56 실측 후 선정안**은 직접 BGE-M3 선정으로 대체된다. #56의 실험 범위 변경은 담당 이슈에서 조정하며, 카드의 benchmark 순위를 본 프로젝트 실측으로 쓰지 않는다.
 
-## 5. 최소 승인 질문 — 한 번에 답할 3묶음
+## 5. 최초 승인 질문(이력)과 최신 응답
 
-사용자는 다음 세 항목을 한 메시지에 `승인 / 수정 / 보류`로 답할 수 있다. 수정이면 바꿀 값만 적는다. 무응답·부분 승인은 남은 OPEN 승인으로 간주하지 않는다.
+아래는 최초 제시한 질문의 이력이다. 현재 결정은 이어지는 표와 §4의 사용자 후속 응답이 우선한다. 무응답·부분 승인은 남은 OPEN 승인으로 간주하지 않는다.
 
 1. **경로·범위 A:** KR/US + ko/en pilot, Tavily 기본 Web/해외 뉴스, Naver 국내 뉴스 optional, KRX/OpenDART/SEC optional, 공식자료 기반 적격성·missing 처리, OpenAI API `gpt-4.1-mini-2025-04-14` structured-output 우선안 및 §2의 required/optional·비공개자료 외부 전송 제외를 승인합니까? 대안을 고르면 provider와 정확한 model ID·지원범위를 지정해야 합니다.
 2. **외부 실행 B:** §3의 10분·20요청·LLM 8요청/token 상한·단일 동시성·retry/미준비 처리·USD 1/run 및 USD 3/campaign 한도·신규 구독/credit 구매 금지·요금 미확인 호출 거절을 승인합니까? 이는 prerequisite/readiness/요금 확인 이후 M2 smoke만 허용하며 M3 전체 실행은 제외합니다.
-3. **로컬 실험 C:** §4의 BGE-M3 1차 및 E5/KURE 3종 순차 비교, SQLite 실험 store, CPU float32/batch 1·자원/120분 상한, 40질의 split·dense top5·사전 품질 기준을 승인합니까? 이는 revision/LICENSE/library lock·#13 corpus·#49/#54 준비 확인 후 모델 다운로드·index/benchmark **한 campaign을 허용하는 승인**이며 product 최종 선택은 측정 후 별도 승인입니다.
+3. **로컬 실험 C (과거 승인 질문, 현재 미채택):** §4의 BGE-M3 1차 및 E5/KURE 3종 순차 비교, SQLite 실험 store, CPU float32/batch 1·자원/120분 상한, 40질의 split·dense top5·사전 품질 기준을 승인합니까? 현재 사용자는 이 비교를 수행하지 않고 BGE-M3를 직접 선정했다. 이 질문은 실행 허가가 아니다.
 
 사용자 응답 기록 (승인·보류는 실행/readiness와 별개):
 
@@ -102,8 +102,8 @@ provider가 제공하는 default retry/auto 옵션은 명시적으로 끄거나 
 | --- | --- | --- | --- |
 | A / D12·provider·LLM snapshot | APPROVED | 사용자 UI「제안한 pilot 경로·범위 승인」; 기록 시각/근거는 서두 | 대안 모델·자동 유료 fallback·모든 API 필수화는 승인하지 않음 |
 | B / D08 미정 live 예산 | APPROVED (질문에 명시된 범위) | 사용자 UI「제안한 smoke 예산 승인」; 기록 시각/근거는 서두 | 신규 backoff/LLM timeout 세부안 미확정; 무제한·요금 미상 강행·M3 전체 실행 금지 |
-| C / D07 실험·실험 store | DEFERRED / 코드·fixture만 | 사용자 UI「다운로드·실험은 보류, 코드/fixture만 진행」; 기록 시각/근거는 서두 | 실제 모델/tokenizer 다운로드·embedding/index/benchmark campaign 실행 금지 |
-| D07 최종 모델/revision/product store | OPEN / 실측 후 요청 | pending | 측정 후 기록 |
+| C / D07 3종 실험·SQLite 실험 store | NOT PLANNED / 실험 미수행 | 최초 UI「다운로드·실험은 보류」 이후 사용자 명시「C실험 수행하지 않음」; 근거는 서두와 #43 후속 기록 | 3종 비교·실험 store·benchmark를 완료로 주장하지 않음 |
+| D07 embedding 모델 | SELECTED: `BAAI/bge-m3` | 사용자 명시「embedding모델은 이미 결정 됨」, 후속 확인「BGE-M3」; #43 후속 기록 | 정확한 revision, 실제 license/접근·품질 검증, product store는 미확정 |
 
 승인 후 담당자가 응답의 정확한 범위를 이슈 근거와 timezone-aware 시각으로 남기고 관련 결정 문서·policy fixture를 별도 소유 범위에서 반영한다. 이 문서가 기존 승인 문서나 configs를 자동 변경하지 않는다. 과제 조건 완화가 생기면 과제 담당자 확인도 필요하다.
 
@@ -113,10 +113,10 @@ provider가 제공하는 default retry/auto 옵션은 명시적으로 끄거나 
 | --- | --- | --- |
 | #45 runtime | #8·#35·#43 관련 계약/정책 승인, #73 구조 DTO 및 #82 운영 정책과의 호환 확인; live는 B 승인과 required readiness 뒤 | offline fake transport/clock은 실제 접근 증거 아님 |
 | #47 LLM adapter | #8·#22·#35·#43·#45 준비, A의 정확한 snapshot/provider와 B 예산, API account/schema/readiness 확인 | wrapper fixture 성공은 real structured-output smoke 아님 |
-| #52 실제 index | #13·#35·#43·#49 준비, C 실험/store 승인, 정확한 revision/라이선스/환경·corpus 승인 확인 | index fake embedding은 real model indexing 아님; 최종 모델 승인을 기다릴 필요는 없음 |
-| #56 benchmark | #13·#35·#43·#54 준비, C 기준·동일 corpus/Chunk/검수 정답셋·3종 revision/environment 확인 | skip/비교 코드만으로 완료 아님. 실제 비교와 최종 선택 팀 승인은 별도 |
+| #52 실제 index | BGE-M3 선정; #49 준비, 정확한 revision/라이선스/환경·corpus 승인 확인 | index fake embedding은 real model indexing 아님; 선택이 실제 작동 증거는 아님 |
+| #56 3종 benchmark | 사용자 결정에 따라 3종 실험은 진행하지 않음. 해당 이슈의 범위·완료 조건은 담당자와 별도로 조정 | 비교·최종 선정 실측을 수행했다고 주장하지 않음 |
 
-#43 부분 승인 기록과 #43 완료는 다르다. #13/#35 선행이 남고 C가 보류되어 **#43 blocked / PR #75 OPEN Draft를 유지**한다. 이 기록은 전용 브랜치에 commit/push하고 PR #75 및 관련 이슈에 반영한다. 다른 담당자의 PR·#35 문서·코드·config·의존성은 수정하지 않는다. 승인 이후에도 readiness 불충족이면 live는 계속 막힌다.
+#43의 결정 기록과 M2 실제 실행 완료는 다르다. #13/#35 문서 선행은 병합되었고 A/B 승인·BGE-M3 직접 선정·C 실험 미수행을 기록했으므로 이 승인 계획 이슈는 완료 처리할 수 있다. 실제 corpus·model revision·license·library lock·자원·credential·요금 readiness는 후속 실행 시 검증한다. #43 완료가 #52/#56 또는 M2 실험 완료를 뜻하지 않는다. readiness 불충족이면 live는 계속 막힌다.
 
 ## 7. 공식 근거 목록과 retrieval gaps
 
