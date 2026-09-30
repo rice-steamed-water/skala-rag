@@ -23,7 +23,7 @@ from skala_rag.agents.evaluation import DimensionAssessmentOutput, evaluate_dime
 from skala_rag.contracts.evaluation import EvaluationResult, EvaluationSnapshot
 from skala_rag.contracts.evidence import Evidence
 from skala_rag.contracts.interfaces import Clock, StructuredLLM
-from skala_rag.prompts.market_evaluation import PROMPT_VERSION, SYSTEM_PROMPT
+from skala_rag.prompts.market_evaluation import SYSTEM_PROMPT
 from skala_rag.scoring.catalog import ScoringPolicy
 
 MarketMetric = Literal["tam", "sam", "cagr"]
@@ -96,6 +96,7 @@ class _MarketRules:
             if growth["metric"] != "cagr_pct":
                 raise ValueError("market.growth metric must be cagr_pct")
             self.growth_bands: list[Mapping] = list(growth["bands"])
+            self.missing_reasons: frozenset[str] = frozenset(rubric["missing_reasons"])
         except (KeyError, TypeError, StopIteration) as exc:
             raise ValueError("rubric lacks market bands/caps/unit") from exc
 
@@ -121,6 +122,24 @@ def _figure(evidence: Evidence, link: MarketLink) -> dict[str, object]:
         "unit": evidence.unit,
         "value": evidence.value,
     }
+
+
+# value·unit·currency는 prompt의 evidence 항목에 이미 있다. geography는 없으므로 둔다.
+_PROMPT_FIGURE_FIELDS = ("metric", "basis", "reference_year", "end_year", "geography")
+
+
+def _prompt_figure(figure: Mapping[str, object], rules: "_MarketRules") -> dict:
+    """prompt용 수치 맥락. rubric 표에서 찾은 구간을 함께 준다(결정적 조회).
+
+    observed/missing·인용 수치·상충 판단은 모델 몫이고, 결과는 출력 검증이 다시 본다.
+    """
+    out = {k: figure[k] for k in _PROMPT_FIGURE_FIELDS}
+    size = figure["metric"] in ("tam", "sam")
+    bands = rules.size_bands if size else rules.growth_bands
+    out["rubric_band"] = _band(bands, float(figure["value"]))  # type: ignore[arg-type]
+    if figure["metric"] == "tam":
+        out["rubric_max_rating"] = rules.tam_cap
+    return out
 
 
 def _exclusion(
@@ -171,6 +190,11 @@ def _context_key(criterion_id: str, figure: Mapping[str, object]) -> tuple:
     return tuple(figure[f] for f in fields)
 
 
+def _code(code: str, criterion_id: str) -> str:
+    """수정 요청에 남는 코드에 criterion을 넣는다(catalog ID라 모델 문자열이 아님)."""
+    return f"{code}_{criterion_id.removeprefix('market.').upper()}: {criterion_id}"
+
+
 def market_output_violations(
     output: DimensionAssessmentOutput,
     *,
@@ -180,6 +204,8 @@ def market_output_violations(
     """시장 수치 인용의 맥락·구간 일치 위반. #22 공통 검증을 통과한 출력에 쓴다."""
     violations: list[str] = []
     for c in output.criteria:
+        if c.status == "missing" and c.missing_reason not in rules.missing_reasons:
+            violations.append(_code("MARKET_MISSING_REASON_INVALID", c.criterion_id))
         if c.status != "observed" or c.criterion_id not in (
             "market.size",
             "market.growth",
@@ -188,34 +214,37 @@ def market_output_violations(
         cid = c.criterion_id
         cited = [figures[eid] for eid in c.evidence_ids if eid in figures]
         if not cited:
-            violations.append(f"MARKET_FIGURE_REQUIRED: {cid}")
+            violations.append(_code("MARKET_FIGURE_REQUIRED", cid))
             continue
         if any(_METRIC_CRITERION[str(f["metric"])] != cid for f in cited):
-            violations.append(f"MARKET_METRIC_MISMATCH: {cid}")
+            violations.append(_code("MARKET_METRIC_MISMATCH", cid))
             continue
         if cid == "market.size" and any(f["basis"] == "forecast" for f in cited):
-            violations.append(f"MARKET_FORECAST_AS_ACTUAL: {cid}")
+            violations.append(_code("MARKET_FORECAST_AS_ACTUAL", cid))
             continue
         if len({_context_key(cid, f) for f in cited}) > 1:
-            violations.append(f"MARKET_CONTEXT_MIXED: {cid}")
+            violations.append(_code("MARKET_CONTEXT_MIXED", cid))
             continue
         bands_def = rules.size_bands if cid == "market.size" else rules.growth_bands
         bands = {_band(bands_def, float(f["value"])) for f in cited}  # type: ignore[arg-type]
         if cid == "market.size":
             if len(bands) > 1:
-                violations.append(f"MARKET_CONFLICT_UNRESOLVED: {cid}")
+                violations.append(_code("MARKET_CONFLICT_UNRESOLVED", cid))
                 continue
             expected = bands.pop()
-            if cited[0]["metric"] == "tam":
-                expected = min(expected, rules.tam_cap)
+            if cited[0]["metric"] == "tam" and expected > rules.tam_cap:
+                if c.rating is not None and c.rating > rules.tam_cap:
+                    violations.append(_code("MARKET_TAM_CAP_EXCEEDED", cid))
+                    continue
+                expected = rules.tam_cap
         else:
             # rubric conflict_rule: 1구간 차이는 낮은 쪽, 2구간 이상은 missing.
             if max(bands) - min(bands) > 1:
-                violations.append(f"MARKET_CONFLICT_UNRESOLVED: {cid}")
+                violations.append(_code("MARKET_CONFLICT_UNRESOLVED", cid))
                 continue
             expected = min(bands)
         if c.rating != expected:
-            violations.append(f"MARKET_RATING_BAND_MISMATCH: {cid}")
+            violations.append(_code("MARKET_RATING_BAND_MISMATCH", cid))
     return violations
 
 
@@ -262,10 +291,10 @@ def evaluate_market(
         update={"evidence_ids": list(allowed), "evidence": allowed}, deep=True
     )
     context = {
-        "prompt_version": PROMPT_VERSION,
         "target_market": target_market.model_dump(mode="json"),
-        "market_figures": figures,
+        "market_figures": {eid: _prompt_figure(f, rules) for eid, f in figures.items()},
         "excluded_evidence_reasons": dict(sorted(excluded.items())),
+        "missing_reasons": sorted(rules.missing_reasons),
     }
     return evaluate_dimension(
         "market",

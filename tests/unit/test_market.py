@@ -146,7 +146,7 @@ def test_matching_market_evidence_reaches_wrapper_with_context(case):
     assert result.evaluation.rubric_version == RUBRIC["rubric_version"]
     assert llm.calls[0].system == SYSTEM_PROMPT
     context = _payload(llm)["context"]
-    assert context["prompt_version"] == PROMPT_VERSION
+    assert PROMPT_VERSION == "market-evaluation-v2"
     assert context["target_market"]["segment_id"] == SEGMENT
     assert context["market_figures"]["ev-sam"] == {
         "metric": "sam",
@@ -154,9 +154,7 @@ def test_matching_market_evidence_reaches_wrapper_with_context(case):
         "reference_year": 2025,
         "end_year": None,
         "geography": "KR",
-        "currency": "USD",
-        "unit": "USD",
-        "value": 8e8,
+        "rubric_band": 3,
     }
     assert context["market_figures"]["ev-cagr"]["end_year"] == 2030
 
@@ -248,6 +246,7 @@ def test_tam_only_is_capped(case):
     over = case.output(size=["ev-tam"], size_rating=5)
     result, _ = case.run(over, over)
     assert result.status == "failure"
+    assert "MARKET_TAM_CAP_EXCEEDED_SIZE" in result.errors[0].message_redacted
     capped, _ = case.run(case.output(size=["ev-tam"], size_rating=3))
     assert capped.status == "success"
 
@@ -297,6 +296,34 @@ def test_size_rating_without_figure_rejected(case):
     bad["criteria"][0]["evidence_ids"] = []
     result, _ = case.run(bad, bad)
     assert result.status == "failure"
+
+
+def test_repair_feedback_names_criterion_not_model_text(case):
+    bad = case.output(gr=5)
+    _, llm = case.run(bad, bad)
+    assert "MARKET_RATING_BAND_MISMATCH_GROWTH" in llm.calls[1].user
+    assert "SIZE" not in llm.calls[1].user.rpartition("\n")[2]
+
+
+def test_free_text_missing_reason_rejected(case):
+    bad = case.output()
+    bad["criteria"][2].update(
+        status="missing", rating=None, evidence_ids=[], missing_reason="자료 없음"
+    )
+    result, llm = case.run(bad, bad)
+    assert "MARKET_MISSING_REASON_INVALID_DEMAND" in result.errors[0].message_redacted
+    assert "not_disclosed" in _payload(llm)["context"]["missing_reasons"]
+
+
+def test_prompt_figures_carry_rubric_band_and_tam_cap(case):
+    case.add("ev-tam", *_sam(5e10, metric="tam"))
+    _, llm = case.run(case.output())
+    figures = _payload(llm)["context"]["market_figures"]
+    assert figures["ev-sam"]["rubric_band"] == 3
+    assert "rubric_max_rating" not in figures["ev-sam"]
+    assert figures["ev-tam"]["rubric_band"] == 5
+    assert figures["ev-tam"]["rubric_max_rating"] == 3
+    assert figures["ev-cagr"]["rubric_band"] == 4
 
 
 def test_repair_then_success(case):

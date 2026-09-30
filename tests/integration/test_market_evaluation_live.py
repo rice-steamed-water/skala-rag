@@ -95,12 +95,13 @@ def test_live_market_evaluation_smoke():
         clock=clock,
     )
     llm = _runtime_llm(transport, clock, run_id, snapshot.candidate_id)
+    recorder = _AttemptRecorder(llm)
     result = evaluate_market(
         snapshot,
         target_market=target,
         market_links=links,
         rubric=rubric,
-        llm=llm,
+        llm=recorder,
         policy=policy,
         clock=clock,
         schema_version=SCHEMA,
@@ -126,6 +127,7 @@ def test_live_market_evaluation_smoke():
             }
             for c in transport.llm_calls
         ],
+        "attempts": recorder.attempts,
         "ledger": llm.runtime.ledger.snapshot(),
         "runtime_errors": [e.error_code for e in llm.runtime.error_history.values()],
     }
@@ -148,6 +150,32 @@ def test_live_market_evaluation_smoke():
     if result.evaluation is not None:
         cited = {e for c in result.evaluation.criteria for e in c.evidence_ids}
         assert cited <= set(snapshot.evidence)
+
+
+class _AttemptRecorder:
+    """시도별 구조화 판단(rating·인용 ID)만 기록한다. 모델이 쓴 문장은 남기지 않는다."""
+
+    def __init__(self, llm: RuntimeStructuredLLM) -> None:
+        self.llm = llm
+        self.attempts: list[list[dict]] = []
+
+    def generate(self, *, system, user, output_schema):
+        output = self.llm.generate(
+            system=system, user=user, output_schema=output_schema
+        )
+        self.attempts.append(
+            [
+                {
+                    "criterion_id": c.criterion_id,
+                    "status": c.status,
+                    "rating": c.rating,
+                    "evidence_ids": c.evidence_ids,
+                    "missing_reason": c.missing_reason,
+                }
+                for c in output.criteria
+            ]
+        )
+        return output
 
 
 def _runtime_llm(
