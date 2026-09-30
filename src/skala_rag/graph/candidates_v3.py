@@ -7,7 +7,8 @@ not implement discovery policy, research retry, reporting, CLI or live providers
 from collections.abc import Callable, Collection, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
+from time import perf_counter
 from typing import Any
 
 from skala_rag.contracts.candidates import Candidate, EligibilityResult
@@ -80,6 +81,7 @@ def run_candidates_v3(
     applicability_verifier: ApplicabilityVerifier | None,
     industry_evidence_dimensions: Collection[str],
     clock: Callable[[], datetime],
+    trace_events: list[dict] | None = None,
 ) -> CandidateRunV3:
     """Process every normalized candidate; #24 graph performs the five-way barrier.
 
@@ -108,6 +110,48 @@ def run_candidates_v3(
         applicability_validator=applicability_verifier,
         clock=clock,
     ).compile()
+
+    def timed(step, cid, operation, input_ids=()):
+        started_at = datetime.now(timezone.utc).isoformat()
+        started = perf_counter()
+        status = "failed"
+        output_ids = []
+        try:
+            value = operation()
+            status = "ok"
+            if isinstance(value, dict):
+                output_ids = list(value.get("evaluations_v3", {}))
+                if value.get("evaluation_status_v3") == "failure":
+                    status = "failed"
+                    output_ids = list(value.get("evaluation_failure_ids_v3", []))
+            else:
+                for field in ("score_summary_id", "decision_id", "candidate_id"):
+                    identifier = getattr(value, field, None)
+                    if identifier:
+                        output_ids.append(identifier)
+                if isinstance(value, SelectionResultV3):
+                    output_ids = (
+                        [value.selected_candidate_id]
+                        if value.selected_candidate_id
+                        else []
+                    )
+            return value
+        finally:
+            if trace_events is not None:
+                trace_events.append(
+                    dict(
+                        run_id=run_id,
+                        candidate_id=cid,
+                        step=step,
+                        started_at=started_at,
+                        duration_seconds=perf_counter() - started,
+                        input_ids=list(input_ids),
+                        output_ids=output_ids,
+                        status=status,
+                        execution_mode="fixture",
+                    )
+                )
+
     outcomes: dict[str, CandidateOutcome] = {}
     scores: dict[str, ScoreSummary] = {}
     decisions: dict[str, InvestmentDecision] = {}
@@ -237,18 +281,23 @@ def run_candidates_v3(
             ):
                 raise ValueError("invalid collected Evidence identity")
             stage = "coverage"
-            coverage = check_coverage_v3(
+            coverage = timed(
+                "coverage",
                 cid,
-                evidence,
-                catalog,
-                evidence_revision=eligibility.evidence_revision,
-                schema_version=schema_version,
-                execution_mode="fixture",
-                policy_version=policy.policy_version,
-                support_check=support_check,
-                applicability_assessments=applicability_assessments(cid),
-                applicability_check=applicability_check,
-                unresolved_conflict_ids=[],
+                lambda: check_coverage_v3(
+                    cid,
+                    evidence,
+                    catalog,
+                    evidence_revision=eligibility.evidence_revision,
+                    schema_version=schema_version,
+                    execution_mode="fixture",
+                    policy_version=policy.policy_version,
+                    support_check=support_check,
+                    applicability_assessments=applicability_assessments(cid),
+                    applicability_check=applicability_check,
+                    unresolved_conflict_ids=[],
+                ),
+                list(collected),
             )
             stage = "freeze"
             snapshot = EvaluationSnapshot.model_validate(
@@ -331,7 +380,12 @@ def run_candidates_v3(
                 candidate_status={},
                 errors=[],
             )
-            evaluated = graph.invoke(graph_state)
+            evaluated = timed(
+                "evaluation_join",
+                cid,
+                lambda: graph.invoke(graph_state),
+                [snapshot.snapshot_id],
+            )
             if evaluated["evaluation_status_v3"] != "success":
                 failure_ids = set(evaluated["evaluation_failure_ids_v3"])
                 failures = [
@@ -362,13 +416,23 @@ def run_candidates_v3(
                 key = evaluation_key(cid, snapshot.evaluation_round, dimension)
                 dims.append(Evaluation.model_validate(evaluated["evaluations_v3"][key]))
             stage = "score"
-            summary = aggregate_scores_v3(
-                dims,
-                policy,
-                applicability_verifier=applicability_verifier,
-                snapshot=snapshot,
+            summary = timed(
+                "score",
+                cid,
+                lambda: aggregate_scores_v3(
+                    dims,
+                    policy,
+                    applicability_verifier=applicability_verifier,
+                    snapshot=snapshot,
+                ),
+                [snapshot.snapshot_id],
             )
-            decision = decide_v3(summary, policy)
+            decision = timed(
+                "decision",
+                cid,
+                lambda: decide_v3(summary, policy),
+                [summary.score_summary_id],
+            )
             scores[cid] = summary
             decisions[cid] = decision
             finish(
@@ -416,8 +480,13 @@ def run_candidates_v3(
                 score_summary_id=summary.score_summary_id if summary else None,
             )
         )
-    selection = select_best_v3(
-        rows, policy, run_id=run_id, schema_version=schema_version
+    selection = timed(
+        "selector",
+        None,
+        lambda: select_best_v3(
+            rows, policy, run_id=run_id, schema_version=schema_version
+        ),
+        [item.score_summary_id for item in scores.values()],
     )
     if not candidates:
         status = "no_candidates"
