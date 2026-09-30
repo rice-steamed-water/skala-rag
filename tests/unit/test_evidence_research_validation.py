@@ -75,6 +75,7 @@ def run(root, **changes):
         gap_criterion="technology.reliability",
         gap_query="technology.reliability",
         top_k=2,
+        max_segment_bytes=4000,
     )
     kwargs.update(changes)
     return smoke.run(**kwargs)

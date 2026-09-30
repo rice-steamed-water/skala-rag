@@ -78,7 +78,7 @@ RAG는 #54 `IndexedRetriever`에 가상 backend를, 추출은 가상 LLM을 쓴�
 index·LLM 호출은 하지 않았으므로 검색 품질·추출 품질이나 live 성공 증거가 아니다.
 gap 질의용 실제 Web 검색 adapter는 아직 없다(#48 Tavily는 후보 발견 전용).
 
-## 실제 로컬 index smoke — 실행 대기
+## 실제 로컬 index smoke
 
 `rag.evidence_research_validation`은 #54 `retrieve_validation`과 같은 #145 로컬 산출물
 (BGE-M3 모델, SQLite index, receipt)을 재검증해 `IndexedRetriever`를 만든다. 그 위에서
@@ -93,7 +93,7 @@ uv run python -m skala_rag.rag.evidence_research_validation \
   --store-path /path/to/repo/outputs/issue145-local-bge-final/index.sqlite \
   --receipt-path /path/to/repo/outputs/issue145-local-bge-final/validation.json \
   --output-dir /path/to/repo/outputs/issue55-evidence-research-none \
-  --timeout-seconds 60 --llm none --top-k 2 \
+  --timeout-seconds 60 --llm none --top-k 2 --max-segment-bytes 4000 \
   --initial-criterion technology.maturity \
   --initial-query "Physical Intelligence vision-language-action model" \
   --gap-criterion technology.reliability \
@@ -107,9 +107,27 @@ uv run python -m skala_rag.rag.evidence_research_validation \
   - 요청당 입력 상한을 넘는 페이지는 호출하지 않고 batch를 멈춘다. 이때 결과는
     `failed`로 기록된다.
   - `top_k`는 1~4만 받는다. 두 batch의 페이지 수가 요청 8회 안에 들어야 하기 때문이다.
-- criterion·질의·top_k는 OPEN 정책을 대신하는 smoke 인자일 뿐, 승인된 값이 아니다.
-- #50 규칙상 기업 근거의 발췌에는 기업명("Physical Intelligence")이 있어야 한다.
-  그래서 논문 본문 페이지의 주장은 대부분 `SUBJECT_NOT_IN_EXCERPT`로 거절될 수 있다.
-  이는 보수적 추출 규칙의 결과이며 검색 실패가 아니다.
+- `--max-segment-bytes`: 긴 페이지를 #163 `split_segment`로 나누는 원문 byte 상한이다.
+  프롬프트·schema 고정분이 약 3,400이라, 4,000이면 요청당 입력 8,000 안에 들어간다.
+- criterion·질의·top_k·분할 상한은 OPEN 정책을 대신하는 smoke 인자일 뿐, 승인된 값이
+  아니다.
+- 기업 자체 발행 Source(발행처·저자에 기업명)는 발췌에 기업명이 없어도 된다(#163).
 - 스크립트 흐름은 `tests/unit/test_evidence_research_validation.py`에서 가상 index로
   확인했다. #145 산출물 로딩 부분은 #54 경로를 그대로 쓰므로 여기서는 재검증하지 않았다.
+
+### 실측 — 2026-09-30 (heojiwon2 로컬, gpt-4.1-mini)
+
+#145 모델 파일 hash와 receipt metadata를 재검증했다. 원문 PDF 두 편은 arXiv에서 다시
+받았고 manifest hash와 일치한다. index version은 `sha256:bc345db…`이다.
+
+| 실행 | 결과 |
+| --- | --- |
+| `--llm none` | 최초 검색 두 문서 1페이지, gap 검색 8·11페이지. Chunk 4개 모두 `rag_segment` 통과. 9.6초, 외부 호출 0 |
+| `--llm openai`, #161·#163 이전 | 최초 수집 주장 전부 거절(`EXCERPT_NOT_IN_SOURCE`). 긴 페이지는 입력 상한으로 호출 전 거절. Evidence 0 |
+| `--llm openai`, #161·#163 이후 + 분할 4,000 | **최초 수집 Evidence 2개**(π0 1페이지, `technology.maturity`, rag). gap 재조사는 조각 추출 후 전부 거절돼 empty(실패 아님). LLM 6회, 약 USD 0.034, 27초 |
+
+생성된 Evidence는 provenance의 retrieval_id·chunk_id가 실제 검색 이력의 반환 Chunk와
+같고, 그 이력의 `evidence_ids`에 기록된다. gap 재조사에서 남은 거절은
+`EXCERPT_NOT_IN_SOURCE` 5, `SUBJECT_MISMATCH` 1, `VALUE_NOT_IN_EXCERPT` 1이다.
+2단 편집의 좌우 단 섞임 등 PDF 추출 품질의 한계로 보이며 #49 범위다. 이 smoke는 한
+질의 쌍의 trace 확인이며 검색·추출 품질 benchmark가 아니다.

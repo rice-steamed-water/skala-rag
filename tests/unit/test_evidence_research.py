@@ -117,7 +117,9 @@ def world():
             gap(c.candidate_id, "technology.integration", ["technology.integration"])
         ]
 
-    def build(*, llm=None, web=(), rag_required=True, initial_plan=plan):
+    def build(
+        *, llm=None, web=(), rag_required=True, initial_plan=plan, max_bytes=None
+    ):
         return EvidenceResearch(
             retrieve=retriever,
             rag_required=rag_required,
@@ -133,6 +135,7 @@ def world():
             clock=clock,
             schema_version=SCHEMA,
             execution_mode="fixture",
+            max_segment_bytes=max_bytes,
         )
 
     return dict(
@@ -326,3 +329,21 @@ def test_initial_plan_for_other_candidate_is_rejected(world):
     )
     with pytest.raises(ValueError):
         research.run(world["a"], [], budget(1))
+
+
+def test_long_segment_is_split_before_extraction(world):
+    # c-fin(두 줄)을 줄 단위로 나눠 LLM에 한 줄씩 보낸다(#163).
+    llm = LineLLM()
+    limit = max(len(REVENUE.encode()), len(ODD_UNIT.encode())) + 1
+    research = world["build"](llm=llm, max_bytes=limit)
+    out = research.run(
+        world["a"], [gap(ALPHA, "market.size", ["market.size"])], budget(1)
+    )
+    assert llm.calls == 2
+    assert sorted(e.excerpt for e in out.evidence.values()) == sorted(
+        [REVENUE, ODD_UNIT]
+    )
+    [record] = out.records
+    assert set(record.evidence_ids) == set(out.evidence)
+    with pytest.raises(ValueError):
+        world["build"](max_bytes=0)

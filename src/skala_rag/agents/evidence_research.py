@@ -9,7 +9,8 @@ contracts §4·§6·§7, data-rag §1·§4, delivery T07·T13·T25, v3 B-1·B-2�
   필수/선택을 정한다. 필수 도구가 ``unavailable``/``failed``면 batch 실패, 선택 도구는
   RetrievalRecord에 사유를 남기고 계속한다. ``empty``는 실패도 부정 사실도 아니다.
 - 추출: #50 ``rag_segment``/``web_segment`` → ``extract_evidence``(StructuredLLM). 금액
-  Evidence는 #53 ``to_amount``의 단위 해석을 통과해야 남는다.
+  Evidence는 #53 ``to_amount``의 단위 해석을 통과해야 남는다. ``max_segment_bytes``를
+  주면 긴 구간을 #163 ``split_segment``로 나눠 추출한다(LLM 입력 상한용, 값 주입).
 - 호출 예산: batch ``ToolBudget.max_calls``를 RAG·Web/API 호출이 함께 쓴다(한도 값은
   OPEN이라 호출자가 주입). 남은 계획은 실행하지 않는다. 후보별 재조사 횟수는 Graph
   ``research_gate``(#25)가 센다. LLM 호출은 별도 wrapper 예산이다.
@@ -30,6 +31,7 @@ from skala_rag.agents.evidence_extraction import (
     extract_evidence,
     link_record,
     rag_segment,
+    split_segment,
     verify_provenance,
     web_segment,
 )
@@ -149,6 +151,7 @@ class EvidenceResearch:
         schema_version: str,
         execution_mode: Literal["fixture", "live"],
         rag_tool_name: str = "retrieve",
+        max_segment_bytes: int | None = None,
     ) -> None:
         names = [rag_tool_name, *(c.name for c in web)]
         if len(set(names)) != len(names):
@@ -167,6 +170,9 @@ class EvidenceResearch:
         self._clock = clock
         self._schema_version = schema_version
         self._mode = execution_mode
+        if max_segment_bytes is not None and max_segment_bytes < 1:
+            raise ValueError("max_segment_bytes must be positive")
+        self._max_segment_bytes = max_segment_bytes
         self._context = {"execution_mode": execution_mode}
         self._seq = 0
 
@@ -401,6 +407,23 @@ class EvidenceResearch:
         return got
 
     def _extract(
+        self,
+        candidate: Candidate,
+        gap: ResearchGap,
+        segment: SourceSegment,
+        records: dict[str, RetrievalRecord],
+        out: ResearchOutcome,
+        evidence: dict[str, Any],
+    ) -> None:
+        limit = self._max_segment_bytes
+        if limit is not None and len(segment.text.encode()) > limit:
+            # LLM 요청당 입력 상한에 맞춰 나눈다. 조각은 원문 부분 문자열이다(#163).
+            for piece in split_segment(segment, limit):
+                self._extract_one(candidate, gap, piece, records, out, evidence)
+        else:
+            self._extract_one(candidate, gap, segment, records, out, evidence)
+
+    def _extract_one(
         self,
         candidate: Candidate,
         gap: ResearchGap,

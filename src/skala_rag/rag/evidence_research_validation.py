@@ -310,6 +310,7 @@ def run(
     gap_criterion: str,
     gap_query: str,
     top_k: int,
+    max_segment_bytes: int,
 ):
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
         raise ValueError("explicit positive finite local bound required")
@@ -350,6 +351,7 @@ def run(
         schema_version=SCHEMA,
         execution_mode="live",
         rag_tool_name=RETRIEVE_TOOL,
+        max_segment_bytes=max_segment_bytes,
     )
     # smoke 전용 batch 호출 한도(질의 1개 × 도구 1개). 승인된 batch 한도가 아니다.
     stage = evidence_research_stage(
@@ -431,6 +433,7 @@ def run(
             initial=[initial_criterion, initial_query],
             gap=[gap_criterion, gap_query],
             top_k=top_k,
+            max_segment_bytes=max_segment_bytes,
             note="OPEN 정책 대신 smoke 인자로 준 값",
         ),
         batches=batches,
@@ -511,6 +514,7 @@ def main():
     for name in ("initial-criterion", "initial-query", "gap-criterion", "gap-query"):
         p.add_argument("--" + name, required=True)
     p.add_argument("--top-k", type=int, required=True)
+    p.add_argument("--max-segment-bytes", type=int, required=True)
     a = p.parse_args()
     print(json.dumps(run(**vars(a)), ensure_ascii=False, default=str))
 
