@@ -15,6 +15,7 @@ from skala_rag.contracts.retrieval import RetrievalRecord
 from skala_rag.contracts.sources import Chunk, Source
 from skala_rag.contracts.state import InvestmentState
 from skala_rag.graph.reducers import merge_errors
+from skala_rag.rag.retrieval import source_date
 
 
 class SnapshotInvalid(ValueError):
@@ -34,8 +35,7 @@ def _count(value: int) -> int:
 
 
 def _source_date(source: Source) -> date:
-    value = source.published_at or source.retrieved_at
-    return value.date() if isinstance(value, datetime) else value
+    return source_date(source)
 
 
 def _build_snapshot(
