@@ -30,8 +30,9 @@ DB connection, API key, LLM 모델 객체는 넣지 않는다(contracts §1).
   controller만 변경.
 
 평가 key는 ``{candidate_id}:{evaluation_round}:{dimension}``이며
-``evaluations``와 ``evaluation_results``가 같은 key를 쓴다. Reducer 지정과 Graph
-wiring은 M1 범위다.
+``evaluations``와 ``evaluation_results``가 같은 key를 쓴다.
+Source·Evidence·Chunk·병렬 평가 결과·오류에 ID reducer를 지정한다.
+Graph wiring은 별도 이슈 범위다.
 """
 
 from __future__ import annotations
@@ -39,7 +40,14 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from enum import StrEnum
-from typing import Any, TypedDict
+from typing import Annotated, Any, TypedDict
+
+from skala_rag.graph.reducers import (
+    merge_errors,
+    merge_evidence,
+    merge_result_maps,
+    merge_sources,
+)
 
 JsonObject = dict[str, Any]
 """JSON으로 직렬화되는 DTO payload."""
@@ -95,9 +103,11 @@ class InvestmentState(TypedDict, total=False):
     eligibility_results: dict[str, JsonObject]  # candidate_id -> EligibilityResult
 
     # 출처/근거
-    sources: dict[str, JsonObject]  # source_id -> Source
-    chunks: dict[str, JsonObject]  # chunk_id -> Chunk
-    evidence: dict[str, JsonObject]  # evidence_id -> Evidence
+    sources: Annotated[dict[str, JsonObject], merge_sources]  # source_id -> Source
+    chunks: Annotated[dict[str, JsonObject], merge_result_maps]  # chunk_id -> Chunk
+    evidence: Annotated[
+        dict[str, JsonObject], merge_evidence
+    ]  # evidence_id -> Evidence
     retrieval_history: list[JsonObject]  # RetrievalRecord[]
 
     # 조사 제어
@@ -107,7 +117,9 @@ class InvestmentState(TypedDict, total=False):
     evidence_revisions: dict[str, int]  # candidate_id ->
 
     # 평가
-    evaluation_results: dict[str, JsonObject]  # 평가 key -> EvaluationResult
+    evaluation_results: Annotated[
+        dict[str, JsonObject], merge_result_maps
+    ]  # 평가 key -> EvaluationResult
     evaluations: dict[str, JsonObject]  # 평가 key -> Evaluation (성공만)
     evaluation_rounds: dict[str, int]  # candidate_id ->
     snapshots: dict[str, JsonObject]  # snapshot_id -> EvaluationSnapshot
@@ -127,7 +139,7 @@ class InvestmentState(TypedDict, total=False):
     report_revision_count: int
 
     # 오류/종료
-    errors: list[JsonObject]  # WorkflowError[]
+    errors: Annotated[list[JsonObject], merge_errors]  # WorkflowError[]
     workflow_status: WorkflowStatus
     run_outcome: RunOutcome | None
 
