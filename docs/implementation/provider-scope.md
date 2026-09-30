@@ -42,13 +42,16 @@ provider 선택은 구현하지 않는다. 모든 차단 receipt를 caller가 �
 
 현재 기존 runtime은 이 helper를 자동으로 읽지 않는다. config 로더/provider
 selector가 없으므로 소비되지 않는 JSON config는 추가하지 않았다.
-이 구현만으로 whole-Graph 호출 차단을 주장할 수 없다. 실제 실행 진입점 담당자는
-반드시 위 경계를 주입해야 한다. 기존 직접 호출 경계는
-`src/skala_rag/tools/discovery_receipt.py::search_with_receipt`,
-`src/skala_rag/tools/discovery_smoke.py::run_discovery_smoke`이며 후자는 Tavily 전용이라
-현재 실행에서 호출하지 않는다. 전역 강제가 필요하면 이 owner 파일들 또는 #55/#96
-runner의 adapter 조립/호출 지점을 별도 범위 승인 후 수정해야 한다.
-공통 `tools/runtime.py::AdapterRuntime.execute`는 이번 작업에서 변경하지 않았다.
+`TavilyDiscovery.__call__` 및 `search_with_receipt`는 live 호출 전에 같은 scope
+helper를 소비한다. `allow_live=True`도 제외를 덮어쓰지 못한다. readiness,
+extractor, HTTP, paid budget callback 전에 unavailable receipt를 반환한다.
+`run_discovery_smoke`는 유효한 caller context/output directory에서 이 receipt를
+`http_requests=[]`, `observed_sources={}`로 저장한다. fixture 경로는 synthetic
+호환성 검증만 유지하며 현재 live scope 재승인 근거가 아니다.
+이 구현만으로 whole-Graph 호출 차단을 주장할 수 없다. #55/#96 runner owner는
+더 넓은 provider adapter 조립/호출 경계에 helper를 소비하고 제외 receipt를
+실행 기록에 보존해야 한다. 공통 `tools/runtime.py::AdapterRuntime.execute`는
+이번 작업에서 변경하지 않았다.
 
 ## 로컬 검증
 

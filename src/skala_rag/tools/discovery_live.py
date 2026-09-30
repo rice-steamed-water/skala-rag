@@ -1,7 +1,7 @@
 """Offline Tavily response boundary with merged #45 shared-runtime bridge.
 
 No credentials, HTTP client, retry or runtime defaults are provided here.
-Live requires explicit opt-in and the shared TavilyRuntimeBridge.
+Live is excluded by current provider scope, regardless of explicit opt-in.
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -122,6 +122,8 @@ class TavilyDiscovery:
     ) -> ToolResult[DiscoveryBundle]:
         self._observed_sources = {}
         self._runtime_records = []
+        if request.execution_mode == "live":
+            return self.current_scope_result()
         started = self.clock.now()
         args = {
             "execution_mode": request.execution_mode,
@@ -279,6 +281,31 @@ class TavilyDiscovery:
             )
         args["observation"] = "candidates_found" if data.candidates else observations
         return self._result(request, started, args, data=data)
+
+    def current_scope_result(self) -> ToolResult[DiscoveryBundle]:
+        """Current live exclusion, before readiness/extraction/budget callbacks."""
+        from skala_rag.tools.provider_scope import invoke_current_scope
+        from skala_rag.tools.runtime import CallContext
+
+        def excluded_invocation() -> ToolResult[DiscoveryBundle]:
+            raise RuntimeError("Live discovery has no current-scope admission")
+
+        self._observed_sources = {}
+        return invoke_current_scope(
+            provider="tavily",
+            approved_providers=frozenset(),
+            context=CallContext(
+                schema_version=self.schema_version,
+                run_id=self.run_id,
+                call_id=self.retrieval_id,
+                candidate_id=None,
+                tool_name="tavily",
+                node="discovery",
+            ),
+            retrieval_id=self.retrieval_id,
+            clock=self.clock,
+            invoke=excluded_invocation,
+        )
 
     def _preflight(self, request, budget, started):
         # Import locally: bridge reuses ProviderResponse from this module.

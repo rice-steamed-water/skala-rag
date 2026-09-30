@@ -235,7 +235,7 @@ def test_failed_transport_receipt_is_exact(tmp_path, kind):
     assert ledger.snapshot()["calls"] == 1
 
 
-@pytest.mark.parametrize("change", ["fake", "wrong_run", "wrong_mode", "live_off"])
+@pytest.mark.parametrize("change", ["fake", "wrong_run", "wrong_mode"])
 def test_inconsistent_or_fake_runtime_never_runs(tmp_path, change):
     from skala_rag.tools.discovery_smoke import run_discovery_smoke
 
@@ -361,13 +361,21 @@ def test_output_path_guard_never_sends(tmp_path, kind):
     assert ledger.snapshot()["calls"] == 0
 
 
-def test_missing_live_approvals_remain_runtime_failure(tmp_path):
+@pytest.mark.parametrize("allow_live", [False, True])
+def test_current_scope_receipt_persists_without_callbacks(tmp_path, allow_live):
     from skala_rag.tools.discovery_smoke import run_discovery_smoke
 
     adapter, request, budget, ledger = configured(
         lambda r: pytest.fail("HTTP forbidden")
     )
-    adapter.allow_live = True
+    adapter.allow_live = allow_live
+
+    def forbidden(*args):
+        pytest.fail("readiness or extractor forbidden")
+
+    adapter.readiness = adapter.extractor = forbidden
+    before_budget = budget.model_dump()
+    before_ledger = ledger.snapshot()
     adapter.runtime.runtime.policy = adapter.runtime.runtime.policy.model_copy(
         update={"execution_mode": "live"}
     )
@@ -376,6 +384,22 @@ def test_missing_live_approvals_remain_runtime_failure(tmp_path):
         adapter=adapter, request=request, budget=budget, output_directory=tmp_path
     )
     saved = json.loads(path.read_text())
+    assert budget.model_dump() == before_budget
+    assert ledger.snapshot() == before_ledger
+    assert saved["result"]["data"] is None
+    assert saved["observed_sources"] == {}
+    assert (
+        saved["result"]["retrieval_records"][0]["arguments_without_secrets"][
+            "physical_attempts"
+        ]
+        == 0
+    )
+    assert (
+        saved["result"]["retrieval_records"][0]["arguments_without_secrets"][
+            "scope_reason"
+        ]
+        == "excluded_current_run"
+    )
     assert saved["execution_mode"] == "live"
     assert saved["result"]["status"] == "unavailable"
     assert saved["result"]["errors"][0]["error_code"] == "TOOL_NOT_CONFIGURED"
