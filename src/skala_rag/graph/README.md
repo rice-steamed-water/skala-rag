@@ -92,3 +92,31 @@ runner는 compile().invoke(initial_state, {"recursion_limit": 100})처럼 명시
 체크포인트·CLI·보고서 생성은 #29·#28 등 후속 작업 범위다.
 T08/T09는 tests/integration/test_candidate_graph.py에서 실제 설치 LangGraph로
 실행하지만 자료·조사·평가·설명은 가상 입력이며 live 성공 증거가 아니다.
+
+## 보고서 단계와 수정 loop — #28
+
+`graph.report.build_report_graph(nodes, policy, *, run_id, schema_version,
+clock, template)`은 `report_input`이 있는 State에서 시작하는 보고서 단계
+`StateGraph(InvestmentState)` builder다. `ReportNodes`에 generate·judge·render·
+layout을 주입한다. context 조립(#26)과 Structural Validator(#27)는 실제 함수를 쓴다.
+fixture 실행만 받으며, workflow가 이미 failed면 아무것도 하지 않는다.
+
+- 흐름: context → generate → validate → judge → render(+layout) → complete.
+- 구조 revise·Judge revise·layout 실패는 `policy.budgets.max_report_revisions`
+  하나를 공유한다. retry가 요청 전에 `report_revision_count`를 올리고, 소진되면
+  `BUDGET_EXHAUSTED`로 failed. 다음 Generator 호출에 직전 오류·수정 요청을
+  feedback으로 넘기고, 새 draft에는 이전 검증·판정 결과를 비운다(SV09).
+- 재수정 없이 failed: Judge `fail`(`REPORT_REJECTED`), context 조립·구조 검증의
+  context/upstream 오류, Generator·Judge 오류, 렌더러 실패(`TOOL_FAILED`),
+  다른 draft·context의 Judge/layout 결과.
+- failed여도 마지막 `report_draft`와 `report_validation`·`report_judgement`·
+  `pdf_validation`, WorkflowError를 남긴다. `report`는 완료 때만 채운다.
+- render·layout 결과에 stub 표시가 있으면 `pdf_validation.checks.pdf_verified`를
+  항상 false로 둔다. 완료는 fixture 보고서 단계의 완료이며 PDF 검증이 아니다.
+
+`reporting.generator.generate_fixture_report`는 결정적 템플릿 Generator이고,
+`reporting.stubs`의 StubJudge·StubRenderer·StubLayout은 주입된 결과만 반환한다.
+후보 Graph의 selection/summary 뒤에 이 builder를 연결하는 것은 runner 몫이며,
+열린 #25 PR과의 충돌을 피하려고 `candidates.py`는 바꾸지 않았다.
+T16은 tests/integration/test_report_graph.py에서 실제 LangGraph로 실행하지만
+Generator·Judge·renderer는 가상이며 실모델 품질·PDF 페이지 준수 증거가 아니다.
