@@ -1,8 +1,8 @@
-# 보고서 목차·인용·구조 검증 계약 — D09 검토안
+# 보고서 목차·인용·구조 검증 계약 — D09 부분 승인
 
 [문서 홈](../README.md) · [공통 계약](contracts.md#5-보고서와-오류) · [검증 계획](delivery.md#5-보고서-계약과-pdf-검증) · [결정 목록](decisions.md)
 
-상태: **OPEN / 승인 전 제안**, 이슈 #14, 담당 xxhigh, 작성일 2026-09-30.
+상태: **APPROVED (목차·인용·구조 검증)**, 이슈 #14, 담당·승인자 xxhigh, 작성일·승인일 2026-09-30 (Asia/Seoul). [승인 근거](https://github.com/rice-steamed-water/skala-rag/issues/14#issuecomment-5902607679). PDF 구현 선택은 OPEN이다.
 근거: [통합 원문 §9.1–9.3](../raws/robotics_startup_agentic_rag_notion_integrated.md).
 이 문서는 M1 Generator·Structural Validator의 인터페이스를 정한다. 렌더러 구현이나 실제 보고서 생성 결과가 아니다.
 현재 main의 D03 승인 baseline을 따른다. 진행 중인 #35의 v3 설계는 별도 정합화 대상이며, 전체 후보 최우수 선택이나 새 판단 label을 여기서 도입하지 않는다.
@@ -97,7 +97,7 @@ REFERENCE 바깥 본문에서 추출한 인용 ID 집합을 C라 한다. ReportD
 
 서지정보는 context.sources의 실제 metadata에서만 가져온다. URL은 검색 결과 페이지 대신 해당 Source 원문 URL을 사용한다. PDF renderer가 추가된 뒤에도 이 ID 대응은 유지하며, 화면용 번호 변환은 별도 렌더링 계약에서 정한다.
 
-| 미상 필드 | 표기 제안 |
+| 미상 필드 | 승인 표기 |
 | --- | --- |
 | 기관/저자 | `발행기관 미상` 또는 `저자 미상` |
 | 발행일/연도 | `발행일 미상` 또는 `발행연도 미상`; retrieved_at을 발행일로 대체 금지 |
@@ -138,4 +138,4 @@ REFERENCE 바깥 본문에서 추출한 인용 ID 집합을 C라 한다. ReportD
 
 구조 검증 → 같은 context의 Semantic Judge → PDF 렌더링 → 페이지/레이아웃 측정 → 사람 시각 검토 순서를 따른다. 수정하면 해당 draft의 구조·의미·PDF 검증을 다시 수행한다(D08의 공유 수정 예산).
 PDF 전체 5페이지와 SUMMARY 반 페이지 제한은 유지한다. A4·폰트·여백·렌더러·SUMMARY 측정 기준·인용 token 화면 변환은 M3에서 별도 승인한다. 이번 문서로 렌더러를 선택하거나 페이지 준수를 인증하지 않는다.
-D09는 목차/인용/구조 검증과 PDF 구현 선택을 나눠 기록한다. 이번 안이 승인되어도 PDF 선택의 OPEN 상태는 남는다.
+D09는 목차/인용/구조 검증과 PDF 구현 선택을 나눠 기록한다. 목차·인용·구조 검증은 승인되었으며 PDF 선택의 OPEN 상태는 남는다.
