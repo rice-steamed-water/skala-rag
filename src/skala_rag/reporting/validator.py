@@ -26,6 +26,7 @@ from skala_rag.reporting.format import (
 TOKEN = re.compile(r"\[@evidence:([^\]\s]+)\]")
 LOOSE_TOKEN = re.compile(r"\[@evidence:[^\]]*\]?")
 REF_LINE = re.compile(r"^- \[@source:([^\]\s]+)\] (.+)$")
+FENCE_OPEN = re.compile(r"^ {0,3}(?P<fence>`{3,}|~{3,})(?P<info>.*)$")
 CHECK_IDS = [f"SV0{i}" for i in range(1, 10)]
 
 
@@ -57,14 +58,30 @@ class _Findings:
 
 
 def _strip_code(markdown: str) -> list[str]:
-    """code block 안 줄을 빈 줄로 바꿔 줄 번호를 유지한다."""
-    out, fenced = [], False
+    """Markdown fence 안 줄을 비워 구조 검사에서 제외하고 줄 번호를 유지한다."""
+    out: list[str] = []
+    marker = ""
+    minimum_length = 0
     for line in markdown.splitlines():
-        if line.strip().startswith("```"):
-            fenced = not fenced
+        if marker:
+            indent = len(line) - len(line.lstrip(" "))
+            if indent <= 3:
+                candidate = line[indent:]
+                length = len(candidate) - len(candidate.lstrip(marker))
+                if length >= minimum_length and not candidate[length:].strip():
+                    marker = ""
+                    minimum_length = 0
             out.append("")
             continue
-        out.append("" if fenced else line)
+        opening = FENCE_OPEN.match(line)
+        if opening:
+            fence = opening.group("fence")
+            if fence[0] == "~" or "`" not in opening.group("info"):
+                marker = fence[0]
+                minimum_length = len(fence)
+                out.append("")
+                continue
+        out.append(line)
     return out
 
 
