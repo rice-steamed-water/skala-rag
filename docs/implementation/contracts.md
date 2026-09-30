@@ -409,8 +409,12 @@ ID 생성은 controller의 공통 함수가 소유하며 LLM이 만들지 않는
 **#6 ID 문자열 인코딩:** `contracts.ids`의 함수는
 `["skala-rag-id-v1", kind, *key_components]` 배열을 UTF-8 JSON으로 직렬화한다
 (`ensure_ascii=False`, 구분자 `,`와 `:`, 추가 공백 없음). SHA-256 전체 hex를
-`{kind}-v1-{digest}` 형태로 반환한다. kind는 `snapshot/eligibility/score/decision`이다.
+`{kind}-v1-{digest}` 형태로 반환한다. kind는 `snapshot/eligibility/score/decision/evidence`이다.
 snapshot key는 위 Freeze 튜플, 나머지는 위 표의 튜플을 그대로 사용한다.
+`evidence_id`(#50)는 §3 중복 병합 계약의 식별 core만 key로 쓰고 provenance·excerpt·해석
+필드는 넣지 않는다. claim은 `normalize_claim`(NFC·공백 축약)으로, 값 1과 1.0은 같은 수로,
+supporting_evidence_ids는 정렬해 비교한다. 같은 Source snapshot·locator의 같은 주장은
+Web/RAG 경로와 무관하게 같은 ID다.
 문자열은 공백뿐인 값을 거절하되 입력 자체를 정규화하지 않는다. 세대·revision은
 bool을 제외한 음이 아닌 정수다. 평가 map key는 `{candidate_id}:{evaluation_round}:{dimension}`을
 유지하며 모호한 분리를 막기 위해 candidate_id와 dimension의 `:`를 거절한다.

@@ -96,7 +96,7 @@ class _Collector:
         self.errors: dict[str, WorkflowError] = {}
 
     def state_map(self, name: str) -> Mapping[str, Any]:
-        value = self.state.get(name) or {}
+        value = self.state.get(name, {})
         if not isinstance(value, Mapping):
             raise _upstream(f"State.{name}가 map이 아니다")
         return value

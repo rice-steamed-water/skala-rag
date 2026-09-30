@@ -26,6 +26,7 @@ pinned 통합 기준 `906312a`에는 baseline DTO/State/reducer/catalog/점수·
 | 창업자·시장·기술·경쟁 우위 rubric, missing 조건 | [핵심 영역 rubric](implementation/rubric-core.md) | 평가 / 지표 담당 |
 | 실적·투자조건 rubric, 재무 단위 규칙 | [재무 rubric](implementation/rubric-finance.md) | 평가 / 지표 담당 |
 | 자료 수집, 코퍼스 manifest, 검색, 임베딩 비교 | [데이터와 RAG](implementation/data-rag.md) | 데이터 / RAG 담당 |
+| adapter readiness·요청 예산·transport retry·LLM 연결 API | [Adapter runtime](implementation/adapter-runtime.md) | live adapter / runner 담당 |
 | mode별 보고서 목차, 인용, 구조 검증 | [보고서 계약](implementation/reporting.md) | 보고서 / 검증 담당 |
 | 작업 패키지, 통합 순서, 테스트, 제출 | [작업 분담과 검증](implementation/delivery.md) | 전원 |
 | 원문 충돌, 새 제안, 승인 기록 | [결정 목록](implementation/decisions.md) | 전원, 정책 결정 담당 |

@@ -1,4 +1,4 @@
-# Traction·Deal Terms rubric과 재무 단위 규칙 — D14 제안
+# Traction·Deal Terms rubric과 재무 단위 규칙 — Finance 승인 / 제안 이력
 
 **현재 구현 방향 — v3 전환 승인:** [사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)에 따라 새 작업은 기존 baseline의 계속 구현이 아니라 v3에 정합화한다. baseline 코드·승인 기록은 호환성과 이력으로 보존하며 새 구현의 우선 방향이 아니다. 방향 승인에 이어 #82 및 #35 comment 5903505208에서 N/A·0분모·최종 selector·재조사 회계·Warning 종료의 운영 규칙을 별도 승인했다. #35 comment 5903574761의 무작위 선정은 평가 전 조사·평가 대상 집합에만 적용하며 최종 selector는 무작위가 아니다. 승인과 구현 완료는 별개이며 rubric 상세·provider·corpus·시간/비용 예산 등 남은 세부 선택만 [결정 목록](decisions.md)의 OPEN gate를 따른다.
 
@@ -9,6 +9,25 @@
 > 상태: **구현 제안 / D14(traction·deal_terms 영역) OPEN** · rubric_version `finance-0.1.0`
 > 근거: 원문 §3 "상세 평가 기준 — 실적 / 투자조건", [scoring §2–§4](scoring.md), 테스트 T21.
 > 아래 **숫자 구간은 팀 승인 전 제안**이다. 승인 전에는 fixture·prompt 개발용으로만 쓰고 실제 추천 결과의 근거로 표시하지 않는다.
+
+
+## 현재 Finance 승인 — #61 (2026-09-30)
+
+승인 근거: #61 comment5906253348 (사용자 승인 기록). `finance-0.1.0`의
+§1–§3 9개 criterion 구간·최소 근거를 승인했다. 아래 제안·OPEN 문구와 Q1–Q6
+작성자 개정 의견은 역사이며 이 승인에 우선하지 않는다. 정책 승인 ≠ live 완료.
+
+- Q1: 원래 구간 유지(ownership x<5%→2 포함). 작은 매출 기저 limitations 필수;
+  새 기저 기준액·rating cap 없음.
+- Q2: pre/post 미상 valuation은 missing, ownership 계산 금지.
+- Q3: 직전 대비 3배·동종 중앙값 대비 2배, snapshot 동종 근거 2건 이상 유지.
+- Q5: CAPEX를 burn에 포함하지 않는다.
+- Q4: **확인된 pre-revenue**만 Rule40 N/A,
+  rule ID `finance-0.1.0:rule40-confirmed-pre-revenue`.
+- Q6: **같은 기간·주체의 영업활동현금흐름 ≥0 확인**만 runway N/A,
+  rule ID `finance-0.1.0:runway-confirmed-nonnegative-ocf`.
+- 두 N/A 모두 rule ID·reason·snapshot Evidence 필수. 미확인/결측은 missing;
+  다른 N/A 없음. runway N/A가 burn=5를 자동 승인하지 않으며 실제 재무 근거 필요.
 
 ## 0. 공통 원칙
 

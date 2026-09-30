@@ -43,3 +43,15 @@
 페이지 총량 검사 없이도 인용 provenance는 보존한다.
 새 corpus_version 승인 시 실제 source/candidate ID, 원문 보관 경로, reviewer,
 사용 권한과 추출 상태를 채운다. 이 초안을 그대로 인덱싱하지 않는다.
+
+## #49 로컬 추출 검증용 승인 기록
+
+2026-09-30 사용자 「전부 다 허용하고 진행해줘」에 따라 π0/π0.5 두 PDF를
+로컬 추출 검증에 사용했다. `issue49-real-validation-v1.json`은 해당 승인·hash·귀속과
+실제 추출 상태(partial)를 담은 별도 runtime manifest이며 기존 후보 초안을 승인
+문서로 바꾸지 않는다. `issue49-source-snapshots.json`은 실제 Source metadata다.
+원문·추출 텍스트는 data/local 및 outputs에만 있고 커밋하지 않는다.
+
+두 문서의 이미지/OCR·회전 텍스트 layout 경고가 남아 있으므로 #44 인덱싱 gate는
+통과하지 못한다. 이 검증은 embedding/index 준비 완료가 아니다. 세부 결과와 범위는
+[추출 검증 기록](../../docs/implementation/extraction-validation.md)을 참고한다.

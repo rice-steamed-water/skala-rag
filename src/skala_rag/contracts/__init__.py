@@ -13,6 +13,8 @@ from .ids import (
     decision_id,
     eligibility_result_id,
     evaluation_key,
+    evidence_id,
+    normalize_claim,
     score_summary_id,
     snapshot_id,
 )
@@ -84,4 +86,6 @@ __all__ = [
     "score_summary_id",
     "decision_id",
     "evaluation_key",
+    "evidence_id",
+    "normalize_claim",
 ]
