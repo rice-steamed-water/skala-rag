@@ -134,6 +134,20 @@ Supersedes:
 
 7개 항목의 승인자·승인일·승인 근거를 기록하고 scoring.md·architecture.md·contracts.md와 문서 홈에 승인 상태를 반영했다. 다른 결정(D07·D09–D14)의 OPEN 상태는 유지한다. 코드·정책 파일은 이 이슈에서 작성하지 않는다. PR 병합은 별도 요청 후 수행한다.
 
+## D09 보고서 형식 검토 기록 — 이슈 #14
+
+- Decision ID: D09 (목차·인용·구조 검증 부분)
+- Status: OPEN
+- Decision: [reporting.md](reporting.md)의 single_candidate/no_recommendation 각각 7개 섹션, Evidence 인용 token과 Source ID 기반 REFERENCE, 서지 미상 표기, SV01–SV09 체크리스트를 채택하는 제안. PDF 전체 5페이지·SUMMARY 반 페이지 과제 조건은 유지한다.
+- Rationale and source: 원문 §9.1–9.3 및 contracts.md §5. 보고서 근거 추적·참고문헌 양방향 일치와 미평가/실패 후보 구분을 구현 가능하게 명시한다.
+- Rejected alternatives: 승인 전 미채택 제안 — 두 mode에 동일 기업 목차 강제; URL만으로 인용 대응; 검색한 모든 자료를 REFERENCE에 포함; 미상 날짜를 수집일로 대체; Markdown 길이로 PDF 분량 판정.
+- Affected documents / policy version / tests: reporting.md, delivery.md §5, docs/README.md. #26 ReportContext, #27 T14·T23, #28 fixture 보고서·수정 loop, #30 E2E. 승인 후 보고서 형식 버전 식별자는 구현 이슈에서 부여.
+- Owner and reviewers: xxhigh / 보고서·Graph·검증 담당 검토 대상(별도 승인 받은 것으로 간주하지 않음).
+- Approval date: 미승인.
+- Supersedes: 없음.
+
+D09 중 렌더러·A4·폰트·여백·SUMMARY 측정 기준·인용 token 화면 변환은 M3까지 OPEN이다. 부분 승인 시 이 기록만 APPROVED로 전환하고 PDF 선택과 D09 전체 완료 여부를 구별한다.
+
 ## 조용히 바꾸면 안 되는 원문
 
 - 현재 팀 가중치를 교수님 예시 `30/25/15/10/10/10`으로 되돌리지 않는다.

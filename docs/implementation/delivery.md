@@ -104,6 +104,8 @@ unit/contract 테스트는 네트워크 없이 실행한다. live integration은
 
 ## 5. 보고서 계약과 PDF 검증
 
+목차·인용 token·서지 누락 표기·mode별 검증의 상세 검토안은 [보고서 계약](reporting.md)에 있다. D09 승인 전 제안이며, 아래 개요와 함께 읽는다.
+
 ### 제안 목차 — D09
 
 ```text
