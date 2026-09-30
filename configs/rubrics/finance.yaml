@@ -1,0 +1,180 @@
+# Traction·Deal Terms rubric — D14 제안 (팀 승인 전)
+# 설명 문서: docs/implementation/rubric-finance.md
+# 구간 표기: [min, max) — min 이상, max 미만. null은 무한대.
+# 승인 전에는 fixture·prompt 개발용이며 실제 추천 근거로 표시하지 않는다.
+
+rubric_version: finance-0.1.0
+status: proposed          # proposed | approved
+decision_id: D14
+scale: {min: 1, max: 5, missing: null}
+comparison: pre_rounding  # 반올림 전 값으로 비교
+
+missing_reasons:
+  - not_disclosed
+  - period_mismatch
+  - currency_mismatch
+  - non_positive_base
+  - non_positive_burn
+  - trend_unavailable
+  - inputs_unavailable
+  - round_mismatch
+  - pre_post_unknown
+  - proxy_only
+  - unresolved_conflict
+
+dimensions:
+  traction:
+    weight: 10
+    criteria:
+      traction.revenue_growth:
+        name: 매출 성장률
+        weight: 3
+        metric: yoy_revenue_growth_pct
+        formula: "(current_revenue - prior_revenue) / prior_revenue * 100"
+        minimum_evidence:
+          - 같은 정의(연결/별도·회계기준)의 두 기간 매출 또는 기간이 명시된 직접 보고 성장률
+        missing_when: [non_positive_base, period_mismatch, currency_mismatch, not_disclosed]
+        applicability_notes: [pre_revenue]
+        bands:
+          - {rating: 1, max: 0}
+          - {rating: 2, min: 0, max: 20}
+          - {rating: 3, min: 20, max: 50}
+          - {rating: 4, min: 50, max: 100}
+          - {rating: 5, min: 100}
+
+      traction.gross_margin:
+        name: 매출총이익률
+        weight: 2
+        metric: gross_margin_pct
+        formula: "(revenue - cost_of_revenue) / revenue * 100"
+        minimum_evidence:
+          - 같은 기간의 매출과 매출원가, 또는 기간이 있는 직접 보고 값
+        missing_when: [non_positive_base, period_mismatch, not_disclosed, proxy_only]
+        bands:
+          - {rating: 1, max: 0}
+          - {rating: 2, min: 0, max: 15}
+          - {rating: 3, min: 15, max: 30}
+          - {rating: 4, min: 30, max: 50}
+          - {rating: 5, min: 50}
+
+      traction.burn:
+        name: 번레이트
+        weight: 1
+        metric: burn_trend
+        definition: "net_burn = abs(operating_cash_flow) if operating_cash_flow < 0 else 0; CAPEX 미포함(baseline)"
+        minimum_evidence:
+          - 두 기간의 영업활동현금흐름과 같은 두 기간 매출
+          - 한 기간만 있으면 영업활동현금흐름 >= 0 인 경우에만 rating 5로 관측
+        missing_when: [trend_unavailable, period_mismatch, proxy_only, not_disclosed]
+        anchors:
+          1: 순현금소모 증가 + 같은 기간 매출 감소
+          2: 순현금소모 증가율 > 매출 성장률
+          3: 순현금소모 증가, 증가율 <= 매출 성장률
+          4: 순현금소모가 전기 대비 감소
+          5: 최근 기간 영업활동현금흐름 >= 0
+
+      traction.runway:
+        name: 런웨이
+        weight: 2
+        metric: remaining_runway_months
+        formula: "cash / monthly_net_burn - months_between(cash_as_of, run_as_of)"
+        unit_rules:
+          result_unit: months
+          annual_to_monthly: "monthly_net_burn = abs(annual_operating_cash_flow) / 12; evidence_kind=derived; derivation에 annual_to_monthly_average 기록"
+          cash: 현금및현금성자산 + 단기금융상품 (같은 기준일)
+          non_positive_denominator: missing(non_positive_burn) + applicability_note operating_cash_flow_non_negative
+          post_date_funding: 기준일 이후 조달은 금액·사건일·라운드 확인 시에만 합산하고 derivation에 기록
+        minimum_evidence:
+          - 같은 재무제표의 기준일 현금과 현금흐름 기간
+          - 또는 기준일이 있는 직접 보고 런웨이
+        missing_when: [non_positive_burn, period_mismatch, not_disclosed]
+        bands:
+          - {rating: 1, max: 6}
+          - {rating: 2, min: 6, max: 12}
+          - {rating: 3, min: 12, max: 18}
+          - {rating: 4, min: 18, max: 24}
+          - {rating: 5, min: 24}
+
+      traction.concentration:
+        name: 고객 집중도
+        weight: 1
+        metric: top1_customer_revenue_share_pct
+        minimum_evidence:
+          - 상위 1개 고객 매출 비중의 직접 수치(감사보고서 주석·공시·IR)
+        missing_when: [proxy_only, not_disclosed]
+        bands:
+          - {rating: 1, min: 70}
+          - {rating: 2, min: 50, max: 70}
+          - {rating: 3, min: 30, max: 50}
+          - {rating: 4, min: 15, max: 30}
+          - {rating: 5, max: 15}
+
+      traction.rule_of_40:
+        name: Rule of 40
+        weight: 1
+        metric: rule_of_40
+        formula: "yoy_revenue_growth_pct + operating_margin_pct (같은 당기)"
+        minimum_evidence:
+          - traction.revenue_growth 입력이 관측 가능하고 같은 당기 영업이익이 있음
+        missing_when: [inputs_unavailable, non_positive_base, period_mismatch]
+        applicability_notes: [pre_revenue]
+        bands:
+          - {rating: 1, max: 0}
+          - {rating: 2, min: 0, max: 20}
+          - {rating: 3, min: 20, max: 40}
+          - {rating: 4, min: 40, max: 60}
+          - {rating: 5, min: 60}
+
+  deal_terms:
+    weight: 10
+    criteria:
+      deal_terms.stage:
+        name: 투자 시리즈
+        weight: 2
+        metric: round_health
+        minimum_evidence:
+          - 라운드 명칭, 사건일(발표일과 구별), 조달 완료 상태
+        missing_when: [unresolved_conflict, not_disclosed]
+        forbidden:
+          - 라운드 단계(Seed<A<B<C)만으로 rating 결정
+          - TIPS 선정만으로 라운드 확정
+        anchors:
+          1: 다운라운드·라운드 무산/철회·기존 투자자 이탈 확인
+          2: 브릿지/익스텐션 반복 또는 직전 라운드 후 36개월 이상 후속 조달 없음
+          3: 라운드 완료 확인, 투자자·규모 정보 제한적
+          4: 라운드 완료와 기관 리드 투자자 확인
+          5: 4 + 기존 투자자 후속 투자 또는 전략적 투자자 참여 확인
+
+      deal_terms.valuation:
+        name: Valuation
+        weight: 5
+        metric: valuation_reasonableness
+        definition: "post_money = pre_money + investment"
+        minimum_evidence:
+          - 금액·통화·날짜·pre/post 구분·해당 라운드
+        missing_when: [pre_post_unknown, round_mismatch, currency_mismatch, not_disclosed]
+        comparison_scope: 같은 EvaluationSnapshot 안의 근거만 사용
+        anchors:
+          1: snapshot 내 동종 비교 근거(2건 이상) 대비 매출 배수가 현저히 높고 실적 근거 없음
+          2: 직전 라운드 대비 크게 상승했으나 실적 개선 근거 없음
+          3: 과도/정당화 근거 모두 제한적 (이유 명시)
+          4: 직전 대비 상승이 실적 근거로 설명되거나 동종 비교 근거와 비슷한 수준
+          5: 4의 두 조건 모두 충족
+        open_questions: [Q2, Q3]
+
+      deal_terms.ownership:
+        name: 지분율
+        weight: 3
+        metric: round_dilution_pct
+        formula: "investment / post_money * 100 (같은 라운드)"
+        minimum_evidence:
+          - 같은 라운드의 투자금과 post-money, 또는 동일 거래 지분율 직접 공개
+        missing_when: [round_mismatch, pre_post_unknown, not_disclosed]
+        bands:
+          - {rating: 1, min: 40}
+          - {rating: 2, min: 30, max: 40}
+          - {rating: 2, max: 5}
+          - {rating: 3, min: 25, max: 30}
+          - {rating: 4, min: 20, max: 25}
+          - {rating: 4, min: 5, max: 10}
+          - {rating: 5, min: 10, max: 20}
