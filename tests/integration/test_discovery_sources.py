@@ -174,8 +174,12 @@ def test_dropped_candidate_sources_are_still_kept(common):
     )
     tool = FixtureSearchCandidates(bundle, run_id="run-t24", clock=FakeClock(NOW))
     outcome = accept_discovery(tool(RUN_INPUT, BUDGET))
-    normalized = normalize_candidates(outcome.bundle.candidates, max_candidates=2)
+    normalized = normalize_candidates(
+        outcome.bundle.candidates,
+        max_candidates=2,
+        limit_policy=lambda candidates, limit: [candidates[-1].candidate_id],
+    )
     state = create_initial_state(RUN_INPUT.model_dump(mode="json"))
     state = apply(state, discovery_state_update(state, outcome, normalized))
-    assert len(state["candidates"]) == 2
+    assert len(state["candidates"]) == 1
     assert set(state["sources"]) == set(common.sources)

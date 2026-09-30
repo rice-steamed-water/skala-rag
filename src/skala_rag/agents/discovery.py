@@ -3,7 +3,9 @@
 - ``accept_discovery``: ``search_candidates`` 결과를 발견/0건/실패로 구별하고
   모든 ``discovery_source_ids``가 bundle ``sources``로 해소되는지 확인한다.
 - ``normalize_candidates``: 동일 법인 중복을 합치고, 이름만 같은 기업은 합치지
-  않는다. 병합마다 근거를 남기고 ``max_candidates``를 적용한다.
+  않는다. 병합마다 근거를 남긴다. 중복 제거 후 ``max_candidates``를 넘으면
+  주입한 ``CandidateLimitPolicy``로만 고른다. 어떤 후보를 남길지는 D08 OPEN
+  (#35)이라 기본 정책이 없고, 정책 없이 초과하면 ``CandidateLimitUnresolved``.
 - ``discovery_state_update``: 발견 Source·검색 이력·오류를 State patch로 만든다.
   이후 Company Research가 실패해도 이 값은 다른 노드가 지우지 않는다.
 
@@ -15,8 +17,9 @@
 3. 어느 것도 같지 않으면 이름이 같아도 별도 후보로 남긴다.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, Protocol, runtime_checkable
 from urllib.parse import urlsplit
 
 from skala_rag.contracts.bundles import DiscoveryBundle
@@ -82,7 +85,24 @@ class NormalizeResult:
     candidates: list[Candidate]
     merges: list[CandidateMerge]
     dropped_candidate_ids: list[str]
-    """중복 제거 후 ``max_candidates``를 넘어 제외된 후보. 발견 순서를 따른다."""
+    """중복 제거 후 상한 정책이 제외한 후보. 발견 순서를 따른다."""
+
+
+class CandidateLimitUnresolved(ValueError):
+    """후보가 상한을 넘었는데 승인된 선택 정책이 주입되지 않았다."""
+
+
+@runtime_checkable
+class CandidateLimitPolicy(Protocol):
+    """상한 초과 시 남길 후보를 고르는 승인 정책(D08, 미결정).
+
+    중복 제거된 후보(발견 순서)와 상한을 받아, 남길 candidate_id를 처리 순서대로
+    돌려준다. 결과는 중복 없는 입력 부분집합이며 1개 이상 ``max_candidates`` 이하.
+    """
+
+    def __call__(
+        self, candidates: Sequence[Candidate], max_candidates: int
+    ) -> Sequence[str]: ...
 
 
 def _country(candidate: Candidate) -> str:
@@ -166,12 +186,17 @@ class _Cluster:
 
 
 def normalize_candidates(
-    candidates: list[Candidate], *, max_candidates: int
+    candidates: list[Candidate],
+    *,
+    max_candidates: int,
+    limit_policy: CandidateLimitPolicy | None = None,
 ) -> NormalizeResult:
     """발견 순서를 유지하며 동일 법인을 첫 후보로 합친다.
 
-    ``max_candidates``는 호출자가 실행 설정(architecture §5)에서 넘긴다.
-    같은 candidate_id인데 다른 법인으로 판단되면 ``ValueError``를 낸다.
+    ``max_candidates``는 호출자가 실행 설정(architecture §5)에서 넘긴다. 상한
+    이내면 모두 남기고, 초과하면 ``limit_policy``의 선택만 따른다. 코드가 임의
+    순서로 자르지 않는다. 같은 candidate_id인데 다른 법인으로 판단되면
+    ``ValueError``를 낸다.
     """
     if type(max_candidates) is not int or max_candidates < 1:
         raise ValueError("max_candidates must be a positive integer")
@@ -207,11 +232,42 @@ def normalize_candidates(
             )
 
     kept = [c.candidate for c in clusters]
-    return NormalizeResult(
-        candidates=kept[:max_candidates],
-        merges=merges,
-        dropped_candidate_ids=[c.candidate_id for c in kept[max_candidates:]],
+    if len(kept) <= max_candidates:
+        return NormalizeResult(kept, merges, [])
+    if limit_policy is None:
+        raise CandidateLimitUnresolved(
+            f"{len(kept)} candidates exceed max_candidates={max_candidates} "
+            "and no approved limit policy is injected (D08 OPEN)"
+        )
+    selected = _check_selection(
+        limit_policy(list(kept), max_candidates), kept, max_candidates
     )
+    by_id = {c.candidate_id: c for c in kept}
+    return NormalizeResult(
+        candidates=[by_id[i] for i in selected],
+        merges=merges,
+        dropped_candidate_ids=[
+            c.candidate_id for c in kept if c.candidate_id not in selected
+        ],
+    )
+
+
+def _check_selection(
+    selected: Sequence[str], kept: list[Candidate], max_candidates: int
+) -> list[str]:
+    ids = list(selected)
+    if not all(isinstance(i, str) for i in ids):
+        raise ValueError("limit policy must return candidate_id strings")
+    if len(set(ids)) != len(ids):
+        raise ValueError("limit policy returned duplicate candidate_id")
+    unknown = set(ids) - {c.candidate_id for c in kept}
+    if unknown:
+        raise ValueError(
+            f"limit policy returned unknown candidate_id {sorted(unknown)}"
+        )
+    if not 1 <= len(ids) <= max_candidates:
+        raise ValueError("limit policy must keep 1..max_candidates candidates")
+    return ids
 
 
 def discovery_state_update(

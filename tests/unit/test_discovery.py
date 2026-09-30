@@ -8,6 +8,8 @@ import pytest
 from tests.fixtures.loader import load_common_fixtures
 
 from skala_rag.agents.discovery import (
+    CandidateLimitPolicy,
+    CandidateLimitUnresolved,
     DiscoveryInvalid,
     accept_discovery,
     normalize_candidates,
@@ -277,16 +279,64 @@ def test_duplicate_candidate_id_merges_but_conflict_raises():
         )
 
 
-def test_max_candidates_applies_after_dedup():
-    raw = [
-        candidate("co-a", legal_identifiers={"brn": "1"}),
-        candidate("co-a2", legal_identifiers={"brn": "1"}),
-        candidate("co-b"),
-        candidate("co-c"),
-    ]
-    result = normalize_candidates(raw, max_candidates=2)
-    assert [c.candidate_id for c in result.candidates] == ["co-a", "co-b"]
-    assert result.dropped_candidate_ids == ["co-c"]
+OVER_LIMIT = [
+    ("co-a", {"brn": "1"}),
+    ("co-a2", {"brn": "1"}),
+    ("co-b", {}),
+    ("co-c", {}),
+]
+
+
+def over_limit():
+    return [candidate(i, legal_identifiers=ids) for i, ids in OVER_LIMIT]
+
+
+def test_limit_counts_after_dedup_without_policy():
+    """중복 제거 후 3개 ≤ 상한 3이면 정책 없이 모두 남는다."""
+    result = normalize_candidates(over_limit(), max_candidates=3)
+    assert [c.candidate_id for c in result.candidates] == ["co-a", "co-b", "co-c"]
+    assert result.dropped_candidate_ids == []
+
+
+def test_over_limit_without_policy_is_not_truncated():
+    """D08 OPEN: 남길 후보 기준이 없으면 발견 순서로 자르지 않고 멈춘다."""
+    with pytest.raises(CandidateLimitUnresolved, match="D08"):
+        normalize_candidates(over_limit(), max_candidates=2)
+
+
+def test_over_limit_follows_injected_policy_only():
+    calls = []
+
+    def pick_last(candidates, max_candidates):
+        calls.append(([c.candidate_id for c in candidates], max_candidates))
+        return ["co-c", "co-a"]
+
+    assert isinstance(pick_last, CandidateLimitPolicy)
+    result = normalize_candidates(
+        over_limit(), max_candidates=2, limit_policy=pick_last
+    )
+    assert calls == [(["co-a", "co-b", "co-c"], 2)]
+    assert [c.candidate_id for c in result.candidates] == ["co-c", "co-a"]
+    assert result.candidates[1].discovery_source_ids == ["src-co-a", "src-co-a2"]
+    assert result.dropped_candidate_ids == ["co-b"]
+
+
+def test_policy_not_called_within_limit():
+    def refuse(candidates, max_candidates):
+        raise AssertionError("policy called within limit")
+
+    normalize_candidates(over_limit(), max_candidates=5, limit_policy=refuse)
+
+
+@pytest.mark.parametrize(
+    "selection",
+    [["co-a", "co-b", "co-c"], [], ["co-a", "co-a"], ["co-a2"], ["co-x"], [1]],
+)
+def test_invalid_policy_selection_rejected(selection):
+    with pytest.raises(ValueError):
+        normalize_candidates(
+            over_limit(), max_candidates=2, limit_policy=lambda c, m: selection
+        )
 
 
 @pytest.mark.parametrize("bad", [0, -1, True, 2.0])
