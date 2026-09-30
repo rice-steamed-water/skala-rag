@@ -12,6 +12,13 @@ from functools import lru_cache
 from pathlib import Path
 
 from skala_rag.contracts import ReportDraft
+from skala_rag.reporting.research_presentation import CSS as RESEARCH_CSS
+from skala_rag.reporting.research_presentation import (
+    ROLES,
+    review_evidence_ids,
+    role_details,
+    scoreboard,
+)
 from skala_rag.reporting.v3_context import ReportContextV3
 
 FONT_ROOT = Path(__file__).with_name("fonts")
@@ -100,11 +107,23 @@ class _Builder:
         self.evidence = data["evidence"]
         self.sources = data["sources"]
         self.research = data.get("policy_version") == "unscored-research-only-1"
+        evidence_ids = list(draft.cited_evidence_ids)
+        source_ids = list(draft.reference_source_ids)
+        if self.research:
+            for role in ROLES:
+                for eid in review_evidence_ids(
+                    data.get("live_reviews", {}).get(role, {})
+                ):
+                    if eid in self.evidence:
+                        evidence_ids.append(eid)
+                        sid = self.evidence[eid].get("source_id")
+                        if sid in self.sources:
+                            source_ids.append(sid)
         self.evidence_labels = {
-            eid: n for n, eid in enumerate(dict.fromkeys(draft.cited_evidence_ids), 1)
+            eid: n for n, eid in enumerate(dict.fromkeys(evidence_ids), 1)
         }
         self.source_labels = {
-            sid: n for n, sid in enumerate(dict.fromkeys(draft.reference_source_ids), 1)
+            sid: n for n, sid in enumerate(dict.fromkeys(source_ids), 1)
         }
         self.refs = set()
 
@@ -123,7 +142,8 @@ class _Builder:
             if self.research and kind == "evidence" and ident in self.evidence_labels:
                 number = self.evidence_labels[ident]
                 out.append(
-                    f'<a class="cite" href="#evidence-{number}">[근거 {number}]</a>'
+                    f'<sup class="citation"><a class="cite" aria-label="근거 {number}" '
+                    f'href="#evidence-{number}">[{number}]</a></sup>'
                 )
             elif self.research and kind == "source" and ident in self.source_labels:
                 number = self.source_labels[ident]
@@ -133,6 +153,8 @@ class _Builder:
                         f'<a class="cite" href="#{_anchor(source)}">{readable}</a>'
                     )
                 out.append(f'{readable} <span class="machine-citation">{label}</span>')
+            elif self.research and kind == "evidence":
+                out.append(f'<span class="unresolved">미해소 근거: {_e(ident)}</span>')
             elif link and source in self.refs:
                 out.append(f'<a class="cite" href="#{_e(_anchor(source))}">{label}</a>')
             else:
@@ -157,6 +179,14 @@ class _Builder:
             source = self.sources.get(evidence.get("source_id"), {})
             excerpt = " ".join(_v(evidence.get("excerpt")).split())
             excerpt = excerpt[:480] + (" … [이하 생략]" if len(excerpt) > 480 else "")
+            trace = (
+                " · ".join(
+                    f"{p.get('method', '미상')}: {p.get('chunk_id') or '미상'} / "
+                    f"{p.get('retrieval_id') or '미상'}"
+                    for p in evidence.get("provenance", [])
+                )
+                or "미상"
+            )
             parts.append(
                 f'<div class="evidence-entry" id="evidence-{number}">'
                 f"<h3>근거 {number}</h3>"
@@ -164,6 +194,9 @@ class _Builder:
                 f"URL: {_e(_v(source.get('url')))}<br>"
                 f"위치: {_e(_v(evidence.get('locator')))}</p>"
                 f'<p class="evidence-excerpt">{_e(excerpt)}</p>'
+                f'<p class="meta">근거 유형: {_e(_v(evidence.get("evidence_kind")))} · '
+                f"저장 신뢰도: {_e(_v(evidence.get('confidence')))}</p>"
+                f'<p class="machine-citation">추적: {_e(trace)}</p>'
                 f'<p class="machine-citation">[@evidence:{_e(eid)}]</p></div>'
             )
         return "".join(parts) + "</section><h3>고유 출처 참고문헌</h3>"
@@ -302,18 +335,35 @@ def render_report_html(draft: ReportDraft, context: ReportContextV3) -> str:
                 m = re.match("- " + TOKEN.pattern, line.strip())
                 if m and m.group(1) == "source":
                     builder.refs.add(m.group(2))
+    if builder.research:
+        for name, lines in sections:
+            if name == "REFERENCE":
+                for sid in builder.source_labels:
+                    if sid not in builder.refs:
+                        source = builder.sources.get(sid, {})
+                        lines.append(
+                            f"- [@source:{sid}] 역할 출력 추가 참조 · "
+                            f"{_v(source.get('author'))} "
+                            f"({_v(source.get('published_at'))}). "
+                            f"{_v(source.get('title'))}. {_v(source.get('url'))}"
+                        )
+                        builder.refs.add(sid)
     body = []
     for name, lines in sections:
         extra = _extras(data) if name == "INVESTMENT ASSESSMENT & RISKS" else ""
         evidence_list = (
             builder.cited_evidence() if name == "REFERENCE" and builder.research else ""
         )
+        if builder.research:
+            extra += role_details(data, name, builder.inline)
         body.append(
             f'<section id="{_section_id(name)}" data-section="{_e(name)}">'
             f"<h2>{TITLES[name]}</h2>"
             f"{evidence_list}{builder.blocks(lines, name == 'REFERENCE')}"
             f"{extra}</section>"
         )
+        if name == "SUMMARY" and builder.research:
+            body.append(scoreboard(data))
     banner = (
         f'<div class="banner">{BANNER}</div>'
         if data["execution_mode"] == "fixture"
@@ -323,11 +373,18 @@ def render_report_html(draft: ReportDraft, context: ReportContextV3) -> str:
         f"보고서 {_e(draft.report_id)} · 수정 {draft.revision} · "
         f"기준일 {_e(data['as_of'])} · 코퍼스 {_e(data['corpus_version'])}"
     )
+    header = f'<h1>{_e(title)}</h1><p class="meta">{meta}</p>{banner}'
+    body_tag, styles = "<body>", CSS
+    if builder.research:
+        header = (
+            '<header class="report-masthead"><p class="edition">RESEARCH BRIEF · '
+            "자료 기반 / 투자 평가 미실시</p>" + header + "</header>"
+        )
+        body_tag, styles = '<body class="research-report">', CSS + RESEARCH_CSS
     return (
         '<!DOCTYPE html>\n<html lang="ko"><head><meta charset="utf-8">'
         f'<meta http-equiv="Content-Security-Policy" content="{CSP}">'
         f"<title>{_e(title)}</title>"
-        f"<style>{_font_css()}{CSS}</style></head><body>"
-        f'<h1>{_e(title)}</h1><p class="meta">{meta}</p>{banner}'
-        f"{_card(data)}{''.join(body)}</body></html>\n"
+        f"<style>{_font_css()}{styles}</style></head>{body_tag}"
+        f"{header}{_card(data)}{''.join(body)}</body></html>\n"
     )
