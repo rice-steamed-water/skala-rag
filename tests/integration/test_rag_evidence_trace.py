@@ -237,6 +237,32 @@ def test_violating_backend_result_is_rejected(fx, bad_chunk, reason):
     assert retriever.cache_keys == []  # 실패는 cache하지 않는다
 
 
+@pytest.mark.parametrize("malformed", ["missing_source", "wrong_source_key", "shape"])
+def test_malformed_backend_bundle_is_recorded_failure(fx, malformed):
+    chunk = fx.chunks["chunk-fixture-eligible"]
+    source = fx.sources[chunk.source_id]
+
+    def broken(req):
+        if malformed == "shape":
+            return {"chunks": [chunk], "sources": {source.source_id: source}}
+        sources = {} if malformed == "missing_source" else {"wrong-key": source}
+        return RetrievalBundle.model_construct(
+            schema_version=SCHEMA,
+            chunks=[chunk],
+            sources=sources,
+        )
+
+    retriever = make_retriever(fx, broken)
+    result = retriever(request())
+    assert result.status == "failed" and result.data is None
+    assert result.errors[0].error_code == "TOOL_RESPONSE_INVALID"
+    assert result.errors[0].message_redacted == "INVALID_RETRIEVAL_BUNDLE"
+    record = result.retrieval_records[0]
+    assert record.status == "failed" and record.chunk_ids == []
+    assert record.error_id == result.errors[0].error_id
+    assert retriever.cache_keys == []
+
+
 def test_unconfigured_index_is_unavailable(fx):
     result = make_retriever(fx)(request(index_version="index-other"))
     assert result.status == "unavailable"
