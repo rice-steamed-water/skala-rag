@@ -1,6 +1,6 @@
 # 팀 구현 가이드 — Robotics Startup Agentic RAG
 
-> 상태: **v3 목표 정합화 / baseline 승인 기록 보존 / v3 대체안 별도 승인 필요** · 기준일: 2026-09-30 KST
+> 상태: **v3 전환 방향 승인 / baseline 이력 보존 / 세부 정책 OPEN** · 기준일: 2026-09-30 KST
 > 대상: 기능을 나누어 구현하고 통합할 팀원
 > 새 설계 입력: [설계 v3](design/design-v3.html) · 이전 설계·과제 요구: [통합 원문](raws/robotics_startup_agentic_rag_notion_integrated.md)
 
@@ -52,14 +52,14 @@
 | 표기 | 의미 | 변경 방법 |
 | --- | --- | --- |
 | **과제 필수** | 원문에 실린 교수님 요구사항 | 팀 임의 완화 없이 담당 교수님 확인 |
-| **v3 명시 목표** | 사용자가 새 설계 입력으로 지정한 v3의 명시 내용 | 구현 목표에 우선 반영; 팀 승인·구현 완료와 구분 |
+| **v3 명시 목표** | 사용자가 전환 방향을 승인한 v3의 명시 내용 | 새 구현의 우선 방향; 세부 정책 승인·구현 완료와 구분 |
 | **이전 원문 팀안** | 통합 원문에 보존된 이전 설계 | v3와 충돌하면 과거 제안으로 추적; 과제 요구 누락은 폐기로 해석하지 않음 |
 | **구현 제안** | 원문을 실행 가능한 계약으로 보완한 초안 | 팀 승인 후 채택; 승인 전 확정안으로 표현하지 않음 |
 | **미결정** | 원문만으로 결론을 낼 수 없는 사항 | 담당자·결정·근거·승인일 기록 |
 
-각 상세 문서의 새 필드, 예외 처리, 함수명은 별도 표시가 없어도 **구현 제안**이다. #3 issue comment의 D01–D06·D08 baseline 승인 기록은 존재하지만, v3가 바꾸는 selector·N/A·Warning 세부는 자동으로 승인되지 않아 `v3-OPEN`이다. v3의 명시 내용은 목표로 반영하되 세부 정책을 승인 없이 기본값으로 만들지 않는다. OPEN에 의존하는 기능은 주입된 가상 정책·인터페이스까지만 진행하고 live를 차단한다.
+**현재 구현 방향 — v3 전환 승인:** [사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)에 따라 새 작업은 기존 baseline의 계속 구현이 아니라 v3에 정합화한다. baseline 코드·승인 기록은 호환성과 이력으로 보존하며 새 구현의 우선 방향이 아니다. 방향 승인은 상세 정책·DTO 전체 필드·provider·corpus·시간/비용 예산 승인이나 구현 완료가 아니다. 남은 세부 선택만 [결정 목록](implementation/decisions.md)의 OPEN gate를 따른다. 각 상세 문서의 새 필드·예외 처리·함수명은 별도 승인 기록이 없는 한 구현 제안이다. OPEN에 의존하는 선택은 주입된 가상 정책·인터페이스까지만 진행하고 해당 live 실행을 차단한다.
 
-D09의 baseline 목차(single_candidate/no_recommendation 각각 7개 섹션)·인용·서지 미상 표기·SV01–SV09 구조 검증은 2026-09-30 xxhigh가 부분 승인했다([보고서 계약](implementation/reporting.md)). 이 승인은 v3 E-1 다섯 목차·전 후보 selector·Warning 대체안을 승인하지 않는다. PDF 구현 선택은 OPEN이며 대체 승인 전에는 baseline 계약의 승인 범위를 유지한다.
+D09의 baseline 목차(single_candidate/no_recommendation 각각 7개 섹션)·인용·서지 미상 표기·SV01–SV09 구조 검증의 2026-09-30 xxhigh 부분 승인은 이력으로 보존한다([보고서 계약](implementation/reporting.md)). 이후 사용자 승인으로 새 구현은 v3 E-1 다섯 목차·전 후보 selector·Warning 방향을 따른다. mode별 예외·구조 검증 상세와 PDF 구현 선택은 OPEN이며 과거 승인이 그 세부를 자동 승인하지 않는다.
 
 ## 필수 요구사항과 검증 위치
 

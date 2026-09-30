@@ -1,22 +1,35 @@
-# 결정 목록 — 승인 전에는 제안이다
+# 결정 목록 — v3 방향 승인과 세부 정책 OPEN
 
 [문서 홈](../README.md) · [v3 원문](../design/design-v3.html) · [이전 통합 원문](../raws/robotics_startup_agentic_rag_notion_integrated.md) · [정합화·영향표](design-v3-alignment.md)
 
-2026-09-30 기준 사용자가 v3를 새 설계 입력으로 지정했다. **v3 명시 목표 ≠ baseline 정책 승인 ≠ main 구현/검증**이다. issue #3 comment `5902473875` (2026-09-30 01:49:36Z, xxhigh)는 PR #41 head `7b9f6cee8f36a016d5f47191b41999430390e6ee`의 D01–D06·D08 **기존 baseline을 변경 없이 승인**한 기록이다. 그러나 그 baseline의 first-RECOMMEND 종료·serial Deal·fixed100·all-domain-low 같은 전제는 v3 목표와 다르다. 따라서 아래 표의 D01–D06·D08은 v3 대체 세부에 관한 `v3-OPEN`이며, 승인 이력을 지우거나 `SUPERSEDED`로 바꾸지 않는다. v3 replacement를 승인할 때만 근거·정확한 supersession 범위를 기록한다. D07·D10–D14와 live 총시간·LLM 호출·비용 상한은 이슈 #3 승인 범위 밖이다. D09는 이슈 #14의 후속 승인으로 baseline 목차·인용·구조 검증이 부분 APPROVED이며, PDF 선택과 v3 다섯 목차·Warning 대체 세부는 OPEN이다. 아래 D09 행은 승인된 baseline과 별도 v3 대체안을 구별한다.
+2026-09-30T02:29:07Z의 [승인 근거 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715)에 따라 **기존 baseline을 계속 구현하는 대신 v3로 전환하는 사용자 방향 승인이 확인되었다**. 새 구현은 v3를 따른다. 방향 승인 ≠ 세부 정책 전체 승인 ≠ main 구현/검증이다. #3 comment 5902473875의 D01–D06·D08 baseline 승인과 #14의 D09 부분 승인 및 D14 OPEN 원본 기록은 역사·호환성 근거로 그대로 보존한다. 아래 `v3-OPEN`은 이미 승인된 전환 방향이 아니라 아직 명시되지 않은 세부 선택에만 적용한다. 정확한 정책별 대체 범위·버전은 해당 후속 결정에 남기며 과거 기록의 상태를 일괄 SUPERSEDED로 바꾸지 않는다.
 
-## 구현 전에 합의할 항목
+## v3 전환 방향 승인 — 별도 기록
+
+- Decision ID: V3-TRANSITION
+- Status: APPROVED (전환 방향만)
+- Decision: baseline 계속 구현 대신 관련 정책·계약·이슈를 v3에 정합화한다. 새 구현 방향은 전 후보 처리 후 deterministic selector, 5 branch/6 dimension과 atomic Business & Deal, Missing은 분모에 포함하고 해당 없음 N/A만 제외, 네 label, market/technology 적용가능 배점 대비 40% 보류, 재조사·보고서 수정 각각 최대2회 및 수정 소진 후 Warning·현재 결과 반환, E-1 다섯 보고서 섹션이다.
+- Rationale and source: [승인 근거 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317); 작성자 luk0715가 사용자 확인 응답에 따른 전환 승인을 기록했다.
+- Rejected alternatives: 새 구현에서 기존 baseline을 계속 따르는 방향은 채택하지 않는다. 미명시 정책별 대안의 최종 선택·기각은 이 기록으로 추정하지 않는다.
+- Affected documents / policy version / tests: #35의 구현 가이드와 후속 구현 이슈. 기존 코드·fixture는 호환성과 역사로 보존하며 이 문서 수정 자체는 v3 코드 구현·검증이 아니다. 새 catalog/schema/policy 버전은 미정이다.
+- Owner and reviewers: 사용자 방향 승인; 근거 기록 작성자 luk0715. 세부 정책 담당자의 별도 승인을 추정하지 않는다.
+- Approval date: 2026-09-30T02:29:07Z (근거 코멘트 기록 시각).
+- Supersedes: 새 작업의 “baseline 계속 구현” 방향만 전환한다. 역사적 D01–D06·D08 APPROVED, D09 부분 APPROVED, D14 OPEN 레코드는 변경하지 않는다. 미명시 정책의 정확한 supersession·버전·수치를 임의 확정하지 않는다.
+- Still OPEN: selector 순위·동점·all-WATCHLIST/PASS·all-none, N/A 적용성 근거/검증 주체·전체/차원 0분모, 부분 핵심 missing·소수/대표 reason, eligibility 최소 Evidence gate, 초기/오류/empty·도구 retry 회계, Warning acceptance/publication/workflow/CLI/manifest·PDF 동작, catalog/schema 버전, rubric, provider·corpus·시간/LLM 호출/비용 예산.
+
+## 구현 전에 합의할 세부 항목
 
 | ID / 상태 | 이전 제안의 이력 | v3 목표 / 근거 | 남은 결정·제안 / 차단 대상 |
 | --- | --- | --- | --- |
 | D01 v3-OPEN | 통합 원문 §3·§7의 팀안/교수 예시/단계별 비중이 공존 | C-1의 23개 criterion, `5/30/25/20/10/10`, 원 catalog 합 100 | 지표 담당: catalog ID·버전 승인. 단계별 비중 자동 변경 금지; N/A 분모는 D05와 함께 검증 / 점수 정책 |
 | D02 v3-OPEN | 과거 모든 상위 영역의 관측 평균 rating≤2 보류안은 v3 대상 아님 | C-2의 1..5 anchor; C-4의 market/technology만 적용가능 배점 대비 획득≤40%, 결측≥30%, 네 label | 지표 담당: 소수 연속 구간·반올림 전 비교·다중 reason 대표표시 우선순위. 부분/완전 핵심 missing의 비율과 관측 저점수를 설명에서 구별 / 평가·판정 |
 | D03 v3-OPEN | 과거 첫 RECOMMEND 종료·나머지 not_evaluated는 v3 대상 아님 | B-1/D-3: 전 후보 처리 후 deterministic selector; 무적격은 selected=None+사유 보고서 | Graph+전원: label/score 우선, tie-break, 전부 WATCHLIST/PASS, 성공 평가 없음, 비교 대상 제외 기준·report mode. 임의 candidate_id/입력순 정렬 금지 / selector·종료 |
-| D04 v3-OPEN | 과거 5개 평가 뒤 직렬 Deal Terms안은 v3 대상 아님 | B-1/D-2: 5번째 Business & Deal가 실적·투자조건 함께 담당; 5 branch/6 dimension | 평가+Graph: `business_deal` branch의 `{traction, deal_terms}` atomic envelope, key·wrapper·schema version. 일부 실패 성공 승격 금지 / DTO·Join |
-| D05 v3-OPEN | 과거 고정 분모 100·not_applicable 미채택안은 v3 대상 아님 | C-3: Missing 포함, 해당 없음만 분모 제외; C-2의 근거부족 N/A 표기는 내부 충돌 | 데이터+지표: missing/not_applicable 구분 해석 승인, 적용성 근거·검증 주체, 전체/차원 0분모 결과. 최소 Evidence gate와 Coverage 충분성·gap 우선순위 / Coverage·집계 |
+| D04 v3-OPEN | 과거 5개 평가 뒤 직렬 Deal Terms안은 v3 대상 아님 | B-1/D-2: 5번째 Business & Deal가 실적·투자조건 함께 담당; 5 branch/6 dimension | 평가+Graph: atomic Business & Deal 방향은 승인됨; `business_deal`/`{traction, deal_terms}`의 구체 envelope 필드·key·wrapper·schema version. 일부 실패 성공 승격 금지 / DTO·Join |
+| D05 v3-OPEN | 과거 고정 분모 100·not_applicable 미채택안은 v3 대상 아님 | C-3: Missing 포함, 해당 없음만 분모 제외; C-2의 근거부족 N/A 표기는 내부 충돌 | 데이터+지표: Missing 포함/N/A 제외 방향은 승인됨; machine status·C-2 문구 상세 해석, 적용성 근거·검증 주체, 전체/차원 0분모 결과. 최소 Evidence gate와 Coverage 충분성·gap 우선순위 / Coverage·집계 |
 | D06 v3-OPEN | 통합 원문 §7의 TIPS·프리/브릿지·추정 정규화는 확인 필요 | A-2/B-1: 비상장·Seed~C·Exit 미완료·최소 Evidence 확보 가능 | Discovery+전원: 최소 Evidence가 확보 가능성/현재 확보 중 무엇인지, Company Research 경계·unknown 보강/다음 후보, 프리시드 허용. TIPS/검색0건/unknown 자동 적격 금지 / Eligibility |
 | D07 OPEN | 과거 BGE/Jina/OpenAI 비교 참고는 v3 baseline이 아님 | B-3: BGE-M3 1차 선택, e5-large·KURE-v1과 동일 Chunk/Query의 Hit Rate@1/3/5·MRR·교차언어 비교 | RAG: 최종 선택, 모델 revision·접근/라이선스 실확인, MRR depth/cutoff·성능 기준·vector store·장비. 실험은 M2 / live index |
 | D08 v3-OPEN | baseline의 후보5·추가조사2·보고서수정2, batch8calls·retry2·timeout30초와 공유 회계는 승인됨. 이를 v3 회계·Warning 경로가 자동 대체하지 않음 | D-2/D-3: Coverage에서 Evidence 재조사 최대2회 후 평가; 구조·의미 수정 공유2회 후 Warning 현재 결과 반환 | Graph+전원: 초기 제외/포함·빈/오류 batch·네트워크 retry·Company Research 별도 회계, 실행 예산, Warning 결과/acceptance/publication·workflow_status/CLI/manifest 매핑 / live·종료 |
-| D09 baseline 부분 APPROVED / v3-OPEN | reporting.md의 mode별 7개 목차·인용·서지 미상 표기·SV01–SV09는 #14 승인; 아래 원본 기록 보존 | E-1/E-2 다섯 목차로의 대체와 무적격/Warning 예외는 별도 승인 대상, PDF≤5·SUMMARY≤0.5 유지 | 보고서: renderer·A4·폰트·여백·SUMMARY 측정, v3 구조 검증·mode 매핑, layout 수정예산 / 보고서·제출 |
+| D09 baseline 부분 APPROVED / v3-OPEN | reporting.md의 mode별 7개 목차·인용·서지 미상 표기·SV01–SV09는 #14 승인; 아래 원본 기록 보존 | E-1/E-2 다섯 목차 방향은 사용자 승인; 무적격/Warning 예외·검증 상세는 OPEN, PDF≤5·SUMMARY≤0.5 유지 | 보고서: renderer·A4·폰트·여백·SUMMARY 측정, v3 구조 검증·mode 매핑, layout 수정예산 / 보고서·제출 |
 | D10 OPEN | 통합 원문 §11/§12의 별명·역할 매핑 미확정 | v3 표지는 울산 4반 2조, 김근홍·정순욱·허지원·심혁·박태준·한유진 명시 | 전원: 표지 명단≠실제 역할/계정. 이슈·PR 수행 증거와 본인 확인으로 Contributors 기록, 자동 매칭 금지 / 기여 역할 |
 | D11 OPEN | 통합 원문 §10의 DAY 3 일정만 있음 | v3가 캠퍼스·반·조는 제공하지만 실제 제출일은 제공하지 않음 | 전원: DAY 3 10:00 설계/15:00 개발의 실제 날짜·시간대·Slack thread 확인 / 제출 |
 | D12 OPEN | 통합 원문 §1·§5 국내 중심 API와 국내외 탐색 목표 차이 | v3 A의 Physical AI / Robotics 도메인 | Discovery: 국가 범위·지원 provider·해외 미지원 표시. 한국 fixture를 최종 지역 제한 승인으로 보지 않음 / live 탐색 |
@@ -28,18 +41,18 @@
 - **D02/D05:** C-2의 근거 부족 N/A는 machine `missing`, C-3의 해당 없음은 `not_applicable`로 분리하는 안을 확인한다. 전체/비핵심/핵심차원 분모 0 각각에 대해 null·오류·보류·계속 여부를 선택한다. 공개되지 않은 값이 분모에서 사라지면 안 된다.
 - **D02:** `70≤s<80`, `60≤s<70`의 연속 구간, 정확도·표시 반올림, missing≥30과 핵심≤40 동시 발생 시 대표 grade를 정한다. 모든 reason은 보존하고 부족 근거를 부정 관측으로 설명하지 않는다.
 - **D03:** Selector는 모든 candidate outcome을 검증하되 적격·정상 평가 결과만 추천할 수 있다. 정렬 키/방향·동점·순서 불변성·모두 WATCHLIST/PASS·성공 평가 없음의 반환 방식을 명시한다. 무적격 None과 전부 기술 실패를 구별한다.
-- **D04:** [공통 계약](contracts.md)의 5개 branch-key envelope→6개 dimension-key 성공 map을 검토한다. Business & Deal의 두 payload 중 하나만 유효할 때 전체 branch failure, Join 후에만 원자적 승격하는 안을 승인한다.
+- **D04:** [공통 계약](contracts.md)의 5개 branch-key envelope→6개 dimension-key 성공 map을 검토한다. Business & Deal 원자성 방향은 승인되었으며, 이를 표현할 envelope 필드·key·wrapper·schema version과 Join 계약의 구체 shape를 확정한다.
 - **D05/D06:** 여섯 차원 최소 Evidence 확보 가능성의 검사 항목·근거/책임, unknown 처리, Company Research와 Evidence Research 경계를 정한다. Coverage 30%를 Eligibility gate로 복사하지 않는다.
-- **D08:** 최초 수집 제외 추가2회·요청 전 count+1·empty/failure도 소비하는 안과 Company Research/도구 retry 별도 한도를 검토한다. 보고서는 최초 생성 제외 구조+의미 공유2회 수정, 그 후 현재 draft+findings+Warning 반환을 제안한다. PDF layout은 공유 여부를 따로 정한다.
+- **D08:** 최초 수집 제외 추가2회·요청 전 count+1·empty/failure도 소비하는 안과 Company Research/도구 retry 별도 한도를 검토한다. 보고서 최대2회 수정 후 Warning·현재 결과 반환 방향은 승인되었다. 최초 생성 제외 및 공유 회계·findings payload는 세부 제안이다. PDF layout은 공유 여부를 따로 정한다.
 - **D08/D09:** 실행 종료·현재 결과 반환·검증 수용·final 발행을 분리한다. v3 `running/completed/failed`에 Warning을 매핑하는 방법과 CLI exit·artifact 이름·manifest를 정한다. 미검증 draft의 final 승격 금지와 context/upstream fatal 경계를 유지한다. 새 workflow enum은 승인 전 추가하지 않는다.
 
 이 질문이 미정인 채로도 schema/가상 정책 주입/조건부 fixture는 작성할 수 있다. 단, 영향을 받는 live 실행은 승인 정책·예산·readiness를 검사해 **시작 전 차단**해야 한다. 설명용 예시 숫자가 있다는 사실은 해당 정책의 승인 증거가 아니다.
 
-표의 `v3-OPEN`은 별도 v3 대체안의 `Status: OPEN`을 뜻하는 문맥 표기다. 아래 원본 승인 레코드의 상태를 바꾸지 않는다. 대체 승인이 기록되기 전까지 baseline의 승인 권한은 유지되며, 실행은 사용한 정책 버전과 승인 범위를 명시해야 한다. v3 가상 fixture의 성공은 baseline 변경 승인이 아니다.
+표의 `v3-OPEN`은 승인된 v3 방향 안에서 남은 세부 정책의 `Status: OPEN`을 뜻한다. 아래 원본 승인 레코드의 상태를 바꾸지 않는다. 기존 baseline은 호환성·역사로 보존하지만 새 작업의 우선 방향은 아니다. 실행에 사용할 정책 버전과 승인 범위를 명시해야 하며, v3 가상 fixture의 성공이 미정 세부의 승인 근거는 아니다.
 
 ## 승인 방법
 
-v3 replacement에서 결정할 수 없는 항목은 `v3-OPEN`으로 남기고, 해당 기능은 fixture/인터페이스까지만 구현한다. baseline 승인 기록을 OPEN으로 되돌리거나, 반대로 이를 v3 replacement의 승인으로 읽지 않는다. `OPEN`을 기본값으로 감추거나 LLM이 실행 때 임의 결정하게 하지 않는다.
+승인된 v3 방향만으로 결정할 수 없는 세부 항목은 `v3-OPEN`으로 남기고, 해당 기능은 fixture/인터페이스까지만 구현한다. baseline 승인 기록을 OPEN으로 되돌리거나, 반대로 이를 v3 replacement의 승인으로 읽지 않는다. `OPEN`을 기본값으로 감추거나 LLM이 실행 때 임의 결정하게 하지 않는다.
 
 결정마다 아래 양식을 채운다. 거절된 대안도 남겨 같은 논의를 반복하지 않게 한다.
 
@@ -192,7 +205,7 @@ D09 중 렌더러·A4·폰트·여백·SUMMARY 측정 기준·인용 token 화�
 
 - 현재 팀 가중치를 교수님 예시 `30/25/15/10/10/10`으로 되돌리지 않는다.
 - `PASS`를 적격성 통과나 보고서 검증 통과라는 의미로 재사용하지 않는다.
-- 5개 branch라는 이유로 투자조건 차원을 누락하지 않는다. v3 목표는 해당 없음만 승인된 적용성으로 분모에서 제외하고 Missing/실패를 삭제해 100으로 재정규화하지 않는 것이다. N/A 제외는 `v3-OPEN`이며 D05 대체 승인 전 baseline은 고정100 + `missing + applicability_note`를 유지한다.
+- 5개 branch라는 이유로 투자조건 차원을 누락하지 않는다. 승인된 v3 방향은 해당 없음 N/A만 분모에서 제외하고 Missing은 남기는 것이다. 적용성 근거·rule·0분모 등 세부는 `v3-OPEN`이다. 기존 고정100 + `missing + applicability_note`는 baseline 호환성·역사이며 새 구현의 우선 방향이 아니다.
 - “특정 항목 2점”을 비중이 1점인 세부항목의 획득점수와 직접 비교하지 않는다.
 - 최종 embedding 후보가 공개되어 있다는 사실만으로 과제의 오픈소스 요구 충족을 선언하지 않는다.
 - 원문의 도구 비용·접근성 표는 당시 메모다. 키 발급, 이용조건, 접근 성공은 구현 시 다시 확인해야 한다.

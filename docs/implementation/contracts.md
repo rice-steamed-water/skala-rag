@@ -4,7 +4,9 @@
 
 근거: [v3](../design/design-v3.html) B-1, C-1–C-4, D-1–D-3, E 및 이전 원문 §7의 StageInfo. v3의 5 branch/6 dimension·수집 책임·점수·종료 목표를 구체화한 **DTO 필드와 검증 규칙은 구현 제안**이다. 현재 main에는 #5의 구조 DTO와 #7의 `InvestmentState`/`create_initial_state`가 있으며, 그 import·검증 범위와 v3 목표는 구별한다([정합화 기록](design-v3-alignment.md)). #3의 기록된 baseline 승인과 v3 대체안도 별개이므로, D04·D05·D08 등의 v3 세부 선택을 이 문서가 자동 승인하지 않는다.
 
-**기존 baseline 승인 범위:** 다음 네 bullet은 2026-09-30 xxhigh가 승인한 D01–D06·D08의 요약이다([승인 기록](decisions.md#m0-승인-검토-기록--이슈-3)). 별도 대체 승인 전까지 baseline의 승인 상태는 유지된다. §1 이후의 v3 목표 계약, 특히 N/A 분모·Business & Deal·전체 후보 selector·Warning에 이 승인을 전이하지 않는다. DTO의 전체 필드나 모든 구현 선택을 승인한 것도 아니다.
+**현재 구현 방향 — v3 전환 승인:** [사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)에 따라 새 작업은 기존 baseline의 계속 구현이 아니라 v3에 정합화한다. baseline 코드·승인 기록은 호환성과 이력으로 보존하며 새 구현의 우선 방향이 아니다. 방향 승인은 상세 정책·DTO 전체 필드·provider·corpus·시간/비용 예산 승인이나 구현 완료가 아니다. 남은 세부 선택만 [결정 목록](decisions.md)의 OPEN gate를 따른다.
+
+**기존 baseline 승인 범위:** 다음 네 bullet은 2026-09-30 xxhigh가 승인한 D01–D06·D08의 요약이다([승인 기록](decisions.md#m0-승인-검토-기록--이슈-3)). baseline의 승인 상태는 역사 기록으로 유지된다. §1 이후의 N/A 분모·atomic Business & Deal·전체 후보 selector·Warning 방향은 별도 사용자 전환 승인에 근거하며, 과거 승인을 v3 세부 정책에 전이하지 않는다. DTO의 전체 필드나 모든 구현 선택을 승인한 것도 아니다.
 
 - StageInfo/EligibilityResult: 직접 확인된 Seed~C만 단계 조건 통과. TIPS만으로 Seed 확정 금지, 명시적 프리시드·엔젤은 out_of_scope, 프리·브릿지는 직전 완료 라운드 근거로 판정. 추정/unknown만으로 eligible 처리 금지(D06).
 - CriterionAssessment/ScoreSummary: 1..5 정수 rating 또는 null, 비중 `5/30/25/20/10/10`, 총 분모 100 고정. 상위 영역 관측 가중평균 rating ≤2와 최종 결측 비중 ≥30은 WATCHLIST(D01·D02·D05).
@@ -358,7 +360,7 @@ Freeze controller는 `(run_id, candidate_id, evaluation_round, evidence_revision
 
 ### 평가 성공과 기술적 실패
 
-각 평가 branch wrapper가 **terminal result**인 `EvaluationResult`를 반환한다. LLM은 차원별 `Evaluation` 내용만 만들고 wrapper가 transport·timeout·schema·허용 재시도를 처리한다. 다음 branch→dimension 매핑과 atomic envelope는 D04 구현 제안이며 5개 branch/6개 차원 자체는 v3 목표다.
+각 평가 branch wrapper가 **terminal result**인 `EvaluationResult`를 반환한다. LLM은 차원별 `Evaluation` 내용만 만들고 wrapper가 transport·timeout·schema·허용 재시도를 처리한다. 5개 branch/6개 차원과 Business & Deal 원자적 성공/실패는 승인된 v3 방향이다. 다음 branch key·envelope 필드·schema version 등 구체 shape는 D04 구현 제안이다.
 
 | branch_id (fan-out/result key) | success payload의 dimension key 집합 |
 | --- | --- |

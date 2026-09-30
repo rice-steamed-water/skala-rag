@@ -4,9 +4,11 @@
 
 근거: [v3](../design/design-v3.html) A-2, C-1–C-4. **23개 항목·비중, 1..5 anchor, N/A 제외 분모, 네 label, 핵심차원 보류는 v3 명시 목표**다. baseline D01–D06·D08의 승인 기록은 [결정 목록](decisions.md)에 보존한다. 아래 OPEN은 그 승인 취소가 아니라 v3 대체 세부에 대한 `v3-OPEN`을 뜻하며, D14 rubric은 별도 OPEN이다. ID·DTO·적용성 검증·소수 경계·reason 우선순위를 포함한 v3 실행 정책은 별도 승인을 받아야 한다. 이전 원문 §3·§7의 상세 자료는 rubric 참고로 보존한다. 이 문서는 보편적 금융 투자 기준이나 구현 완료 주장이 아니다.
 
+**현재 구현 방향 — v3 전환 승인:** [사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)에 따라 새 작업은 기존 baseline의 계속 구현이 아니라 v3에 정합화한다. baseline 코드·승인 기록은 호환성과 이력으로 보존하며 새 구현의 우선 방향이 아니다. 방향 승인은 상세 정책·DTO 전체 필드·provider·corpus·시간/비용 예산 승인이나 구현 완료가 아니다. 남은 세부 선택만 [결정 목록](decisions.md)의 OPEN gate를 따른다.
+
 ## 현재 구현과 아래 v3 목표의 경계
 
-#16/PR #64의 `aggregate_scores`는 여섯 dimension·후보/세대/snapshot/policy 일치를 검증하고 `ScoreBreakdown`을 반환한다. `observed`/`missing`만 허용하며 N/A는 거절한다. `decide`는 고정100의 missing_weight와 모든 영역의 관측 rating을 검사하고 세 label(RECOMMEND/WATCHLIST/PASS)을 반환한다. 우선검토는 별도 grade이지 RECOMMEND_PRIORITY label이 아니다. 아래 §3·§5는 이 구현을 설명하는 문서가 아니라 별도 승인·구현할 v3 replacement다. #53 재무 helper는 파생값·Unavailable 사유를 반환하며 D14 rating·적용성 정책을 승인하지 않는다.
+#16/PR #64의 `aggregate_scores`는 여섯 dimension·후보/세대/snapshot/policy 일치를 검증하고 `ScoreBreakdown`을 반환한다. `observed`/`missing`만 허용하며 N/A는 거절한다. `decide`는 고정100의 missing_weight와 모든 영역의 관측 rating을 검사하고 세 label(RECOMMEND/WATCHLIST/PASS)을 반환한다. 우선검토는 별도 grade이지 RECOMMEND_PRIORITY label이 아니다. 아래 §3·§5는 이 구현을 설명하는 문서가 아니라 방향은 승인되었고 세부 정책 승인·구현은 남은 v3 전환 계약이다. #53 재무 helper는 파생값·Unavailable 사유를 반환하며 D14 rating·적용성 정책을 승인하지 않는다.
 
 ## 1. 먼저 적격성부터 판단한다
 
@@ -73,7 +75,7 @@ M0에서 23개 criterion별로 이 척도를 구체화한다. traction·deal_ter
 
 ### 상태와 분모 — C-2/C-3 용어 충돌은 D05 OPEN
 
-C-2는 근거 부족을 `N/A`라 부르지만 C-3는 `N/A`를 지표 자체의 해당 없음으로 정의한다. 두 의미를 같은 machine status로 인코딩하지 않는다. 아래 세 상태로 분리하는 안을 제안하며 C-2 문구 해석·정정, 적용성 근거와 검증 주체는 승인받아야 한다.
+C-2는 근거 부족을 `N/A`라 부르지만 C-3는 `N/A`를 지표 자체의 해당 없음으로 정의한다. 두 의미를 같은 machine status로 인코딩하지 않는다. 새 구현은 Missing을 분모에 남기고 해당 없음 N/A만 제외하는 승인된 v3 방향을 따른다. 아래 machine status 명칭과 C-2 문구의 상세 해석·정정, 적용성 근거와 검증 주체는 별도 확정해야 한다.
 
 | status 제안 | rating | 사유/근거 | 분모 처리 |
 | --- | --- | --- | --- |

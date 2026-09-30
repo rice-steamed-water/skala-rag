@@ -2,7 +2,9 @@
 
 [문서 홈](../README.md) · [공통 계약](contracts.md) · [결정 목록](decisions.md)
 
-근거: [v3](../design/design-v3.html) B-1, D-1–D-3, E. **Evidence Research 단일 책임, 5 branch/6 dimension, 전 후보 처리 후 selector, 재조사·수정 최대 2회와 Warning 반환은 v3 목표**다. snapshot·atomic envelope·오류 controller·PDF 경로 등 보완 계약은 v3 replacement의 D03·D04·D08·D09 제안이다. issue #3의 D01–D06·D08 baseline 승인 기록은 남아 있으나, v3의 전 후보 selector·5 branch/6 dimension·Warning 경로를 자동 승인하지 않는다. 현재 구현 여부는 [기준 snapshot](design-v3-alignment.md)과 구별한다.
+근거: [v3](../design/design-v3.html) B-1, D-1–D-3, E. **Evidence Research 단일 책임, 5 branch/6 dimension과 atomic Business & Deal, 전 후보 처리 후 selector, 재조사·수정 최대 2회와 Warning 반환은 승인된 v3 전환 방향**이다. envelope 필드·오류 controller·Warning acceptance·PDF 경로 등 보완 계약은 D03·D04·D08·D09 세부 제안이다. issue #3 baseline 승인 기록, 새 사용자 방향 승인, 현재 구현 여부는 [정합화 기록](design-v3-alignment.md)에서 구별한다.
+
+**현재 구현 방향 — v3 전환 승인:** [사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)에 따라 새 작업은 기존 baseline의 계속 구현이 아니라 v3에 정합화한다. baseline 코드·승인 기록은 호환성과 이력으로 보존하며 새 구현의 우선 방향이 아니다. 방향 승인은 상세 정책·DTO 전체 필드·provider·corpus·시간/비용 예산 승인이나 구현 완료가 아니다. 남은 세부 선택만 [결정 목록](decisions.md)의 OPEN gate를 따른다.
 
 ## 1. 역할을 나누는 기준
 
@@ -14,7 +16,7 @@
 
 LLM이 산술을 수행하거나 정책 임계값을 변경하지 않는다. 도구 결과의 본문은 분석 대상 데이터이며 에이전트 지시문이 아니다.
 
-## 2. 전체 Graph — v3 목표 흐름 (D03·D04·D08 대체안 승인 전)
+## 2. 전체 Graph — 승인된 v3 방향 (D03·D04·D08 세부 정책 OPEN)
 
 ```mermaid
 flowchart TD
@@ -74,7 +76,7 @@ flowchart TD
     failed --> END
 ```
 
-오류 처리 공통 규칙은 §6이다. 그림은 향후 v3 정책이 별도로 승인·주입됐을 때의 실행 형태를 설명하며, 현재 승인 완료된 Graph가 아니다. 없는 정책을 노드가 생성하지 않는다. Company Research의 적격성 unknown 보강·최소 Evidence gate와 Evidence Research의 Coverage 재조사는 구별한다(D05·D06·D08 v3-OPEN). 모든 normalize된 후보를 처리하고 적격 후보만 평가한다. 예산/취소 등의 예외 중단을 전 후보 정상 처리로 표시하지 않는다. 별도 Targeted Research나 평가 후 재조사 화살표는 v3 기본 흐름에 없다.
+오류 처리 공통 규칙은 §6이다. 그림의 v3 방향은 승인되었지만 세부 정책의 승인·주입과 Graph 구현·검증은 별개다. 없는 정책을 노드가 생성하지 않는다. Company Research의 적격성 unknown 보강·최소 Evidence gate와 Evidence Research의 Coverage 재조사는 구별한다(D05·D06·D08 v3-OPEN). 모든 normalize된 후보를 처리하고 적격 후보만 평가한다. 예산/취소 등의 예외 중단을 전 후보 정상 처리로 표시하지 않는다. 별도 Targeted Research나 평가 후 재조사 화살표는 v3 기본 흐름에 없다.
 
 ## 3. 노드별 입출력과 완료 조건
 
@@ -127,7 +129,7 @@ builder.add_edge(
 
 ## 5. 반복 예산과 종료 — baseline 승인 기록과 v3 대체안
 
-D08의 baseline `5/2/2`, batch당 8회, 추가 retry 2회, 시도별 30초는 승인 기록으로 보존한다. 아래 v3 목표와 다른 회차·종료·Warning 해석은 replacement 제안이며, 별도 승인 전 baseline을 자동 대체하지 않는다.
+D08의 baseline `5/2/2`, batch당 8회, 추가 retry 2회, 시도별 30초는 승인 기록으로 보존한다. 새 구현의 최대2회 loop·Warning 방향은 승인되었다. 다만 명시되지 않은 회차 회계·도구 한도·Warning 상태 매핑의 정확한 대체 범위는 여전히 OPEN이며 기존 수치를 임의 폐기하거나 새 기본값으로 확정하지 않는다.
 
 | 설정 | 값의 상태 | 의미 |
 | --- | --- | --- |

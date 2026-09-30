@@ -4,6 +4,8 @@
 
 **상태: v3 목표에 맞춘 실행 계획. baseline D01–D06·D08은 승인 기록으로 보존되며 v3 replacement 세부는 별도 승인 전까지 OPEN이다.** [v3](../design/design-v3.html)의 명시 목표·현재 main 구현·OPEN 정책은 [정합화 기록](design-v3-alignment.md)으로 구별한다. 아래 WP는 구현 묶음이지 사람·역할 배정이 아니다. 실제 작업은 GitHub 이슈로 나누고 assignee 규칙을 따른다([협업 규칙](../../CONTRIBUTING.md#이슈로-일하기)).
 
+**현재 구현 방향 — v3 전환 승인:** [사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)에 따라 새 작업은 기존 baseline의 계속 구현이 아니라 v3에 정합화한다. baseline 코드·승인 기록은 호환성과 이력으로 보존하며 새 구현의 우선 방향이 아니다. 방향 승인은 상세 정책·DTO 전체 필드·provider·corpus·시간/비용 예산 승인이나 구현 완료가 아니다. 남은 세부 선택만 [결정 목록](decisions.md)의 OPEN gate를 따른다.
+
 ## 1. 작업 패키지
 
 | WP | 구현 범위 | 다른 작업에 넘길 것 | 완료 조건 |
@@ -33,7 +35,7 @@ Vector store, LLM provider/model, 최종 embedding, PDF renderer는 미정이다
 
 ### M0 — 공통 계약과 정책 합의
 
-**선행:** v3·과제 원문·정합화 기록을 읽고 baseline D01–D06·D08과 충돌하는 v3 replacement 세부 및 D14의 구현 정책을 별도 승인한다. D09 baseline 목차·인용·구조 검증은 부분 승인되어 있다. v3 다섯 목차로의 대체·Warning 예외는 해당 보고서 fixture 전, renderer는 M3 전 합의한다. D07·D12·D13은 해당 live 기능 전에 해소한다. 미승인 질문은 주입된 fixture 정책으로만 검증하고 live 기본값으로 설치하지 않는다.
+**선행:** v3 전환 방향은 승인되었다. baseline을 계속 구현하는 대신 새 작업을 v3에 맞춘다. M0에서는 selector 순위·동점, N/A 적용성·0분모, 부분 결측, eligibility Evidence gate, schema/catalog 버전, D14 rubric, 회차 회계와 Warning 상태 매핑 등 남은 세부만 승인한다. D09의 다섯 목차 방향은 승인되었지만 mode 예외·구조 검증 상세는 해당 보고서 fixture 전, renderer는 M3 전 합의한다. D07·D12·D13·provider·corpus·실행 예산은 해당 live 기능 전에 해소한다. 미승인 선택은 가상 정책으로만 검증하고 live 기본값으로 설치하지 않는다.
 
 - WP1: schema, catalog interface, mock Tool/LLM, failure 타입, 최소 실행환경 설정.
 - WP4/WP5: 23개 criterion rubric, missing/not_applicable 조건, 정규화·네 label·핵심차원 fixture.
@@ -113,11 +115,11 @@ unit/contract 테스트는 네트워크 없이 실행한다. live integration은
 
 ## 5. 보고서 계약과 PDF 검증
 
-### 현재 승인 baseline — D09 부분 승인
+### 역사적 baseline — D09 부분 승인 보존
 
-[보고서 계약](reporting.md)의 single_candidate/no_recommendation 각각 7개 섹션, 인용 token·서지 미상 표기·SV01–SV09 구조 검증은 2026-09-30 xxhigh가 부분 승인했다. 승인 기록은 [D09](decisions.md)에 보존한다. 아래 v3 다섯 목차·selector·Warning은 그 승인의 자동 확장이 아니며 별도 대체 승인이 필요하다. PDF 구현 선택은 OPEN이다.
+[보고서 계약](reporting.md)의 single_candidate/no_recommendation 각각 7개 섹션, 인용 token·서지 미상 표기·SV01–SV09 구조 검증은 2026-09-30 xxhigh가 부분 승인했다. 승인 기록은 [D09](decisions.md)에 보존한다. 아래 v3 다섯 목차·selector·Warning 방향은 #35의 별도 사용자 전환 승인에 근거한다. 과거 D09 승인의 자동 확장이 아니며 mode 예외·구조 검증·Warning 세부는 OPEN이다. PDF 구현 선택은 OPEN이다.
 
-### v3 E-1 다섯 목차 — 별도 대체 승인 전 목표
+### v3 E-1 다섯 목차 — 승인된 새 구현 방향
 
 ```text
 1. SUMMARY

@@ -1,6 +1,8 @@
 # Founder·Market·Technology·Moat rubric과 missing 조건 — D14 제안
 
-**적용 범위 — baseline 기반 D14 제안 보존:** #10/PR #40의 병합은 아래 rubric 정책의 승인이 아니다. D02·D05 baseline에 따른 고정100·N/A 미채택과 작성자의 추가 N/A 금지 제안·fixture는 그대로 보존한다. [scoring](scoring.md)의 v3 적용가능 분모·핵심차원40%와 충돌하는 부분은 [전환 기록](design-v3-alignment.md) 및 D05/D14의 별도 대체 승인 대상으로 읽는다. 본문의 과거 PR 상태는 작성 당시 맥락이며 정책 승인 근거가 아니다.
+**현재 구현 방향 — v3 전환 승인:** [사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)에 따라 새 작업은 기존 baseline의 계속 구현이 아니라 v3에 정합화한다. baseline 코드·승인 기록은 호환성과 이력으로 보존하며 새 구현의 우선 방향이 아니다. 방향 승인은 상세 정책·DTO 전체 필드·provider·corpus·시간/비용 예산 승인이나 구현 완료가 아니다. 남은 세부 선택만 [결정 목록](decisions.md)의 OPEN gate를 따른다.
+
+**보존 본문의 범위 — 역사·호환성:** 아래 본문은 기존 baseline D14 미승인 rubric 제안을 그대로 보존한다. 본문 안의 “현재 baseline”, “v3 승인 전/대체 승인 시”, 과거 PR 상태와 고정100·N/A 미채택·첫 추천·7개 섹션은 작성 당시 맥락이며 새 구현 지시가 아니다. 새 구현은 [scoring](scoring.md)·[delivery](delivery.md)의 승인된 v3 방향을 따른다. rubric 숫자·적용성 근거, 보고서 mode별 예외·검증·PDF 등 구체 정책은 여전히 OPEN이며 과거 기록이나 전환 승인만으로 확정하지 않는다.
 
 [문서 홈](../README.md) · [점수와 판단 정책](scoring.md) · [공통 계약](contracts.md) · [결정 목록](decisions.md) · 구조화 파일: [`configs/rubrics/core.yaml`](../../configs/rubrics/core.yaml) · 재무 영역: #11 (PR #34)
 

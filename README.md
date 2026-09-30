@@ -3,10 +3,7 @@
 Physical AI / Robotics 스타트업의 투자 조사·평가를 위한 수업용
 LangGraph Multi-Agent RAG 프로젝트다. 실제 투자 실행 시스템은 아니다.
 
-통합 기준 `c5a30f3`에는 #5 구조 DTO, #7 State/factory, #9 fixture 전용 draft catalog 외에 #15/PR #42의 ID reducer와 State Annotated 연결, #16/PR #64의 baseline `aggregate_scores`·`decide`, #53/PR #66의 재무 단위·기간·파생값 helper가 있다. 집계는 고정100·observed/missing·여섯 영역 관측 rating 저점수·세 label baseline이며 v3 N/A 분모·핵심차원40%·네 label 구현이 아니다. 업무 Graph wiring·CLI·live RAG·평가 agent·보고서 출력은 여전히 구현 목표다. 새 구현 목표는 사용자 제공
-[설계 v3 보존본](docs/design/design-v3.html)이며, 이전 설계와의 차이 및
-main·미병합 PR 기준은 [v3 정합화 기록](docs/implementation/design-v3-alignment.md)에 있다.
-D09의 baseline 목차·인용·구조 검증도 부분 승인되었으며 v3 다섯 목차·Warning 대체안과 PDF 선택은 별도 승인 대상이다. v3의 명시 목표와 팀의 구현 정책 승인은 별개다. #3에는 D01–D06·D08의 **기존 baseline** 승인 기록이 있으나 v3의 selector·N/A·Warning 대체 세부는 별도 `v3-OPEN`이다. [결정 목록](docs/implementation/decisions.md)은 이 경계를 추적하며, 미정 정책·최종 모델·provider를 실행 기본값으로 정하지 않는다.
+[사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)로 **baseline 계속 구현 대신 v3 전환 방향이 승인되었다**. 새 구현은 v3를 따른다. D01–D06·D08 승인 및 D09 부분 승인 기록과 기존 코드는 호환성·이력으로 보존한다. 전 후보 selector, 5 branch/6 dimension과 atomic Business & Deal, Missing/N/A 규칙, 네 label·market/technology 40%, 두 loop의 최대2회·Warning, 다섯 보고서 섹션은 승인된 방향이다. selector 순위·동점·all-none, 적용성 근거·0분모·부분 결측, eligibility Evidence gate, 재시도 회계, Warning acceptance/workflow/PDF, catalog/schema 버전·rubric·provider·corpus·실행 예산은 여전히 OPEN이다. [결정 목록](docs/implementation/decisions.md)에 방향 승인과 세부 정책의 경계를 기록한다.
 
 ## 설치
 
@@ -81,5 +78,5 @@ uv lock --check
 - `agents`, `tools`, `rag`, `reporting`, `prompts`: 업무 흐름 미구현
 - `tests/contract/`, `tests/fixtures/contracts.json`: 구조 DTO/state 검증 fixture·tests; 테스트 총수는 실행 결과로만 보고
 - `tests/unit/`, `tests/integration/`: 각 작업의 별도 검증 범위
-- [구현 가이드](docs/README.md): 목표와 승인 전 설계
+- [구현 가이드](docs/README.md): 승인된 v3 방향과 미결정 세부 설계
 - [협업 규칙](CONTRIBUTING.md): 이슈·브랜치·개발 환경 규칙

@@ -13,7 +13,7 @@
 | 이전 설계·교수 과제 원문 | [통합 원문](../raws/robotics_startup_agentic_rag_notion_integrated.md) 및 `docs/raws/` | 읽기 전용. 이전 제안의 이력과 v3에서 생략한 과제 요구를 보존 |
 | 파생 구현 가이드 | 이 폴더의 architecture/contracts/scoring/data-rag/delivery/decisions | v3 명시 목표와 승인 전 구현 제안을 구별. 원문을 조용히 수정하는 대체본이 아님 |
 
-우선순위는 **새 사용자 지정 설계의 명시 내용 → 모순을 기록한 구현 목표 → 승인받아야 할 세부 제안**이다. v3 내부 충돌은 임의 해소하지 않는다. v3가 과제 필수 요구를 생략했다고 폐기하지 않는다. 예컨대 README 필수 항목·개인별 수행 역할(PM/PL 제외)·제출 파일명·DAY 3 상대 일정은 통합 원문 §10에서 계속 추적한다. v3와 이전 설계가 다른 것은 팀 승인 기록의 `SUPERSEDED` 전환과 다르다. baseline D01–D06·D08은 APPROVED로 남고, 그와 충돌하는 v3 replacement 세부만 `v3-OPEN`이다. D09 baseline 목차·인용·구조 검증은 #14 후속 부분 APPROVED이며 PDF 선택 및 v3 대체 범위는 OPEN이다. D07·D10–D14는 OPEN이다.
+우선순위는 **사용자가 전환 승인한 v3의 명시 방향 → 남은 세부 정책의 명시적 승인 → 해당 버전의 구현·검증**이다. [승인 근거 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)이 baseline 계속 구현 대신 v3 정합화를 승인했다. 전 후보 selector, 5 branch/6 dimension·atomic Business & Deal, Missing/N/A 규칙, 네 label·market/technology 40%, 두 loop 최대2회·Warning, 다섯 보고서 섹션이 새 구현 방향이다. baseline D01–D06·D08 APPROVED·D09 부분 APPROVED·D14 OPEN 원본 기록과 기존 코드는 역사·호환성으로 보존한다. 전환 승인을 DTO 전체 필드·selector 정렬·0분모·적용성·회계·Warning 상태/PDF·rubric·provider·corpus·실행 예산의 승인으로 확대하지 않는다. 세부 OPEN과 정확한 정책별 대체 범위는 [결정 목록](decisions.md)에서 추적한다. v3의 생략은 과제 요구 폐기가 아니므로 README·실제 역할·제출 파일명·DAY 3 일정은 이전 원문 §10에서 계속 추적한다.
 
 표지의 **울산 4반 2조 / 김근홍·정순욱·허지원·심혁·박태준·한유진**은 v3가 제공한 metadata다. 실제 역할·GitHub 계정 매핑·기여량 또는 달력상 제출일은 제공하지 않는다.
 
@@ -28,13 +28,20 @@
 | #42 / #15 | `graph/reducers.py`, State의 sources/chunks/evidence/evaluation_results/errors Annotated 연결; ID 멱등 병합·core 충돌 검증 | 업무 Graph wiring·revision controller는 별도. dimension 기반 평가 key를 v3 branch-key·atomic Business & Deal 계약으로 전환해야 함 |
 | #64 / #16 | `aggregate_scores`→ScoreBreakdown, `decide`→Decision 순수 함수; 여섯 dimension/세대 검증, 고정100·관측 rating·세 label | N/A 제외·핵심차원40%·RECOMMEND_PRIORITY·selector 미구현; baseline 테스트를 v3 완료 증거로 쓰지 않음 |
 | #66 / #53 | `scoring/finance.py`의 금액·기간, 월 burn·잔여 runway·성장률·매출총이익률·환율 파생 helper, Derived/Unavailable 및 provenance | rating·rubric/N/A 승인 아님. 전체 재무 정책/agent 구현과 구별 |
-| #65 / #14 | reporting.md 및 D09 mode별 7개 섹션·인용·서지 미상·SV01–SV09 부분 승인 기록 | PDF 선택은 OPEN. v3 다섯 섹션·selector·Warning은 별도 대체 승인 필요 |
+| #65 / #14 | reporting.md 및 D09 mode별 7개 섹션·인용·서지 미상·SV01–SV09 부분 승인 기록 | PDF 선택은 OPEN. 이후 #35 사용자 승인으로 v3 다섯 섹션·selector·Warning 방향을 채택; 세부는 OPEN |
 | #40 / #10, #34 / #11 | core/finance rubric 문서·YAML·fixture 테스트 및 D14 제안 기록 | 병합 후에도 D14 OPEN. baseline 고정100/missing 규칙과 작성자 조건부 N/A 제안을 보존 |
 | #37 / #6 | 평가·점수·판정·보고서·오류·manifest DTO, Decimal 왕복과 결정적 ID 인코딩 | dimension 단위·observed/missing·세 label 구조. v3 복합 branch/N/A/네 label·SelectionResult는 별도 확장 |
 | #69 / #68 | `build_score_summary`·`build_investment_decision`으로 baseline 계산값을 #6 DTO에 연결 | adapter 병합은 v3 점수·label·selector 정책의 승인·구현이 아님 |
 | #70 / #8, #71 / #12, #72 / #21 | ToolResult·Protocol·fake 주입, 공통 가상 fixture/loader, snapshot 복사·참조 검증 | Protocol≠live adapter. EvaluateDimension/기존 DTO는 baseline이며 v3 복합 branch·selector 계약은 별도. 가상 검증은 live 실측·v3 정책 승인이 아님 |
 
-#5 DTO/#7 State/#9 draft catalog 위에 이 구현이 추가되었다. 업무 Graph·CLI·live RAG·평가 agent·보고서 출력이나 v3 정책 승인이 완료된 것은 아니다. 이 문서 통합은 upstream 코드·tests·configs를 수정하지 않는다. 최종 delivery head·gate·리뷰 결과는 PR 검증 기록에서 별도로 보고한다.
+#5 DTO/#7 State/#9 draft catalog 위에 이 구현이 추가되었다. 업무 Graph·CLI·live RAG·평가 agent·보고서 출력이나 v3 세부 정책 승인이 완료된 것은 아니다. v3 전환 방향의 별도 사용자 승인은 §1과 구별한다. 이 문서 통합은 upstream 코드·tests·configs를 수정하지 않는다. 최종 delivery head·gate·리뷰 결과는 PR 검증 기록에서 별도로 보고한다.
+
+### 후속 승인·작업 snapshot — PR36 Ready 준비 시점
+
+2026-09-30의 후속 supplied snapshot은 열린 이슈 34개다. 아래 과거 44개 열린 이슈와 48개 영향표 행은 역사 자료로 그대로 보존하며 현재 수량으로 읽지 않는다. #35 comment 5902877317의 2026-09-30T02:29:07Z 사용자 전환 승인은 §1 및 별도 V3-TRANSITION 기록에 반영했다.
+
+- #73 / PR #74: 독립 `skala_rag.contracts.v3` 구조 DTO·atomic branch·offline fixture 후속 작업. snapshot의 PR 상태는 OPEN, head `97ab903c14e1d2635735509fdbbba9e8300b3397`, mergedAt=null이다. 이는 제안/진행 중 계약이지 이 문서의 통합 cutoff에 구현된 public API가 아니다. 기존 baseline DTO·State를 바꾸거나 그 PR의 코드를 가져오지 않는다. 정책 계산·selector·Warning enum·live 예산은 그 구조 작업으로 승인되지 않는다.
+- #67: #53의 재무 helper 이후 실제 IR/공시 Evidence를 T21 검증에 연결하는 후속 작업이다. 승인된 자료·#43 provider/예산 gate·#50 추출 연계가 필요하며 재무 rubric 승인을 대신하지 않는다.
 
 ### 이전 API 조회 snapshot — 85fa030 (historical)
 
@@ -155,7 +162,7 @@
 
 ## 5. 전환 시 검증과 남은 차단
 
-1. baseline 승인 기록은 보존하되 v3 목표 절에 고정100·모든 영역 저점수·첫 추천 종료·직렬 Deal·N/A 미채택을 섞지 않는다. 반대로 v3 목표를 baseline 대체 승인으로 읽지 않는다. 관련 PR 통합 시 적용 정책 버전과 대체 승인 범위를 대조한다.
+1. baseline 승인 기록은 보존하되 v3 목표 절에 고정100·모든 영역 저점수·첫 추천 종료·직렬 Deal·N/A 미채택을 섞지 않는다. 새 작업은 #35 사용자 승인에 따라 v3 방향으로 진행한다. 방향 승인을 미명시 세부의 일괄 승인으로 읽지 않으며 관련 PR 통합 시 적용 정책 버전과 정확한 대체 범위를 대조한다.
 2. D02–D06·D08의 남은 질문을 정책/DTO fixture로 구체화하고, 승인되지 않은 선택을 실제 기본값으로 설치하지 않는다. D07/D09/D12/D13의 live·제출 gate도 보존한다.
 3. [delivery §4](delivery.md)의 T01–T25는 목표 테스트다. #35의 문서 수치 계산·링크/정합성 검사는 구현 테스트·실 API·RAG 벤치마크·PDF 측정이 아니다.
 4. source hash/바이트 일치, 원 catalog 비중, 설명용 산술을 확인했다. 최종 문서 diff·링크·잔존 옛 지시 검색과 프로젝트 gate·독립 리뷰는 PR 검증란에서 해당 head의 실제 결과를 추적한다.
