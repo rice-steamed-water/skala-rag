@@ -1,4 +1,4 @@
-"""Atomic v3 snapshot boundary; D14/#55 live readiness remains blocked."""
+"""Atomic v3 snapshot boundary; #55 live readiness remains blocked."""
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -89,7 +89,9 @@ def evaluate_business_deal(
     #22 catalog/evidence validation and assembly, then promotes to v3 atomically.
     """
     if execution_mode != "fixture":
-        raise ValueError("live blocked: D14 approved rubric and #55 readiness required")
+        raise ValueError(
+            "live blocked: #55 actual research integration readiness required"
+        )
     identity = {
         k: getattr(snapshot, k)
         for k in (
@@ -181,6 +183,17 @@ def evaluate_business_deal(
                         or verifiers.rubric(c, scoped) is not True
                     ):
                         raise ValueError("unapproved financial rating")
+                if c.status == "not_applicable" and rubric.get("status") == "approved":
+                    approved_rules = {
+                        "traction.rule_of_40": (
+                            "finance-0.1.0:rule40-confirmed-pre-revenue"
+                        ),
+                        "traction.runway": (
+                            "finance-0.1.0:runway-confirmed-nonnegative-ocf"
+                        ),
+                    }
+                    if c.applicability_rule_id != approved_rules.get(c.criterion_id):
+                        raise ValueError("applicability outside approved finance rules")
                 if (
                     c.status == "not_applicable"
                     and verifiers.applicability(c, scoped) is not True

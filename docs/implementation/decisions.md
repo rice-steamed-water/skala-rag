@@ -285,3 +285,15 @@ SQLite는 선택 가능한 offline 구현이며 운영 기본값을 정하지 �
 
 앞선 D09 PDF OPEN 표현은 당시 기록이다. 위 PDF 선택/측정/회계만 승인되었으며
 mode별 예외·실제 Generator/Judge·M3 live 완료를 함께 승인하거나 완료로 표시하지 않는다.
+
+
+## D14 Finance 승인 — #61 (2026-09-30)
+
+Status: APPROVED (Finance 부분만). 사용자 승인 기록: #61 comment5906253348.
+finance-0.1.0 §1–§3의 9개 criterion 구간·최소근거 및 Q1–Q6는
+[rubric-finance 현재 승인](rubric-finance.md)의 범위로 승인되었다. 이전 Finance
+OPEN·개정 제안은 이력이다. Core rubric·다른 정책을 승인하지 않는다.
+N/A는 확인된 pre-revenue Rule40·동일 기간/주체 OCF≥0 runway만 허용;
+rule ID/reason/snapshot evidence 필수, 미확인은 missing, burn5는 실제 재무근거 필요.
+작은 기저 limitations 필수(새 cap/threshold 없음), pre/post 미상은 missing,
+valuation 직전3배/동종중앙값2배, CAPEX 제외. 정책 승인과 #55 live 완료는 별개.
