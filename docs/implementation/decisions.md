@@ -66,7 +66,7 @@
 | D10 OPEN | v3 표지 명단 보존 | 실제 역할·계정 매핑은 수행 증거와 본인 확인 필요 |
 | D11 OPEN | 원문 DAY 3 일정 보존 | 실제 제출 날짜·시간대·Slack thread |
 | D12 OPEN | Physical AI / Robotics 도메인 | 국가 범위·지원 provider·미지원 표시·live 탐색 |
-| D13 OPEN | 전체 RAG 문서≤200페이지 | HTML/PPT/부분문서 산정·승인 corpus manifest |
+| D13 REJECTED | 전체 RAG 문서≤200페이지 한도 적용 제외 ([기록](#d13--200페이지-산정-규칙-적용-제외-91)) | 없음. 승인 corpus manifest gate(#44)는 페이지 산정 없이 유지 |
 | D14 OPEN | N/A에 승인 rule·사유·근거 필요 | criterion별 rating·rule·품질 기준, 재무 단위/기간/동일 라운드·burn 적용성 |
 
 승인되지 않은 세부는 가상 정책 주입/인터페이스로 검증하며 live 기본값으로 숨기지 않는다. 승인된 운영 규칙의 기대값 테스트와 남은 OPEN gate 테스트를 분리한다. 현재 구현 가용성은 [공통 계약](contracts.md)과 pinned [정합화 기록](design-v3-alignment.md)을 따른다.
@@ -221,6 +221,19 @@ D09 중 렌더러·A4·폰트·여백·SUMMARY 측정 기준·인용 token 화�
 - Owner and reviewers: XXXXXim / 지표 담당(heojiwon2) 검토 요청 대상.
 - Approval date: -
 - Supersedes: 없음.
+
+## D13 — 200페이지 산정 규칙 적용 제외 (#91)
+
+- Decision ID: D13
+- Status: REJECTED
+- Decision: 이 프로젝트는 원문 §1.3·v3 B-2의 RAG 코퍼스 200페이지 한도(R05)를 적용하지 않는다. 따라서 페이지 산정 규칙(HTML·PPT·부분 PDF)을 정하지 않으며, corpus manifest gate는 문서 승인·추출 상태·버전 고정·인덱스 입력 대조만 검사한다.
+- Rationale and source: 팀 결정 — 이 프로젝트에서 200페이지 제한 규칙이 필요 없다고 판단했다(heojiwon2, 2026-09-30 작업 대화).
+- Rejected alternatives: 미채택 — 전체 코퍼스 200페이지 합계 gate; 형식별 페이지 산정 규칙 승인 후 적용.
+- Affected documents / policy version / tests: data-rag.md §3, delivery.md §3·T11, docs/README.md R05, design-v3-alignment.md(후속 변경 메모); #44 / PR #88 `rag/corpus.py`·`tests/unit/test_corpus_gate.py`; #13·#62의 200페이지 관련 할 일.
+- Owner and reviewers: heojiwon2 / RAG 담당·팀 전원 검토 요청 대상.
+- Approval date: 2026-09-30 (Asia/Seoul), 결정자 heojiwon2.
+- 과제 담당자 확인 근거: **미기록.** 과제 필수 조건 완화에 해당하므로 아래 승인 방법에 따라 확인 근거 링크를 추가해야 한다.
+- Supersedes: v3 남은 세부 항목 표의 `D13 OPEN`.
 
 ## 조용히 바꾸면 안 되는 원문
 

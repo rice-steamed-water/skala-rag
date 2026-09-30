@@ -25,7 +25,7 @@ pinned 통합 기준 `906312a`에는 baseline DTO/State/reducer/catalog/점수·
 | 평가 항목, 가중치, 결측, 판단 라벨 | [점수와 판단 정책](implementation/scoring.md) | 평가 / 지표 담당 |
 | 창업자·시장·기술·경쟁 우위 rubric, missing 조건 | [핵심 영역 rubric](implementation/rubric-core.md) | 평가 / 지표 담당 |
 | 실적·투자조건 rubric, 재무 단위 규칙 | [재무 rubric](implementation/rubric-finance.md) | 평가 / 지표 담당 |
-| 자료 수집, 페이지 예산, 검색, 임베딩 비교 | [데이터와 RAG](implementation/data-rag.md) | 데이터 / RAG 담당 |
+| 자료 수집, 코퍼스 manifest, 검색, 임베딩 비교 | [데이터와 RAG](implementation/data-rag.md) | 데이터 / RAG 담당 |
 | mode별 보고서 목차, 인용, 구조 검증 | [보고서 계약](implementation/reporting.md) | 보고서 / 검증 담당 |
 | 작업 패키지, 통합 순서, 테스트, 제출 | [작업 분담과 검증](implementation/delivery.md) | 전원 |
 | 원문 충돌, 새 제안, 승인 기록 | [결정 목록](implementation/decisions.md) | 전원, 정책 결정 담당 |
@@ -71,7 +71,7 @@ D09의 baseline 목차(single_candidate/no_recommendation 각각 7개 섹션)·�
 | R02 | 도메인 Physical AI / Robotics | §1.1, §2 | 입력 범위와 후보 도메인 검증 |
 | R03 | 비상장, Seed~Series C, Exit 미완료·최소 평가 가능성 | §2.2; v3 A-2 | 적격 / 부적격 / 정보부족 fixture; 최소 Evidence gate는 D05·D06 |
 | R04 | 지정된 RAG 적용 대상 중 최소 1개 Agent에 실제 RAG 적용 | §1.3, §12 교수님 노션 B; v3 B-2 | Primary RAG인 Evidence Research의 검색→근거→Technology 기술 요약/평가→인용 trace |
-| R05 | RAG 문서 총 200페이지 한정 | §1.3; v3 B-2 | 전체 코퍼스 manifest의 페이지 합 검증 |
+| R05 | RAG 문서 총 200페이지 한정 | §1.3; v3 B-2 | **적용 제외** — [D13](implementation/decisions.md#d13--200페이지-산정-규칙-적용-제외-91) |
 | R06 | 오픈소스 임베딩 적용, 후보·선택 근거 문서화 | §1.3; v3 B-3 | BGE-M3 1차 선택, e5/KURE와 동일 데이터 비교·라이선스 확인 후 최종 선택 |
 | R07 | 가중치 평가, 결측 및 핵심차원 저점수 보류 | v3 C-1–C-4 | Missing/N/A, 정규화, 네 label, 경계값 검증 |
 | R08 | Graph의 Loop / Branch 및 State 구현 | §4, §8; v3 D-1–D-3 | Coverage 재조사, 전 후보 처리·selector, 5 branch 합류, Warning 유한 종료 |

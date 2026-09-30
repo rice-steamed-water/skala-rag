@@ -46,8 +46,8 @@ FAISS·embedding·PyTorch는 모델·저장소 선택 전, Postgres·Redis는 ch
 [공통 계약](docs/implementation/contracts.md)과
 [데이터·RAG 설계](docs/implementation/data-rag.md)의 경계를 따르며,
 [결정 목록](docs/implementation/decisions.md)의 OPEN 상태는 바꾸지 않는다.
-특히 D07(embedding·vector store), D09(renderer), D13(페이지 산정)은 승인하지 않았다.
-`pypdf` 페이지 metadata 검증은 D13 산정 정책이나 PDF 렌더링 품질 검증이 아니다.
+특히 D07(embedding·vector store), D09(renderer)는 승인하지 않았다.
+`pypdf` 페이지 metadata 검증은 PDF 렌더링 품질 검증이 아니다.
 
 ## Usage
 

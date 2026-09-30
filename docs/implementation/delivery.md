@@ -12,7 +12,7 @@
 | --- | --- | --- | --- |
 | WP1 Contracts / Graph | 공통 schema, reducer, graph wiring, 전 후보 loop·selector, Coverage 조사·보고서 수정, 예산 | schema와 fixture, graph trace, runner | 유한 종료·5 branch/6 dimension 합류·상태 격리·Warning/acceptance 분리 |
 | WP2 Discovery / Eligibility | 후보 탐색/정규화, 기업 조사, 상장·Exit·단계 근거 | Candidate, CompanyProfile, EligibilityResult, ToolResult | 적격/부적격/unknown/동명 기업 fixture와 live adapter 확인 |
-| WP3 Evidence / RAG | 코퍼스 manifest, 추출·chunk·embedding·검색, 근거 병합 | Source/Chunk/Evidence, retrieve adapter, 모델 비교 기록 | 200페이지 gate와 실제 검색→평가 연결 증거 |
+| WP3 Evidence / RAG | 코퍼스 manifest, 추출·chunk·embedding·검색, 근거 병합 | Source/Chunk/Evidence, retrieve adapter, 모델 비교 기록 | 승인 manifest gate와 실제 검색→평가 연결 증거 |
 | WP4 Evaluation / Rubrics | Founder/Market/Technology/Moat rubric·prompt·구조화 출력 | 영역별 Evaluation과 rubric fixtures | 근거 없는 rating 거절, missing·상충·다른 기업 오염 테스트 |
 | WP5 Finance / Scoring | Business & Deal branch의 traction/deal_terms rubric·평가, deterministic score·decision | 여섯 차원 집계 계약, 정책, 숫자·라벨 테스트 | Missing/N/A·정규화·핵심차원40%·네 label·단위 검증 |
 | WP6 Reports / Integration QA | ReportInput/ReportContext, 생성·구조·의미 검증, PDF, README, 제출 묶음 | Markdown/PDF renderer, validation manifest, 재현 절차 | 5페이지·SUMMARY·REFERENCE·근거 일치 및 clean run 확인 |
@@ -35,11 +35,11 @@ Vector store, LLM provider/model, 최종 embedding, PDF renderer는 미정이다
 
 ### M0 — 공통 계약과 정책 합의
 
-**선행:** v3 전환 방향은 승인되었다. baseline을 계속 구현하는 대신 새 작업을 v3에 맞춘다. selector 순위·원본 candidate_id tie-break·missing/정당한 N/A·0분모 오류·exact 경계·추가 조사/수정 회계·completed Warning/CLI2는 #82 승인이다. M0의 남은 항목은 applicability rule/품질·대표 reason 표현·eligibility Evidence gate·runtime schema 연결·D14 rubric·사전 무작위 선정의 새 후보 수/난수/seed·live 예산이다. D09의 다섯 목차 방향은 승인되었지만 mode 예외·구조 검증 상세는 해당 보고서 fixture 전, renderer는 M3 전 합의한다. D07·D12·D13·provider·corpus·실행 예산은 해당 live 기능 전에 해소한다. 미승인 선택은 가상 정책으로만 검증하고 live 기본값으로 설치하지 않는다.
+**선행:** v3 전환 방향은 승인되었다. baseline을 계속 구현하는 대신 새 작업을 v3에 맞춘다. selector 순위·원본 candidate_id tie-break·missing/정당한 N/A·0분모 오류·exact 경계·추가 조사/수정 회계·completed Warning/CLI2는 #82 승인이다. M0의 남은 항목은 applicability rule/품질·대표 reason 표현·eligibility Evidence gate·runtime schema 연결·D14 rubric·사전 무작위 선정의 새 후보 수/난수/seed·live 예산이다. D09의 다섯 목차 방향은 승인되었지만 mode 예외·구조 검증 상세는 해당 보고서 fixture 전, renderer는 M3 전 합의한다. D07·D12·provider·corpus·실행 예산은 해당 live 기능 전에 해소한다. D13(200페이지 한도)은 적용 제외(REJECTED, #91)다. 미승인 선택은 가상 정책으로만 검증하고 live 기본값으로 설치하지 않는다.
 
 - WP1: schema, catalog interface, mock Tool/LLM, failure 타입, 최소 실행환경 설정.
 - WP4/WP5: 23개 criterion rubric, missing/not_applicable 조건, 정규화·네 label·핵심차원 fixture.
-- WP3: 코퍼스 후보와 페이지 산정 표, 접근 가능한 모델/자료 점검.
+- WP3: 코퍼스 후보 manifest, 접근 가능한 모델/자료 점검.
 - WP6: 출력 목차, 인용 표기, 검증 체크리스트 합의.
 
 **완료:** 다른 WP가 동일 fixture를 읽고 타입 검증할 수 있다. 정책 승인 기록이 있고 M1 작업이 이슈로 나뉘어 있다. 새 문서를 작성한 것만으로 M0 완료가 아니다.
@@ -94,7 +94,7 @@ WP1이 예산 제한을 적용한 runner로 통합한다. WP6는 real Report Gen
 | T08 | graph / 후보 이동 | 네 label 모두 archive/advance; 첫 RECOMMEND 뒤 후속 RECOMMEND_PRIORITY도 처리; index 한 번 증가, selector는 전 후보 소진 후만 실행 | WP1 |
 | T09 | graph / selector·고갈 | 승인 순위(RECOMMEND_PRIORITY→RECOMMEND, normalized_score DESC, weighted_missing_pct ASC, 원본 candidate_id ASC)·순서 불변·전부 WATCHLIST/PASS 무선택 비교 보고서·성공 평가 없음. 무적격은 None+사유 보고서; 0건/전부 부적격/unknown/기술실패 구별 | WP1/WP6 |
 | T10 | adapter / 실패 | 0건/401·403/timeout 구별, bounded retry, 인증 실패 반복 금지 | WP2/WP3 |
-| T11 | corpus / 페이지 | 전체 200 허용, 201 거절, 미상·미승인·교체 문서 검색 제외 | WP3 |
+| T11 | corpus / manifest | 미승인·추출 미완료 문서 인덱싱 거절, 교체 문서 검색 제외, corpus_version·hash 고정과 인덱스 입력 대조 | WP3 |
 | T12 | RAG / 귀속·metadata filter | 같은 query·기업·corpus에 서로 다른 as_of를 전달해 cutoff와 cache 격리 확인; 다른 기업/미허용 Source/날짜 미상 미래 snapshot 제외. schema 확장 후에는 doc_type/year filter, unknown metadata, 1→2→3 priority fallback과 returned Chunk/cache key 격리를 fixture로 확인 | WP3/WP4 |
 | T13 | RAG / 실사용 | 실제 retrieval_id/chunk_id → rag provenance → 평가 snapshot의 Evidence → 기술 평가 → 보고서 citation; 사후 rag 표기만으로 통과 금지 | WP3/WP6 |
 | T14 | report / 인용 | Evidence·Source 연결, 실제 인용과 REFERENCE 정확히 일치 | WP6 |
