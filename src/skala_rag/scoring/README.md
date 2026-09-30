@@ -27,5 +27,17 @@ priority_weight만 catalog에서 다시 계산한다. 같은 후보의 open gap�
 비중 내림차순, 동률 catalog 순서로 정렬한다. 실제 검색과 재조사 loop는 #25에서
 연결한다.
 
-#12의 확대 공통 fixture와 후속 v3 정책은 병합 후 다시 대조해야 한다.
-현재 테스트는 #5의 가상 DTO fixture와 #9 draft catalog를 명시적으로 사용한다.
+baseline 테스트는 #5의 가상 DTO fixture와 #9 draft catalog를 명시적으로 사용한다.
+
+## 별도 v3 경계 (#20)
+
+`coverage_v3.check_coverage_v3`는 병합된 `contracts.v3.CoverageResult`를 반환한다.
+23항목 catalog, v3 policy_version, 실제 근거 충분성 검사와 승인 rule 적용 검사를
+호출자가 명시적으로 공급한다. 검증된 N/A만 분모에서 제외하고 Missing은 포함한다.
+Decimal 비율과 정확한 30% readiness 경계, 후보별 분모0 예외,
+`build_research_gaps_v3`의 Missing 전용 caller gap 보존을 제공한다.
+
+실제 병합된 #12 `tests.fixtures.loader.load_common_fixtures`로 회귀를 검증한다.
+API·책임·live 차단과 미연결 경계는
+[`docs/implementation/v3-coverage.md`](../../../docs/implementation/v3-coverage.md)에 있다.
+이 구현은 baseline을 변경하거나 D14 rule 목록·rubric/live를 승인하지 않는다.
