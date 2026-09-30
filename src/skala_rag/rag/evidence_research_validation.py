@@ -20,6 +20,7 @@ import json
 import math
 import os
 import time
+from collections import Counter
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -76,6 +77,19 @@ USD_PER_OUTPUT_TOKEN = Decimal("1.60") / 1_000_000
 class Clock:
     def now(self):
         return datetime.now(UTC)
+
+
+class _RecordingResearch(EvidenceResearch):
+    """batch별 ``ResearchOutcome``의 거절 사유·도구 결과를 리포트용으로 남긴다."""
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.outcomes = []
+
+    def run(self, candidate, gaps, budget):
+        outcome = super().run(candidate, gaps, budget)
+        self.outcomes.append(outcome)
+        return outcome
 
 
 class NoClaimsLLM:
@@ -319,7 +333,7 @@ def run(
     else:
         key, extractor = "", NoClaimsLLM()
 
-    research = EvidenceResearch(
+    research = _RecordingResearch(
         retrieve=retriever,
         rag_required=True,
         llm=extractor,
@@ -452,6 +466,16 @@ def run(
         retrieve_ledger=retrieve_runtime.ledger.snapshot(),
         query_token_lengths=local.token_lengths,
         elapsed_seconds=time.monotonic() - started,
+        outcomes=[
+            dict(
+                status=o.status,
+                initial=o.initial,
+                calls=[(c.tool, c.status, list(c.error_codes)) for c in o.calls],
+                rejected=sorted(Counter(o.rejected).items()),
+                errors=[e.error_code for e in o.errors],
+            )
+            for o in research.outcomes
+        ],
         quality_benchmark="not performed",
     )
     if llm == "openai":
