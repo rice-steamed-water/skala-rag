@@ -156,6 +156,7 @@ def test_offline_plan_and_atomic_fake_write():
         {"approved": False, "reviewer": None},
         {"extraction_status": "partial"},
         {"extraction_status": "pending"},
+        {"extraction_status": "failed"},
     ],
 )
 def test_rejected_document_blocks_whole_plan(changes):
@@ -312,6 +313,19 @@ def test_mutating_caller_settings_after_plan_does_not_change_encoder_settings():
     write_index(result, embedder=CheckingEmbedder(), store=FakeStore())
 
 
+def test_forged_plan_metadata_never_reaches_embedder_or_sink():
+    result = plan()
+    forged = replace(
+        result,
+        metadata=replace(result.metadata, index_version="sha256:forged"),
+    )
+    embedder, store = FakeEmbedder(), FakeStore()
+    with pytest.raises(ValueError, match="integrity"):
+        write_index(forged, embedder=embedder, store=store)
+    assert embedder.calls == 0
+    assert not store.writes
+
+
 def test_existing_index_metadata_never_overwritten():
     result = plan()
     store = FakeStore(replace(result.metadata, model_revision="other"))
@@ -327,3 +341,5 @@ def test_missing_explicit_settings_or_non_json_configuration_rejected():
         settings(tokenizer_revision="")
     with pytest.raises((TypeError, ValueError)):
         settings(chunk_settings={"threshold": float("nan")})
+    with pytest.raises(ValueError, match="keys"):
+        settings(chunk_settings={"nested": {1: "not-json"}})

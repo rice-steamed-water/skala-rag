@@ -37,6 +37,11 @@ filesystem store, benchmark, or production persistence implementation.
   guarantee persistence atomicity, concurrency safety, or metadata verification
   by a future store implementation; that implementation must provide its own
   transaction/unique-index guarantees and read-back checks.
+- This boundary assumes a **trusted in-process caller**. `IndexPlan` is ordinary
+  Python data, not a security capability: an untrusted caller can construct its
+  own inputs or call its injected sink directly. Store authorization, signed
+  manifests, process isolation and tamper resistance belong to the approved
+  product-store/runtime design, not this fixture module.
 
 The #49 approved real extraction/Chunk integration is still open. Before any
 real indexing, approve and verify the exact BGE revision and its LICENSE,

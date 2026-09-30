@@ -36,6 +36,17 @@ def _required(value: object, name: str) -> None:
         raise ValueError(f"{name} must be a nonblank string")
 
 
+def _validate_json_mapping_keys(value: object) -> None:
+    if isinstance(value, Mapping):
+        for key, nested in value.items():
+            if not isinstance(key, str):
+                raise ValueError("settings keys must be strings")
+            _validate_json_mapping_keys(nested)
+    elif isinstance(value, (list, tuple)):
+        for nested in value:
+            _validate_json_mapping_keys(nested)
+
+
 @dataclass(frozen=True)
 class IndexSettings:
     """Every version-bearing decision is supplied; none is a product default."""
@@ -86,22 +97,12 @@ class IndexSettings:
         ):
             if not isinstance(payload[name], Mapping) or not payload[name]:
                 raise ValueError(f"{name} must be a nonempty JSON mapping")
+            _validate_json_mapping_keys(payload[name])
         try:
             encoded = _canonical(payload)
             decoded = json.loads(encoded)
         except (TypeError, ValueError) as exc:
             raise ValueError("settings must be finite JSON data") from exc
-        if any(
-            not isinstance(key, str)
-            for name in (
-                "tokenizer_settings",
-                "preprocessing_settings",
-                "chunk_settings",
-                "embedding_settings",
-            )
-            for key in payload[name]
-        ):
-            raise ValueError("settings keys must be strings")
         # Snapshot protects identity from later mutations of supplied mappings.
         object.__setattr__(self, "_payload", _canonical(decoded))
 
@@ -127,8 +128,8 @@ class IndexMetadata:
 @dataclass(frozen=True)
 class IndexPlan:
     metadata: IndexMetadata
-    settings: IndexSettings
     # Serialized copies make later mutations of the caller's DTOs irrelevant.
+    source_snapshots: tuple[str, ...]
     chunk_snapshots: tuple[str, ...]
 
 
@@ -151,6 +152,26 @@ class IndexSink(Protocol):
     def write_new(
         self, metadata: IndexMetadata, vectors: tuple[EmbeddingVector, ...]
     ) -> None: ...
+
+
+def _index_version(
+    *,
+    corpus_version: str,
+    corpus_hash: str,
+    settings_snapshot: str,
+    source_snapshots: tuple[str, ...],
+    chunk_snapshots: tuple[str, ...],
+) -> str:
+    version_input = {
+        "boundary": "skala-index-v3-fixture-1",
+        "corpus_version": corpus_version,
+        "corpus_hash": corpus_hash,
+        "settings": json.loads(settings_snapshot),
+        "sources": [json.loads(snapshot) for snapshot in source_snapshots],
+        "chunks": [json.loads(snapshot) for snapshot in chunk_snapshots],
+    }
+    digest = hashlib.sha256(_canonical(version_input).encode("utf-8")).hexdigest()
+    return f"sha256:{digest}"
 
 
 def build_index_plan(
@@ -213,19 +234,17 @@ def build_index_plan(
     chunk_snapshots = tuple(
         _canonical(item.model_dump(mode="json")) for item in ordered
     )
-    source_snapshots = {
-        key: source.model_dump(mode="json") for key, source in sources.items()
-    }
-    version_input = {
-        "boundary": "skala-index-v3-fixture-1",
-        "corpus_version": manifest.corpus_version,
-        "corpus_hash": gate.manifest_hash,
-        "settings": settings.snapshot(),
-        "sources": source_snapshots,
-        "chunks": [json.loads(snapshot) for snapshot in chunk_snapshots],
-    }
-    digest = hashlib.sha256(_canonical(version_input).encode("utf-8")).hexdigest()
-    index_version = f"sha256:{digest}"
+    source_snapshots = tuple(
+        _canonical(sources[source_id].model_dump(mode="json"))
+        for source_id in sorted(sources)
+    )
+    index_version = _index_version(
+        corpus_version=manifest.corpus_version,
+        corpus_hash=gate.manifest_hash,
+        settings_snapshot=settings._payload,
+        source_snapshots=source_snapshots,
+        chunk_snapshots=chunk_snapshots,
+    )
     metadata = IndexMetadata(
         index_version=index_version,
         corpus_version=manifest.corpus_version,
@@ -239,22 +258,38 @@ def build_index_plan(
         document_ids=tuple(sorted(doc_ids)),
         chunk_ids=tuple(sorted(ids)),
     )
-    return IndexPlan(metadata, settings, chunk_snapshots)
+    return IndexPlan(metadata, source_snapshots, chunk_snapshots)
 
 
 def write_index(plan: IndexPlan, *, embedder: Encoder, store: IndexSink) -> None:
     """Validate every vector before a single injected sink write; never overwrite."""
     metadata = plan.metadata
+    try:
+        frozen_settings = IndexSettings(**json.loads(metadata.settings_snapshot))
+        chunks = tuple(
+            Chunk.model_validate_json(snapshot) for snapshot in plan.chunk_snapshots
+        )
+        expected_version = _index_version(
+            corpus_version=metadata.corpus_version,
+            corpus_hash=metadata.corpus_hash,
+            settings_snapshot=metadata.settings_snapshot,
+            source_snapshots=plan.source_snapshots,
+            chunk_snapshots=plan.chunk_snapshots,
+        )
+    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise ValueError("index plan integrity mismatch") from exc
+    if (
+        metadata.index_version != expected_version
+        or metadata.model_id != frozen_settings.model_id
+        or metadata.model_revision != frozen_settings.model_revision
+        or metadata.tokenizer_id != frozen_settings.tokenizer_id
+        or metadata.tokenizer_revision != frozen_settings.tokenizer_revision
+        or metadata.dimension != frozen_settings.dimension
+        or tuple(c.chunk_id for c in chunks) != metadata.chunk_ids
+    ):
+        raise ValueError("index plan integrity mismatch")
     if store.read_metadata(metadata.index_version) is not None:
         raise ValueError("index version already exists; refusing overwrite")
-    if plan.settings._payload != metadata.settings_snapshot:
-        raise ValueError("index settings mismatch")
-    chunks = tuple(
-        Chunk.model_validate_json(snapshot) for snapshot in plan.chunk_snapshots
-    )
-    if tuple(c.chunk_id for c in chunks) != metadata.chunk_ids:
-        raise ValueError("index plan chunk IDs mismatch")
-    frozen_settings = IndexSettings(**json.loads(metadata.settings_snapshot))
     vectors = tuple(embedder.encode(chunks, settings=frozen_settings))
     if len(vectors) != len(chunks):
         raise ValueError("embedding count mismatch")
