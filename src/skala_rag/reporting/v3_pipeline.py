@@ -19,6 +19,7 @@ from skala_rag.contracts.common import Contract, Text
 from skala_rag.contracts.interfaces import StructuredLLM
 from skala_rag.contracts.sources import Source
 from skala_rag.reporting.format import reference_line
+from skala_rag.reporting.pdf_presentation import presentation_payload
 from skala_rag.reporting.v3_context import ReportContextV3, canonical
 from skala_rag.reporting.validator import TOKEN, artifact_hash
 
@@ -188,6 +189,12 @@ def validate_report_v3(
             if errors
             else "pass",
             "version": PROMPT_VERSION,
+            # Optional rendering observations share the existing exact-draft proof.
+            **(
+                {"pdf_presentation": presentation_payload(data, draft)}
+                if not errors
+                else {}
+            ),
         },
         errors=errors,
         artifact_hash=artifact_hash(draft),

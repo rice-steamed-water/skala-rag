@@ -15,7 +15,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Table, TableStyle
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Table
 
 from skala_rag.contracts import (
     ReportDraft,
@@ -24,6 +24,16 @@ from skala_rag.contracts import (
     ValidationResult,
 )
 from skala_rag.contracts.tools import RenderResult
+from skala_rag.reporting.pdf_presentation import (
+    INK,
+    NAVY,
+    TEAL,
+    VERSION,
+    page_decoration,
+    presentation_flowables,
+    table_style,
+    validated_presentation,
+)
 from skala_rag.reporting.validator import artifact_hash
 
 SECTIONS = (
@@ -158,6 +168,9 @@ class PDFRenderer:
                 return _failure(draft, "PDF_PROFILE_NOT_APPROVED")
             if self.profile.renderer_version != reportlab.Version:
                 return _failure(draft, "PDF_RENDERER_VERSION_MISMATCH")
+            presentation = validated_presentation(
+                structural.checks.get("pdf_presentation"), draft, self.execution_mode
+            )
             fonts = []
             for filename, expected in [
                 ("NanumGothic-Regular.ttf", self.profile.regular_sha256),
@@ -182,6 +195,7 @@ class PDFRenderer:
                 leading=15,
                 wordWrap="CJK",
                 spaceAfter=6,
+                textColor=INK,
             )
             head = ParagraphStyle(
                 "head",
@@ -191,6 +205,20 @@ class PDFRenderer:
                 leading=19,
                 spaceBefore=12,
                 spaceAfter=7,
+                textColor=NAVY,
+                keepWithNext=True,
+            )
+            subhead = ParagraphStyle(
+                "subhead",
+                parent=head,
+                fontSize=10.5,
+                leading=15,
+                textColor=TEAL,
+                spaceBefore=8,
+                spaceAfter=5,
+            )
+            table_header = ParagraphStyle(
+                "table-header", parent=body, fontName=fonts[1], textColor=colors.white
             )
             positions = []
 
@@ -247,11 +275,22 @@ class PDFRenderer:
             margin = 18 * mm
             width = A4[0] - 2 * margin - 12
             story = []
+            visualizations = {
+                "score_cards": 0,
+                "dimension_bars": 0,
+                "candidate_rows": 0,
+            }
             for section, kind, value in blocks:
                 if kind == "table":
                     rows = [
-                        [Paragraph(html.escape(_plain(cell)), body) for cell in row]
-                        for row in value
+                        [
+                            Paragraph(
+                                html.escape(_plain(cell)),
+                                table_header if i == 0 else body,
+                            )
+                            for cell in row
+                        ]
+                        for i, row in enumerate(value)
                     ]
                     table = MeasuredTable(
                         rows,
@@ -260,33 +299,34 @@ class PDFRenderer:
                         hAlign="LEFT",
                     )
                     table.section = section
-                    table.setStyle(
-                        TableStyle(
-                            [
-                                (
-                                    "GRID",
-                                    (0, 0),
-                                    (-1, -1),
-                                    0.4,
-                                    colors.HexColor("#CCD4DF"),
-                                ),
-                                (
-                                    "BACKGROUND",
-                                    (0, 0),
-                                    (-1, 0),
-                                    colors.HexColor("#EDF2F7"),
-                                ),
-                                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                            ]
-                        )
-                    )
+                    table.setStyle(table_style())
                     story.append(table)
                 else:
                     story.append(
                         MeasuredParagraph(
-                            value, head if "heading" in kind else body, section
+                            value,
+                            head
+                            if kind == "heading"
+                            else subhead
+                            if kind == "subheading"
+                            else body,
+                            section,
                         )
                     )
+                if (
+                    kind == "heading"
+                    and section == "INVESTMENT ASSESSMENT & RISKS"
+                    and presentation is not None
+                ):
+                    additions, visualizations = presentation_flowables(
+                        presentation,
+                        width,
+                        body,
+                        subhead,
+                        MeasuredTable,
+                        MeasuredParagraph,
+                    )
+                    story.extend(additions)
             document = SimpleDocTemplate(
                 str(destination),
                 pagesize=A4,
@@ -296,7 +336,11 @@ class PDFRenderer:
                 bottomMargin=margin,
                 title="투자 검토 보고서",
             )
-            document.build(story)
+
+            def decorate(canvas, doc):
+                page_decoration(canvas, doc, font=fonts[0], mode=self.execution_mode)
+
+            document.build(story, onFirstPage=decorate, onLaterPages=decorate)
             reader = PdfReader(destination)
             content = "\n".join(page.extract_text() for page in reader.pages)
             summary = [box for box in positions if box["section"] == "SUMMARY"]
@@ -347,6 +391,8 @@ class PDFRenderer:
                 artifact_hash=hashlib.sha256(destination.read_bytes()).hexdigest(),
                 renderer_version=reportlab.Version,
                 template_version=self.profile.version,
+                presentation_version=VERSION,
+                visualizations=visualizations,
                 summary_height_pt=summary_height,
                 summary_fraction=fraction,
                 summary_pages=pages,
