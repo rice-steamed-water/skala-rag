@@ -56,6 +56,10 @@ v3 B-2의 **Primary RAG Agent는 Evidence Research**다. 같은 Agent가 최초 
 
 ## 3. 코퍼스 manifest 관리
 
+#13의 [후보 manifest](../../data/manifests/README.md)와
+[embedding 접근 점검](corpus-readiness.md)은 검토 초안이다.
+문서 권한·포함 승인·추출 완료와 runtime 가용성을 대신하지 않는다.
+
 전체 프로젝트의 승인된 RAG 문서 집합을 `corpus_manifest`로 관리한다. 이 프로젝트는 원문 §1.3의 코퍼스 200페이지 한도(R05)를 적용하지 않는다([D13 기록](decisions.md#d13--200페이지-산정-규칙-적용-제외-91)). 페이지 수 산정·합계 검사는 하지 않는다.
 
 | Manifest 필드 | 의미 |
