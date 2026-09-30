@@ -21,7 +21,7 @@
 
 채택한 디렉터리 구조와 공통 파일 규칙은 [CONTRIBUTING.md](../../CONTRIBUTING.md#폴더-구조)에 있다.
 
-main의 `pyproject.toml`은 Python `>=3.11`과 직접 의존성·uv/ruff/pytest를 명시하고 `uv.lock`이 설치 해석 결과를 고정한다. #5의 구조 DTO (`skala_rag.contracts`)와 #7의 `InvestmentState`/`create_initial_state`, 그 contract fixture·test는 현재 존재한다. 이는 storage/검증·초기 state 범위이며 Coverage 계산, Graph/reducer wiring, CLI, live RAG, 점수·보고서 구현을 뜻하지 않는다. 설치·기존 테스트 명령은 [루트 README](../../README.md)에 있다. `CONTRIBUTING.md`의 “첫 코드 PR에서 만든다”는 시점 문구보다 현재 파일과 [기준 SHA](design-v3-alignment.md)를 본다. 그 협업문서는 #35 수정 범위 밖이다.
+`pyproject.toml`은 Python `>=3.11`과 직접 의존성·uv/ruff/pytest를 명시하고 `uv.lock`이 해석 결과를 고정한다. 통합 기준 `c5a30f3`에는 #5 구조 DTO, #7 State/factory, #9 fixture 전용 draft catalog 외에 #15/PR #42의 ID reducer와 State Annotated 연결, #16/PR #64의 baseline `aggregate_scores`·`decide`, #53/PR #66의 재무 단위·기간·파생값 helper가 있다. 집계는 고정100·observed/missing·여섯 영역 관측 rating 저점수·세 label baseline이며 v3 N/A 분모·핵심차원40%·네 label 구현이 아니다. 업무 Graph wiring·CLI·live RAG·평가 agent·보고서 출력은 여전히 구현 목표다. 설치·검증 명령은 [루트 README](../../README.md), cutoff는 [정합화 기록](design-v3-alignment.md)을 따른다.
 
 #9/PR #38의 `scoring.catalog.load_policy`, `configs/scoring.draft.json`과 계산 fixture도 기준 main에 있다. fixture 전용 draft이며 v3 `aggregate_scores`·`decide` 구현이나 정책 승인으로 보지 않는다.
 
@@ -31,7 +31,7 @@ Vector store, LLM provider/model, 최종 embedding, PDF renderer는 미정이다
 
 ### M0 — 공통 계약과 정책 합의
 
-**선행:** v3·과제 원문·정합화 기록을 읽고 baseline D01–D06·D08과 충돌하는 v3 replacement 세부 및 D14의 구현 정책을 별도 승인한다. D09 목차/인용/Warning 예외는 보고서 fixture 전, renderer는 M3 전 합의한다. D07·D12·D13은 해당 live 기능 전에 해소한다. 미승인 질문은 주입된 fixture 정책으로만 검증하고 live 기본값으로 설치하지 않는다.
+**선행:** v3·과제 원문·정합화 기록을 읽고 baseline D01–D06·D08과 충돌하는 v3 replacement 세부 및 D14의 구현 정책을 별도 승인한다. D09 baseline 목차·인용·구조 검증은 부분 승인되어 있다. v3 다섯 목차로의 대체·Warning 예외는 해당 보고서 fixture 전, renderer는 M3 전 합의한다. D07·D12·D13은 해당 live 기능 전에 해소한다. 미승인 질문은 주입된 fixture 정책으로만 검증하고 live 기본값으로 설치하지 않는다.
 
 - WP1: schema, catalog interface, mock Tool/LLM, failure 타입, 최소 실행환경 설정.
 - WP4/WP5: 23개 criterion rubric, missing/not_applicable 조건, 정규화·네 label·핵심차원 fixture.
@@ -105,13 +105,17 @@ WP1이 예산 제한을 적용한 runner로 통합한다. WP6는 real Report Gen
 | T24 | discovery / 출처 전달 | DiscoveryBundle 모든 discovery_source_ids 해소; 후속 Company Research 실패 후에도 발견 Source·이력 보존 | WP1/WP2 |
 | T25 | snapshot / 불변성 | 근거·provenance 추가 후 이전 snapshot 불변, 새 세대에서만 보임; superseded/파생 입력 무효화·참조 폐쇄성 확인; 누락·적격성 근거 무효화는 SNAPSHOT_INVALID로 해당 후보만 archive | WP1/WP3 |
 
-T03의 0분모/소수, T09의 순위·동점, T16의 status/CLI 기대값은 **OPEN 정책별 조건부 테스트**다. 임의 기대값으로 승인하지 않는다. 정책 없는 live를 차단하는 테스트와, 제안 정책이 주입됐을 때의 경로 테스트를 분리한다. 기존 6개 smoke test는 이 T01–T25 구현 증거가 아니다.
+T03의 0분모/소수, T09의 순위·동점, T16의 status/CLI 기대값은 **OPEN 정책별 조건부 테스트**다. 임의 기대값으로 승인하지 않는다. 정책 없는 live를 차단하는 테스트와, 제안 정책이 주입됐을 때의 경로 테스트를 분리한다. 기존 smoke·DTO·baseline 집계·reducer·재무 helper 테스트는 각 구현 범위의 증거이며 이 v3 T01–T25 전체 구현 증거가 아니다.
 
 unit/contract 테스트는 네트워크 없이 실행한다. live integration은 명시적 설정과 예산이 있을 때만 실행하고, 미설정 시 skipped 사유를 남긴다. 외부 LLM 출력의 완전 동일성은 보장하지 않지만, 점수 함수·분기·근거 추적 계약은 동일하게 검증한다.
 
 ## 5. 보고서 계약과 PDF 검증
 
-### v3 E-1 다섯 목차 — 세부 검증 설정은 D09
+### 현재 승인 baseline — D09 부분 승인
+
+[보고서 계약](reporting.md)의 single_candidate/no_recommendation 각각 7개 섹션, 인용 token·서지 미상 표기·SV01–SV09 구조 검증은 2026-09-30 xxhigh가 부분 승인했다. 승인 기록은 [D09](decisions.md)에 보존한다. 아래 v3 다섯 목차·selector·Warning은 그 승인의 자동 확장이 아니며 별도 대체 승인이 필요하다. PDF 구현 선택은 OPEN이다.
+
+### v3 E-1 다섯 목차 — 별도 대체 승인 전 목표
 
 ```text
 1. SUMMARY
@@ -131,7 +135,7 @@ unit/contract 테스트는 네트워크 없이 실행한다. live integration은
 
 v3는 본문 약 4~4.5페이지를 목표로 둔다. 목표 분량 합이나 Markdown 길이가 실제 PDF 검증을 대체하지 않는다. 제목 문자열·순서는 위 E-1을 검사하고 번호/Markdown 레벨 허용 형식은 D09에서 고정한다.
 
-**과제 필수:** 5장 이내, SUMMARY는 전체 보고서의 핵심 요약이며 1/2페이지 이내, 마지막 REFERENCE는 실제 사용 자료만. 표지·참고문헌을 분량 제한 밖으로 빼는 예외는 원문에 없으므로 전체 PDF를 세는 제안이다.
+**과제 필수:** 5장 이내, SUMMARY는 전체 보고서의 핵심 요약이며 1/2페이지 이내, 마지막 REFERENCE는 실제 사용 자료만. 표지·참고문헌을 분량 제한 밖으로 빼는 예외는 원문에 없으므로 승인된 baseline 보고서 계약처럼 전체 PDF를 센다. v3에서도 이 분량 보호를 유지하며 renderer·SUMMARY 측정 방식은 별도 승인한다.
 
 - SUMMARY: **기업 한 줄 정의**, 추천 여부, 핵심 이유, 가장 큰 위험, 근거 한계. 단순 목차나 회사 소개로 대체하지 않는다.
 - 점수: 원배점 observed_score·applicable_weight, normalized_score, missing_weight·weighted_missing_pct, N/A 항목·차원별 비율·모든 보류 사유를 구별한다. 네 label은 원 Decision과 일치해야 한다.
@@ -149,7 +153,7 @@ Reference 양식은 v3 E-2와 이전 원문 §9.3을 따른다.
 웹페이지: 기관명 또는 작성자(YYYY-MM-DD). 제목. 사이트명, URL
 ```
 
-알 수 없는 날짜·권호·저자는 만들어 넣지 않는다. 누락 표기 정책을 승인받거나 인용 가능한 원출처를 확보한다. 사용한 Evidence의 Source 집합과 REFERENCE가 일치해야 한다.
+알 수 없는 날짜·권호·저자는 만들어 넣지 않는다. 보고서 계약의 승인된 미상 표기를 사용하되 Source와 원문 locator는 해소되어야 한다. 사용한 Evidence의 Source 집합과 REFERENCE가 일치해야 한다.
 
 ### 검증 순서
 

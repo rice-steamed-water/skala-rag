@@ -11,7 +11,7 @@
 3. 모든 구현 담당자가 [공통 데이터 계약](implementation/contracts.md)을 먼저 읽는다.
 4. [작업 분담과 검증](implementation/delivery.md)의 M0 → M1 순서로 시작한다. 외부 API부터 각자 연결하기보다, 같은 fixture로 전체 흐름을 먼저 맞춘다.
 
-기준 main에는 `pyproject.toml`·`uv.lock`, 설치 가능한 Python 패키지, #5의 구조 DTO와 #7의 `InvestmentState`/`create_initial_state`, 관련 contract fixture·tests가 있다. #9의 draft catalog 로더·설정·계산 fixture도 병합됐지만 fixture 전용이며 v3 점수 구현이나 정책 승인과 다르다. Graph/reducer wiring·CLI·실제 RAG·평가·점수 계산·보고서는 구현되지 않았다. 설치·검증 명령은 [루트 README](../README.md), 조사한 main SHA와 미병합 PR snapshot은 [정합화 기록](implementation/design-v3-alignment.md)에 있다. 아래 함수·DTO·정책에서 이미 구현된 것으로 명시한 범위 외에는 **구현 목표/제안**이다. v3 HTML과 `raws/`는 수정하지 않는다.
+통합 기준 `c5a30f3`에는 #5 구조 DTO, #7 State/factory, #9 fixture 전용 draft catalog 외에 #15/PR #42의 ID reducer와 State Annotated 연결, #16/PR #64의 baseline `aggregate_scores`·`decide`, #53/PR #66의 재무 단위·기간·파생값 helper가 있다. 집계는 고정100·observed/missing·여섯 영역 관측 rating 저점수·세 label baseline이며 v3 N/A 분모·핵심차원40%·네 label 구현이 아니다. 업무 Graph wiring·CLI·live RAG·평가 agent·보고서 출력은 여전히 구현 목표다. 설치·검증 명령은 [루트 README](../README.md), 통합 cutoff와 과거 GitHub snapshot은 [정합화 기록](implementation/design-v3-alignment.md)에 있다. 명시한 구현 외의 함수·DTO·정책은 목표/제안이며 v3 HTML과 `raws/`는 수정하지 않는다.
 
 ## 문서를 읽는 순서
 
@@ -21,7 +21,10 @@
 | 전체 흐름, 노드 책임, 반복과 종료 | [아키텍처](implementation/architecture.md) | Graph / Agent 담당 |
 | State, Evidence, 평가 결과, Tool 경계 | [공통 데이터 계약](implementation/contracts.md) | 전원 |
 | 평가 항목, 가중치, 결측, 판단 라벨 | [점수와 판단 정책](implementation/scoring.md) | 평가 / 지표 담당 |
+| 창업자·시장·기술·경쟁 우위 rubric, missing 조건 | [핵심 영역 rubric](implementation/rubric-core.md) | 평가 / 지표 담당 |
+| 실적·투자조건 rubric, 재무 단위 규칙 | [재무 rubric](implementation/rubric-finance.md) | 평가 / 지표 담당 |
 | 자료 수집, 페이지 예산, 검색, 임베딩 비교 | [데이터와 RAG](implementation/data-rag.md) | 데이터 / RAG 담당 |
+| mode별 보고서 목차, 인용, 구조 검증 | [보고서 계약](implementation/reporting.md) | 보고서 / 검증 담당 |
 | 작업 패키지, 통합 순서, 테스트, 제출 | [작업 분담과 검증](implementation/delivery.md) | 전원 |
 | 원문 충돌, 새 제안, 승인 기록 | [결정 목록](implementation/decisions.md) | 전원, 정책 결정 담당 |
 | 이슈·브랜치·PR 규칙, 폴더 구조, 개발 도구 | [협업 규칙](../CONTRIBUTING.md) | 전원 |
@@ -53,6 +56,8 @@
 | **미결정** | 원문만으로 결론을 낼 수 없는 사항 | 담당자·결정·근거·승인일 기록 |
 
 각 상세 문서의 새 필드, 예외 처리, 함수명은 별도 표시가 없어도 **구현 제안**이다. #3 issue comment의 D01–D06·D08 baseline 승인 기록은 존재하지만, v3가 바꾸는 selector·N/A·Warning 세부는 자동으로 승인되지 않아 `v3-OPEN`이다. v3의 명시 내용은 목표로 반영하되 세부 정책을 승인 없이 기본값으로 만들지 않는다. OPEN에 의존하는 기능은 주입된 가상 정책·인터페이스까지만 진행하고 live를 차단한다.
+
+D09의 baseline 목차(single_candidate/no_recommendation 각각 7개 섹션)·인용·서지 미상 표기·SV01–SV09 구조 검증은 2026-09-30 xxhigh가 부분 승인했다([보고서 계약](implementation/reporting.md)). 이 승인은 v3 E-1 다섯 목차·전 후보 selector·Warning 대체안을 승인하지 않는다. PDF 구현 선택은 OPEN이며 대체 승인 전에는 baseline 계약의 승인 범위를 유지한다.
 
 ## 필수 요구사항과 검증 위치
 

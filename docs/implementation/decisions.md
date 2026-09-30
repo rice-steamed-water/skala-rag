@@ -2,7 +2,7 @@
 
 [문서 홈](../README.md) · [v3 원문](../design/design-v3.html) · [이전 통합 원문](../raws/robotics_startup_agentic_rag_notion_integrated.md) · [정합화·영향표](design-v3-alignment.md)
 
-2026-09-30 기준 사용자가 v3를 새 설계 입력으로 지정했다. **v3 명시 목표 ≠ baseline 정책 승인 ≠ main 구현/검증**이다. issue #3 comment `5902473875` (2026-09-30 01:49:36Z, xxhigh)는 PR #41 head `7b9f6cee8f36a016d5f47191b41999430390e6ee`의 D01–D06·D08 **기존 baseline을 변경 없이 승인**한 기록이다. 그러나 그 baseline의 first-RECOMMEND 종료·serial Deal·fixed100·all-domain-low 같은 전제는 v3 목표와 다르다. 따라서 아래 표의 D01–D06·D08은 v3 대체 세부에 관한 `v3-OPEN`이며, 승인 이력을 지우거나 `SUPERSEDED`로 바꾸지 않는다. v3 replacement를 승인할 때만 근거·정확한 supersession 범위를 기록한다. D07·D09–D14와 live 총시간·LLM 호출·비용 상한은 이번 승인 범위 밖이다.
+2026-09-30 기준 사용자가 v3를 새 설계 입력으로 지정했다. **v3 명시 목표 ≠ baseline 정책 승인 ≠ main 구현/검증**이다. issue #3 comment `5902473875` (2026-09-30 01:49:36Z, xxhigh)는 PR #41 head `7b9f6cee8f36a016d5f47191b41999430390e6ee`의 D01–D06·D08 **기존 baseline을 변경 없이 승인**한 기록이다. 그러나 그 baseline의 first-RECOMMEND 종료·serial Deal·fixed100·all-domain-low 같은 전제는 v3 목표와 다르다. 따라서 아래 표의 D01–D06·D08은 v3 대체 세부에 관한 `v3-OPEN`이며, 승인 이력을 지우거나 `SUPERSEDED`로 바꾸지 않는다. v3 replacement를 승인할 때만 근거·정확한 supersession 범위를 기록한다. D07·D10–D14와 live 총시간·LLM 호출·비용 상한은 이슈 #3 승인 범위 밖이다. D09는 이슈 #14의 후속 승인으로 baseline 목차·인용·구조 검증이 부분 APPROVED이며, PDF 선택과 v3 다섯 목차·Warning 대체 세부는 OPEN이다. 아래 D09 행은 승인된 baseline과 별도 v3 대체안을 구별한다.
 
 ## 구현 전에 합의할 항목
 
@@ -16,7 +16,7 @@
 | D06 v3-OPEN | 통합 원문 §7의 TIPS·프리/브릿지·추정 정규화는 확인 필요 | A-2/B-1: 비상장·Seed~C·Exit 미완료·최소 Evidence 확보 가능 | Discovery+전원: 최소 Evidence가 확보 가능성/현재 확보 중 무엇인지, Company Research 경계·unknown 보강/다음 후보, 프리시드 허용. TIPS/검색0건/unknown 자동 적격 금지 / Eligibility |
 | D07 OPEN | 과거 BGE/Jina/OpenAI 비교 참고는 v3 baseline이 아님 | B-3: BGE-M3 1차 선택, e5-large·KURE-v1과 동일 Chunk/Query의 Hit Rate@1/3/5·MRR·교차언어 비교 | RAG: 최종 선택, 모델 revision·접근/라이선스 실확인, MRR depth/cutoff·성능 기준·vector store·장비. 실험은 M2 / live index |
 | D08 v3-OPEN | baseline의 후보5·추가조사2·보고서수정2, batch8calls·retry2·timeout30초와 공유 회계는 승인됨. 이를 v3 회계·Warning 경로가 자동 대체하지 않음 | D-2/D-3: Coverage에서 Evidence 재조사 최대2회 후 평가; 구조·의미 수정 공유2회 후 Warning 현재 결과 반환 | Graph+전원: 초기 제외/포함·빈/오류 batch·네트워크 retry·Company Research 별도 회계, 실행 예산, Warning 결과/acceptance/publication·workflow_status/CLI/manifest 매핑 / live·종료 |
-| D09 OPEN | 과거 SUMMARY+본문5개+REFERENCE안은 v3 대상 아님 | E-1/E-2의 다섯 목차·인용, 실제 PDF≤5·SUMMARY≤0.5 | 보고서: 렌더러·A4·폰트·여백·SUMMARY 측정, 무적격/Warning 목차 예외, 서지 누락 표기, layout 수정예산 / 보고서·제출 |
+| D09 baseline 부분 APPROVED / v3-OPEN | reporting.md의 mode별 7개 목차·인용·서지 미상 표기·SV01–SV09는 #14 승인; 아래 원본 기록 보존 | E-1/E-2 다섯 목차로의 대체와 무적격/Warning 예외는 별도 승인 대상, PDF≤5·SUMMARY≤0.5 유지 | 보고서: renderer·A4·폰트·여백·SUMMARY 측정, v3 구조 검증·mode 매핑, layout 수정예산 / 보고서·제출 |
 | D10 OPEN | 통합 원문 §11/§12의 별명·역할 매핑 미확정 | v3 표지는 울산 4반 2조, 김근홍·정순욱·허지원·심혁·박태준·한유진 명시 | 전원: 표지 명단≠실제 역할/계정. 이슈·PR 수행 증거와 본인 확인으로 Contributors 기록, 자동 매칭 금지 / 기여 역할 |
 | D11 OPEN | 통합 원문 §10의 DAY 3 일정만 있음 | v3가 캠퍼스·반·조는 제공하지만 실제 제출일은 제공하지 않음 | 전원: DAY 3 10:00 설계/15:00 개발의 실제 날짜·시간대·Slack thread 확인 / 제출 |
 | D12 OPEN | 통합 원문 §1·§5 국내 중심 API와 국내외 탐색 목표 차이 | v3 A의 Physical AI / Robotics 도메인 | Discovery: 국가 범위·지원 provider·해외 미지원 표시. 한국 fixture를 최종 지역 제한 승인으로 보지 않음 / live 탐색 |
@@ -146,13 +146,53 @@ Supersedes:
 
 ### 승인 반영 범위
 
-7개 항목의 승인자·승인일·승인 근거를 기록하고 scoring.md·architecture.md·contracts.md와 문서 홈에 승인 상태를 반영했다. 다른 결정(D07·D09–D14)의 OPEN 상태는 유지한다. 코드·정책 파일은 이 이슈에서 작성하지 않는다. PR 병합은 별도 요청 후 수행한다.
+7개 항목의 승인자·승인일·승인 근거를 기록하고 scoring.md·architecture.md·contracts.md와 문서 홈에 승인 상태를 반영했다. 이슈 #3 승인에서는 다른 결정을 변경하지 않았다. D09의 후속 부분 승인은 아래 이슈 #14 기록을 따른다. 코드·정책 파일은 이 이슈에서 작성하지 않는다. PR 병합은 별도 요청 후 수행한다.
+
+## D09 보고서 형식 승인 기록 — 이슈 #14
+
+- Decision ID: D09 (목차·인용·구조 검증 부분)
+- Status: APPROVED (목차·인용·구조 검증 부분)
+- Decision: [reporting.md](reporting.md)의 single_candidate/no_recommendation 각각 7개 섹션, Evidence 인용 token과 Source ID 기반 REFERENCE, 서지 미상 표기, SV01–SV09 체크리스트를 채택한다. PDF 전체 5페이지·SUMMARY 반 페이지 과제 조건은 유지한다.
+- Rationale and source: 원문 §9.1–9.3 및 contracts.md §5. 보고서 근거 추적·참고문헌 양방향 일치와 미평가/실패 후보 구분을 구현 가능하게 명시한다.
+- Rejected alternatives: 미채택 — 두 mode에 동일 기업 목차 강제; URL만으로 인용 대응; 검색한 모든 자료를 REFERENCE에 포함; 미상 날짜를 수집일로 대체; Markdown 길이로 PDF 분량 판정.
+- Affected documents / policy version / tests: reporting.md, delivery.md §5, docs/README.md. #26 ReportContext, #27 T14·T23, #28 fixture 보고서·수정 loop, #30 E2E. 보고서 형식 버전 식별자는 구현 이슈에서 부여.
+- Owner and reviewers: xxhigh / 보고서·Graph·검증 담당 검토 대상(별도 승인 받은 것으로 간주하지 않음).
+- Approval date: 2026-09-30 (Asia/Seoul), 승인자 xxhigh. [승인 근거](https://github.com/rice-steamed-water/skala-rag/issues/14#issuecomment-5902607679).
+- Supersedes: 없음.
+
+D09 중 렌더러·A4·폰트·여백·SUMMARY 측정 기준·인용 token 화면 변환은 M3까지 OPEN이다. 이 기록만 부분 APPROVED이며 PDF 선택과 D09 전체 완료 여부를 구별한다.
+
+## D14 제안 기록 — founder·market·technology·moat (#10, OPEN)
+
+- Decision ID: D14 (founder·market·technology·moat 부분)
+- Status: OPEN — 제안 작성 완료, 팀 승인 대기
+- Decision: [rubric-core.md](rubric-core.md)와 `configs/rubrics/core.yaml`(rubric_version core-0.1.0)의 14개 criterion rating 1–5 기준·최소 근거·missing 코드를 baseline으로 채택. 승인된 D05에 따라 적용조건 미확정은 `missing + applicability_note`이며 이 14개에는 not_applicable을 쓰지 않는다. 근거 없는 rating·다른 기업 근거·미해결 상충은 missing, 회사 자기주장만이면 최대 4.
+- Rationale and source: 원문 §3 상세 기준, scoring §2–§4, D02·D05(APPROVED). 설계 산출물 v3 C-2·C-3(#35 / PR #36, 미병합)은 병합 시 재검토.
+- Rejected alternatives: 미채택 — 근거 부족을 rating 1–2로 처리; 시장성·기술력 N/A 허용(저점수 조건 우회); 전체 로봇 시장 수치로 세부 시장 평가; 특허 검색 0건을 곧바로 "특허 없음"으로 처리.
+- Affected documents / policy version / tests: scoring.md §2, rubric-core.md, configs/rubrics/core.yaml, tests/unit/test_core_rubric.py; #22 평가 wrapper, #16 집계.
+- Open sub-questions: rubric-core.md §6 Q1–Q5
+- Owner and reviewers: XXXXXim / 지표·평가 담당 검토 요청 대상.
+- Approval date: -
+- Supersedes: 없음.
+
+## D14 제안 기록 — traction·deal_terms (#11, OPEN)
+
+- Decision ID: D14 (traction·deal_terms 부분)
+- Status: OPEN — 제안 작성 완료, 팀 승인 대기
+- Decision: [rubric-finance.md](rubric-finance.md)와 `configs/rubrics/finance.yaml`(rubric_version finance-0.1.0)의 9개 criterion rating 1–5 기준·최소 근거·missing 코드, 재무 단위 규칙(런웨이 개월 통일, 연간→월 환산은 derived, 분모 0 이하·기간 불일치는 missing)을 baseline으로 채택. 승인된 D05에 따라 pre-revenue·영업현금흐름 흑자 등 적용조건 문제는 `missing + applicability_note`로 두고 비중을 제거하지 않는다.
+- Rationale and source: 원문 §3 실적/투자조건 상세 기준, scoring §2–§4, D02·D05(APPROVED), T21. SaaS 경험칙·투자 단계 순서는 자동 점수 규칙에서 제외.
+- Rejected alternatives: 미채택 — SaaS 기준 매출총이익률 구간(70–80%); 단계별 자동 가점; pre-revenue를 rating 1로 처리; 분모 0 이하일 때 런웨이 무한대/최대점 처리.
+- Affected documents / policy version / tests: scoring.md §3·§4, rubric-finance.md, configs/rubrics/finance.yaml, tests/unit/test_finance_rubric.py; #16 집계, #22 평가 wrapper.
+- Open sub-questions: rubric-finance.md §5 Q1–Q6 (작성자 의견 포함). Q4·Q6의 not_applicable 안은 v3(#35 / PR #36)가 D05를 대체하도록 승인될 때만 적용.
+- Owner and reviewers: XXXXXim / 지표 담당(heojiwon2) 검토 요청 대상.
+- Approval date: -
+- Supersedes: 없음.
 
 ## 조용히 바꾸면 안 되는 원문
 
 - 현재 팀 가중치를 교수님 예시 `30/25/15/10/10/10`으로 되돌리지 않는다.
 - `PASS`를 적격성 통과나 보고서 검증 통과라는 의미로 재사용하지 않는다.
-- 5개 branch라는 이유로 투자조건 차원을 누락하지 않는다. 해당 없음만 승인된 적용성으로 분모에서 제외하며 Missing/실패를 삭제해 100으로 재정규화하지 않는다.
+- 5개 branch라는 이유로 투자조건 차원을 누락하지 않는다. v3 목표는 해당 없음만 승인된 적용성으로 분모에서 제외하고 Missing/실패를 삭제해 100으로 재정규화하지 않는 것이다. N/A 제외는 `v3-OPEN`이며 D05 대체 승인 전 baseline은 고정100 + `missing + applicability_note`를 유지한다.
 - “특정 항목 2점”을 비중이 1점인 세부항목의 획득점수와 직접 비교하지 않는다.
 - 최종 embedding 후보가 공개되어 있다는 사실만으로 과제의 오픈소스 요구 충족을 선언하지 않는다.
 - 원문의 도구 비용·접근성 표는 당시 메모다. 키 발급, 이용조건, 접근 성공은 구현 시 다시 확인해야 한다.

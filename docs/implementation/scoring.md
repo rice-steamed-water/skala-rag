@@ -4,6 +4,10 @@
 
 근거: [v3](../design/design-v3.html) A-2, C-1–C-4. **23개 항목·비중, 1..5 anchor, N/A 제외 분모, 네 label, 핵심차원 보류는 v3 명시 목표**다. baseline D01–D06·D08의 승인 기록은 [결정 목록](decisions.md)에 보존한다. 아래 OPEN은 그 승인 취소가 아니라 v3 대체 세부에 대한 `v3-OPEN`을 뜻하며, D14 rubric은 별도 OPEN이다. ID·DTO·적용성 검증·소수 경계·reason 우선순위를 포함한 v3 실행 정책은 별도 승인을 받아야 한다. 이전 원문 §3·§7의 상세 자료는 rubric 참고로 보존한다. 이 문서는 보편적 금융 투자 기준이나 구현 완료 주장이 아니다.
 
+## 현재 구현과 아래 v3 목표의 경계
+
+#16/PR #64의 `aggregate_scores`는 여섯 dimension·후보/세대/snapshot/policy 일치를 검증하고 `ScoreBreakdown`을 반환한다. `observed`/`missing`만 허용하며 N/A는 거절한다. `decide`는 고정100의 missing_weight와 모든 영역의 관측 rating을 검사하고 세 label(RECOMMEND/WATCHLIST/PASS)을 반환한다. 우선검토는 별도 grade이지 RECOMMEND_PRIORITY label이 아니다. 아래 §3·§5는 이 구현을 설명하는 문서가 아니라 별도 승인·구현할 v3 replacement다. #53 재무 helper는 파생값·Unavailable 사유를 반환하며 D14 rating·적용성 정책을 승인하지 않는다.
+
 ## 1. 먼저 적격성부터 판단한다
 
 점수가 높아도 부적격 기업을 추천하지 않는다.
@@ -18,7 +22,7 @@
 
 상장·Exit 완료·명시적 Series D 이상 등 확실한 부적격 조건이 하나라도 있으면 ineligible. 그 외 필수 조건이 하나라도 미확정이면 unknown으로 기록하고 다음 후보를 처리한다. 이 둘을 `PASS`라는 투자 판정과 혼동하지 않는다.
 
-이전 원문 정규화 표의 프리B·브릿지 등은 후보 검색용 힌트로 보존하되, 직전 완료 라운드를 근거로 확인한다. TIPS 선정만으로 seed를 확정하지 않는다. 프리시드/엔젤의 범위와 추정 단계 허용은 D06 OPEN이다. 직접 확인된 Seed~C도 나머지 적격 조건을 모두 확인해야 한다. 최소 Evidence gate를 Coverage의 30% 결측 기준과 동일시하지 않는다. Company Research의 unknown 보강 경로·예산도 승인 전이며, 위 unknown→다음 후보는 보수적 fixture 제안이다.
+이전 원문 정규화 표의 프리B·브릿지 등은 후보 검색용 힌트로 보존하되, 직전 완료 라운드를 근거로 확인한다. TIPS 선정만으로 seed를 확정하지 않는다. 승인된 D06 baseline에서 명시적 프리시드·엔젤은 `out_of_scope`이고 추정/unknown만으로 적격 처리하지 않는다. 이를 바꾸는 v3 대체안만 `v3-OPEN`이며 별도 승인 전 live 기본값으로 사용할 수 없다. 직접 확인된 Seed~C도 나머지 적격 조건을 모두 확인해야 한다. 최소 Evidence gate를 Coverage의 30% 결측 기준과 동일시하지 않는다. baseline은 공통 보강 예산 소진 후 unknown이면 다음 후보로 이동하며, v3 Company Research의 별도 보강 경로·예산 변경은 승인 전이다.
 
 ## 2. 평가 catalog — 원문 비중, ID는 제안
 
@@ -50,7 +54,7 @@
 | deal_terms / 10 | deal_terms.valuation | Valuation | 5 | 금액·통화·날짜·pre/post 구분·해당 라운드 |
 | deal_terms / 10 | deal_terms.ownership | 지분율 | 3 | 동일 거래의 지분율 직접 공개 또는 정확한 산정 조건 |
 
-원문 `Ruld of 40`은 raw에 보존되어 있다. 구현 ID와 표시명에서는 `Rule of 40`으로 통일한다. 위 “최소 근거”는 공개 자료의 보유를 보장하지 않으며, 점수별 rubric을 대신하지 않는다.
+founder·market·technology·moat 14개 criterion의 rubric 제안은 [핵심 영역 rubric](rubric-core.md)(`configs/rubrics/core.yaml`)에 있다. 원문 `Ruld of 40`은 raw에 보존되어 있다. 구현 ID와 표시명에서는 `Rule of 40`으로 통일한다. 위 “최소 근거”는 공개 자료의 보유를 보장하지 않으며, 점수별 rubric을 대신하지 않는다.
 
 ## 3. rating·적용성·가중점수 — v3 replacement 제안
 
@@ -65,7 +69,7 @@
 | 5 | 매우 우수: 복수의 신뢰 가능한 근거 및 경쟁사 대비 우위 확인 | 근거·비교 조건 확인 |
 | null | missing 또는 not_applicable | 아래 상태별 사유 필수; rating으로 부정 평가하지 않음 |
 
-M0에서 23개 criterion별로 이 척도를 구체화한다. 정책 담당자는 “왜 3이 아니라 4인가”를 검토할 수 있는 rubric과 예시를 제공해야 한다. 숫자 임계값을 새로 정할 경우 승인 근거가 필요하다. **Series C라는 이유만으로 Seed보다 높은 투자조건 점수를 자동 부여하지 않는다.**
+M0에서 23개 criterion별로 이 척도를 구체화한다. traction·deal_terms 9개 criterion의 제안은 [재무 rubric](rubric-finance.md)(`configs/rubrics/finance.yaml`)에 있다. 정책 담당자는 “왜 3이 아니라 4인가”를 검토할 수 있는 rubric과 예시를 제공해야 한다. 숫자 임계값을 새로 정할 경우 승인 근거가 필요하다. **Series C라는 이유만으로 Seed보다 높은 투자조건 점수를 자동 부여하지 않는다.**
 
 ### 상태와 분모 — C-2/C-3 용어 충돌은 D05 OPEN
 
@@ -134,7 +138,7 @@ dimension_score_pct(d) = Σ d의 observed p_i / Σ d의 observed/missing w_i × 
 
 재무 지표가 공개되지 않았다는 이유로 도구 실패를 숨기거나 추정 재무제표를 생성하지 않는다. 원문의 SaaS 경험칙·국민연금 인원 기반 추정·기사 반복 노출은 참고 신호이지 직접 재무 관측의 대체물이 아니다. 확인되지 않은 투자액/기업가치/지분율을 서로 다른 라운드에서 섞지 않는다.
 
-**이전 원문 단위 충돌 — 런웨이:** §3 상세 표 L229는 정의에 `보유 현금 ÷ 월 번레이트`, 데이터 칸에는 `현금 ÷ 연간 영업현금유출`을 적고 있다. 월·연 결과를 같은 값으로 취급하지 않는다. D14 v3-OPEN rubric에서 현금소모 지표·기간·부호·단위 변환을 명시한다. 연간→월평균 환산은 원자료·식·평균화 가정을 `derivation`에 남기고 현재 월 번레이트의 직접 관측으로 표시하지 않는다. 분모 0 이하·기간 불일치에서는 유한 개월 수를 만들지 않는다. 지표 적용성 자체가 맞지 않는지(not_applicable), 적용되나 입력이 부족한지(missing)는 D14에서 정하며 non_positive_burn을 자동 N/A로 바꾸지 않는다.
+**이전 원문 단위 충돌 — 런웨이:** baseline 해소 규칙 제안은 [재무 rubric §1.3](rubric-finance.md#13-런웨이-단위-충돌-해소-원문-l229)에 보존한다. §3 상세 표 L229는 정의에 `보유 현금 ÷ 월 번레이트`, 데이터 칸에는 `현금 ÷ 연간 영업현금유출`을 적고 있다. 월·연 결과를 같은 값으로 취급하지 않는다. D14 OPEN rubric에서 현금소모 지표·기간·부호·단위 변환을 명시한다. 연간→월평균 환산은 원자료·식·평균화 가정을 `derivation`에 남기고 현재 월 번레이트의 직접 관측으로 표시하지 않는다. 분모 0 이하·기간 불일치에서는 유한 개월 수를 만들지 않는다. 지표 적용성 자체가 맞지 않는지(not_applicable), 적용되나 입력이 부족한지(missing)는 D14에서 정하며 non_positive_burn을 자동 N/A로 바꾸지 않는다.
 
 ## 5. 판단 규칙과 최종 후보 선택 — v3 replacement 제안
 

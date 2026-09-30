@@ -33,7 +33,7 @@ D01–D06·D08 baseline은 기록상 승인되었지만, v3가 바꾸는 selecto
 호출자가 공급한 관측을 저장할 뿐, 서로를 계산하거나 정당화하지 않는다.
 `execution_mode="live"`의 schema 통과도 정책·예산·도구 readiness 승인과 무관하다.
 State, reducer, stable ID 생성, snapshot/controller 참조 검증, 평가·점수·보고서·
-manifest, 수집·환율·근거 병합 함수는 #5 구현에 포함하지 않는다. State와 초기화는 별도로 병합된 #7이 제공한다.
+manifest, 수집·환율·근거 병합 함수는 #5 구현에 포함하지 않는다. State와 초기화는 별도로 병합된 #7이 제공한다. 이후 #15의 reducer/State 연결, #16 baseline 집계·판정, #53 재무 helper 추가 범위는 §7과 정합화 기록을 따른다.
 
 **타입과 결측**
 
@@ -417,4 +417,4 @@ ToolResult는 `status`, typed `data`, `retrieval_records`, `errors`를 가진다
 
 `collect_evidence`는 Evidence Research의 초기·gap 조사 공통 경계다. gaps가 비어 있으면 최초 수집, 있으면 Coverage의 부족자료 조사라는 제안이며 별도 Targeted Research API를 요구하지 않는다. `EvidenceBundle`에 RAG Chunk가 필요하면 RetrievalBundle에서 먼저 Source/Chunk를 저장하고 Evidence 참조를 해소한다. branch 내부 차원 해석 helper를 둘 수 있어도 외부 terminal boundary는 evaluate_branch이며 business_deal의 두 차원을 원자적으로 검증한다.
 
-이 문서가 제안하는 업무 계약 중 현재 제공되는 것은 #5/PR #32의 구조 DTO와 #7/PR #39의 `InvestmentState`·`create_initial_state`다. 별도로 #9/PR #38의 `skala_rag.scoring.catalog.load_policy`와 draft config/fixture는 fixture 전용으로 제공되며 `aggregate_scores`·`decide` 또는 v3 replacement API가 구현됐다는 뜻이 아니다. 그 밖의 제안 이름과 함수는 설계 계약이지 사용 가능한 API가 아니다. M0에서 schema와 fixture, M1에서 adapter stub, M2 이후 실제 구현을 연결한다. 각 기능은 주입된 Tool/LLM/clock을 사용해 외부 호출 없이 테스트할 수 있어야 한다. selector·0분모·Warning 정책 누락은 인터페이스의 명시적 미설정 오류로 검출하고 live 시작을 거절하며, fixture 정책 주입을 팀 승인으로 표시하지 않는다.
+통합 기준 `c5a30f3`에는 #5 구조 DTO, #7 State/factory, #9 fixture 전용 draft catalog 외에 #15/PR #42의 ID reducer와 State Annotated 연결, #16/PR #64의 baseline `aggregate_scores`·`decide`, #53/PR #66의 재무 단위·기간·파생값 helper가 있다. 집계는 고정100·observed/missing·여섯 영역 관측 rating 저점수·세 label baseline이며 v3 N/A 분모·핵심차원40%·네 label 구현이 아니다. 업무 Graph wiring·CLI·live RAG·평가 agent·보고서 출력은 여전히 구현 목표다. 실제 #16 API는 `aggregate_scores(evaluations, policy) -> ScoreBreakdown`, `decide(observed_score, missing_weight, dimension_ratings, thresholds) -> Decision`이다. 위 제안의 ScoreSummary/eligibility 입력 API와 같지 않다. 현재 State의 평가 key는 dimension 기반이며 v3 branch-key/atomic Business & Deal 승격은 별도 전환 대상이다. #53 helper는 `Derived | Unavailable` 결과로 단위·기간·provenance를 검증하며 N/A나 rating을 결정하지 않는다. 나머지 제안 이름은 사용 가능한 API로 읽지 않는다. selector·0분모·Warning 정책 부재는 v3 live 시작 전에 차단해야 하며 fixture 정책 주입을 팀 승인으로 표시하지 않는다.

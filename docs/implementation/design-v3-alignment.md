@@ -13,11 +13,27 @@
 | 이전 설계·교수 과제 원문 | [통합 원문](../raws/robotics_startup_agentic_rag_notion_integrated.md) 및 `docs/raws/` | 읽기 전용. 이전 제안의 이력과 v3에서 생략한 과제 요구를 보존 |
 | 파생 구현 가이드 | 이 폴더의 architecture/contracts/scoring/data-rag/delivery/decisions | v3 명시 목표와 승인 전 구현 제안을 구별. 원문을 조용히 수정하는 대체본이 아님 |
 
-우선순위는 **새 사용자 지정 설계의 명시 내용 → 모순을 기록한 구현 목표 → 승인받아야 할 세부 제안**이다. v3 내부 충돌은 임의 해소하지 않는다. v3가 과제 필수 요구를 생략했다고 폐기하지 않는다. 예컨대 README 필수 항목·개인별 수행 역할(PM/PL 제외)·제출 파일명·DAY 3 상대 일정은 통합 원문 §10에서 계속 추적한다. v3와 이전 설계가 다른 것은 팀 승인 기록의 `SUPERSEDED` 전환과 다르다. baseline D01–D06·D08은 APPROVED로 남고, 그와 충돌하는 v3 replacement 세부만 `v3-OPEN`이다. D07·D09–D14는 OPEN이다.
+우선순위는 **새 사용자 지정 설계의 명시 내용 → 모순을 기록한 구현 목표 → 승인받아야 할 세부 제안**이다. v3 내부 충돌은 임의 해소하지 않는다. v3가 과제 필수 요구를 생략했다고 폐기하지 않는다. 예컨대 README 필수 항목·개인별 수행 역할(PM/PL 제외)·제출 파일명·DAY 3 상대 일정은 통합 원문 §10에서 계속 추적한다. v3와 이전 설계가 다른 것은 팀 승인 기록의 `SUPERSEDED` 전환과 다르다. baseline D01–D06·D08은 APPROVED로 남고, 그와 충돌하는 v3 replacement 세부만 `v3-OPEN`이다. D09 baseline 목차·인용·구조 검증은 #14 후속 부분 APPROVED이며 PDF 선택 및 v3 대체 범위는 OPEN이다. D07·D10–D14는 OPEN이다.
 
 표지의 **울산 4반 2조 / 김근홍·정순욱·허지원·심혁·박태준·한유진**은 v3가 제공한 metadata다. 실제 역할·GitHub 계정 매핑·기여량 또는 달력상 제출일은 제공하지 않는다.
 
-## 2. 현재 구현과 GitHub refresh
+## 2. 현재 통합 cutoff와 historical GitHub snapshot
+
+### 이번 upstream 통합 기준 — c5a30f3
+
+로컬 merge 입력 `c5a30f3da3b55ea05bff681e2b1058bea9e78a10`의 Git 이력과 코드를 확인했다. 이 cutoff 이후 main/이슈 상태를 추정하지 않는다. 아래 과거 API snapshot·44개 이슈 표는 그대로 역사 자료이며 현재 열린 작업 수를 뜻하지 않는다.
+
+| 통합된 PR / 이슈 | 현재 코드·문서 범위 | v3 전환 경계 |
+| --- | --- | --- |
+| #42 / #15 | `graph/reducers.py`, State의 sources/chunks/evidence/evaluation_results/errors Annotated 연결; ID 멱등 병합·core 충돌 검증 | 업무 Graph wiring·revision controller는 별도. dimension 기반 평가 key를 v3 branch-key·atomic Business & Deal 계약으로 전환해야 함 |
+| #64 / #16 | `aggregate_scores`→ScoreBreakdown, `decide`→Decision 순수 함수; 여섯 dimension/세대 검증, 고정100·관측 rating·세 label | N/A 제외·핵심차원40%·RECOMMEND_PRIORITY·selector 미구현; baseline 테스트를 v3 완료 증거로 쓰지 않음 |
+| #66 / #53 | `scoring/finance.py`의 금액·기간, 월 burn·잔여 runway·성장률·매출총이익률·환율 파생 helper, Derived/Unavailable 및 provenance | rating·rubric/N/A 승인 아님. 전체 재무 정책/agent 구현과 구별 |
+| #65 / #14 | reporting.md 및 D09 mode별 7개 섹션·인용·서지 미상·SV01–SV09 부분 승인 기록 | PDF 선택은 OPEN. v3 다섯 섹션·selector·Warning은 별도 대체 승인 필요 |
+| #40 / #10, #34 / #11 | core/finance rubric 문서·YAML·fixture 테스트 및 D14 제안 기록 | 병합 후에도 D14 OPEN. baseline 고정100/missing 규칙과 작성자 조건부 N/A 제안을 보존 |
+
+#5 DTO/#7 State/#9 draft catalog 위에 이 구현이 추가되었다. 업무 Graph·CLI·live RAG·평가 agent·보고서 출력이나 v3 정책 승인이 완료된 것은 아니다. 이 문서 통합은 upstream 코드·tests·configs를 수정하지 않는다. 최종 delivery head·gate·리뷰 결과는 PR 검증 기록에서 별도로 보고한다.
+
+### 이전 API 조회 snapshot — 85fa030 (historical)
 
 **확인 기준: 2026-09-30 11:04 KST; 통합한 main 커밋 `85fa0304b664f07ce54c9b0a1e8d9b95b144a6c8`.** 아래 GitHub 정보는 이 시점의 API 조회 snapshot이며 이후 상태를 뜻하지 않는다. 문서 정합화는 다른 PR의 구현·검증·병합을 대신하지 않는다.
 
@@ -29,7 +45,7 @@
 | #35 / PR #36 | #35 assignee `luk0715`; PR #36 OPEN Draft, 이 작업 시작 head `790c8dc667d421e341f782803778f9a07dcaaae8` | source 보존/문서 정합화 작업. 이 문서의 이후 변경, review, gate, merge를 그 head에 소급해 주장하지 않는다 |
 | 열린 작업 | supplied snapshot 기준 open issues 44개 | 아래 28개 영향표는 historical snapshot이며 현재 assignment/count를 나타내지 않는다 |
 
-### pinned PR 상태 요약
+### historical pinned PR 상태 요약
 
 | PR | 상태 / pinned head | 정합화 경계 |
 | --- | --- | --- |
@@ -37,7 +53,7 @@
 | #33, #34, #36, #37, #40, #42, #63, #64, #65 | OPEN (`ca91eda9c85a7a24cbd9f3eb8c7041d8c6fec503`, `813cf70cd3f0cc5616f5bd425dfdfb4b2130078b`, `790c8dc667d421e341f782803778f9a07dcaaae8`, `ed8f9967b51c6347f67eb819dc5a4446d3a1b50e`, `48c0aa90b8c70c690f5f5f365f23eca6867db502`, `4758c57627c36c2cee15197e00394295ec539211`, `14540847499fee7a03d541bbe3638969d46fd8ab`, `a9175103f97e416deb4440bcca75ab1deb801697`, `f5471db6f88783c5bb679f8320a7a6da457cd033`) | 각 제안/진행 작업은 v3 승인·구현 증거가 아님 |
 
 
-### 현재 열린 PR 영향
+### historical snapshot 당시 열린 PR 영향
 
 - #37/#6, #40/#10, #34/#11, #42/#15, #63/#20, #64/#16, #65/#14는 OPEN pinned heads이며 v3 구현/승인을 뜻하지 않는다. #38/#9 draft catalog는 MERGED이나 runtime fixture-only이고 `aggregate_scores`는 #64 OPEN이다. 이 문서는 어느 PR의 코드를 복사하거나 완료 처리하지 않는다.
 - PR #41의 baseline 기록과 v3의 newer user-selected design input이 충돌한다. baseline을 지우지 않고, `v3-OPEN` 질문으로 별도 승인·supersession 범위를 요구한다.
@@ -74,7 +90,7 @@
 
 ## 4. historical 열린 이슈 snapshot의 acceptance migration
 
-아래는 refresh 이전의 **28개(#3, #5–#30, #35) historical snapshot**이며, 최신 open-issue count/assignee는 §2 refresh를 따른다. 당시 assignee는 #3=`heojiwon2`, #5/#35=`luk0715`, #11=`XXXXXim`; 나머지는 미할당이었다. 이는 실제 수업 역할·실명 매핑이 아니다. 아래는 **필요한 후속 AC 변경**이지 이미 해당 이슈 본문을 수정/승인/완료했다는 기록이 아니다. 알림·PR 통합·read-back은 #35 상위 작업에서 처리한다.
+아래는 refresh 이전의 **28개(#3, #5–#30, #35) historical snapshot**이며, open-issue count/assignee 역시 §2의 과거 API snapshot 범위에 한정된다. 당시 assignee는 #3=`heojiwon2`, #5/#35=`luk0715`, #11=`XXXXXim`; 나머지는 미할당이었다. 이는 실제 수업 역할·실명 매핑이 아니다. 아래는 **필요한 후속 AC 변경**이지 이미 해당 이슈 본문을 수정/승인/완료했다는 기록이 아니다. 알림·PR 통합·read-back은 #35 상위 작업에서 처리한다.
 
 | 이슈 / snapshot 작업 | 필요한 acceptance migration | 문서·결정 / 검증 |
 | --- | --- | --- |
@@ -107,11 +123,11 @@
 | #30 M1 E2E trace | 첫 추천 뒤 후속 후보, 우선추천 비교·순서 불변, N/A/부분핵심결측, 복합 branch 부분실패, Warning 소진을 시나리오에 반영 | delivery §3/§4; T03/T06–T09/T16/T22 |
 | #35 문서 정합화 / PR #36 | 원문 보존·정합화·영향표·OPEN 경계·검증을 완료 범위로 한정. 다른 이슈 승인·구현·병합 대행 없음 | 이 문서 및 관련 가이드; PR의 실제 gate/리뷰 기록 |
 
-### 현재 M2 이슈의 수용 조건 대조
+### historical M2 이슈의 수용 조건 대조
 
-기준 snapshot의 #43–#62 본문은 이미 v3와 #35를 참조하고 미승인 정책의 live 연결을 차단한다. 따라서 전체를 구설계로 분류하지 않는다. 아래는 본문 확인 후 추가로 대조할 세부 항목이며, 다른 담당자의 이슈를 수정하거나 승인한 기록이 아니다. 역사 표에서 현재 닫힌 #3·#5·#7·#9를 제외한 24개와 아래 20개가 기준 시점의 열린 이슈 44개에 대응한다.
+기준 snapshot의 #43–#62 본문은 이미 v3와 #35를 참조하고 미승인 정책의 live 연결을 차단한다. 따라서 전체를 구설계로 분류하지 않는다. 아래는 본문 확인 후 추가로 대조할 세부 항목이며, 다른 담당자의 이슈를 수정하거나 승인한 기록이 아니다. 역사 표에서 당시 닫힌 #3·#5·#7·#9를 제외한 24개와 아래 20개가 기준 시점의 열린 이슈 44개에 대응한다.
 
-| 현재 이슈 | 본문에 이미 반영된 범위 / 남은 대조 | 문서·결정 / 검증 |
+| 당시 이슈 | 본문에 이미 반영된 범위 / 남은 대조 | 문서·결정 / 검증 |
 | --- | --- | --- |
 | #43 live 사전 승인 | 실험 승인과 최종 모델 선정 분리 유지; baseline D08과 v3 회계·Warning 대체 범위를 별도 기록 | decisions D07/D08/D12; data-rag §5 |
 | #44 corpus gate | 전체 200페이지·승인·불변 manifest·교체 검증 유지; 이번 정합화로 승인 상태 변경 없음 | data-rag §3; D13/T11 |

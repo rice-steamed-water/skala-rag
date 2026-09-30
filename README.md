@@ -3,12 +3,10 @@
 Physical AI / Robotics 스타트업의 투자 조사·평가를 위한 수업용
 LangGraph Multi-Agent RAG 프로젝트다. 실제 투자 실행 시스템은 아니다.
 
-현재는 설치 가능한 `src/skala_rag` 패키지와 네트워크 호출 없는 검증이 있으며, #5의 구조 DTO
-(`RunInput`·후보·Source/Chunk/Evidence·retrieval/coverage bundle)와 #7의 `InvestmentState`·
-`create_initial_state`가 포함된다. 이는 정책 계산이 없는 저장/검증 및 초기 state 범위다. #9의 draft catalog 로더·설정·계산 fixture도 병합됐지만 fixture 전용이며 v3 점수 계산 구현이나 정책 승인을 뜻하지 않는다. Graph/reducer wiring, CLI, live RAG, 평가·점수 계산 및 보고서 출력은 구현되지 않았다. 새 구현 목표는 사용자 제공
+통합 기준 `c5a30f3`에는 #5 구조 DTO, #7 State/factory, #9 fixture 전용 draft catalog 외에 #15/PR #42의 ID reducer와 State Annotated 연결, #16/PR #64의 baseline `aggregate_scores`·`decide`, #53/PR #66의 재무 단위·기간·파생값 helper가 있다. 집계는 고정100·observed/missing·여섯 영역 관측 rating 저점수·세 label baseline이며 v3 N/A 분모·핵심차원40%·네 label 구현이 아니다. 업무 Graph wiring·CLI·live RAG·평가 agent·보고서 출력은 여전히 구현 목표다. 새 구현 목표는 사용자 제공
 [설계 v3 보존본](docs/design/design-v3.html)이며, 이전 설계와의 차이 및
 main·미병합 PR 기준은 [v3 정합화 기록](docs/implementation/design-v3-alignment.md)에 있다.
-v3의 명시 목표와 팀의 구현 정책 승인은 별개다. #3에는 D01–D06·D08의 **기존 baseline** 승인 기록이 있으나 v3의 selector·N/A·Warning 대체 세부는 별도 `v3-OPEN`이다. [결정 목록](docs/implementation/decisions.md)은 이 경계를 추적하며, 미정 정책·최종 모델·provider를 실행 기본값으로 정하지 않는다.
+D09의 baseline 목차·인용·구조 검증도 부분 승인되었으며 v3 다섯 목차·Warning 대체안과 PDF 선택은 별도 승인 대상이다. v3의 명시 목표와 팀의 구현 정책 승인은 별개다. #3에는 D01–D06·D08의 **기존 baseline** 승인 기록이 있으나 v3의 selector·N/A·Warning 대체 세부는 별도 `v3-OPEN`이다. [결정 목록](docs/implementation/decisions.md)은 이 경계를 추적하며, 미정 정책·최종 모델·provider를 실행 기본값으로 정하지 않는다.
 
 ## 설치
 
@@ -29,7 +27,7 @@ tutorial의 과거 하한 버전이나 전체 의존성 목록은 복사하지 �
 
 | 직접 의존성 | 용도와 제한 |
 | --- | --- |
-| `langgraph` | 기존 Graph 패키지 import 검증; 실제 workflow는 미구현 |
+| `langgraph` | 패키지 및 State reducer 통합 테스트; 실제 업무 workflow는 미구현 |
 | `pydantic` | #5 구조 DTO 검증에 사용; 정책 계산·v3 평가 DTO 구현은 아님 |
 | `langchain-core` | 중립적인 Document·message·prompt 인터페이스; 가상 Document·HumanMessage와 ChatPromptTemplate의 변수 포맷팅·invoke 결과를 검증, 모델 client 없음 |
 | `langchain-text-splitters` | 문서 분할 유틸리티; 명시적 테스트 전용 크기·overlap은 운영 chunk 정책 선택이 아님 |
@@ -74,7 +72,10 @@ uv lock --check
 
 - `src/skala_rag/contracts/`: #5 구조 DTO와 #7 state factory
 - `src/skala_rag/scoring/catalog.py`, `configs/scoring.draft.json`: #9 fixture 전용 draft catalog 로더·설정; v3 집계·판정 구현 아님
-- `graph`, `agents`, `tools`, `rag`, `reporting`, `prompts`: 업무 흐름 미구현
+- `src/skala_rag/graph/reducers.py`: ID 병합·충돌 검증 및 State 연결; 업무 Graph wiring은 미구현
+- `src/skala_rag/scoring/aggregate.py`, `decide.py`: baseline 집계·판정 순수 함수; v3 계약과 다름
+- `src/skala_rag/scoring/finance.py`: 재무 파생값·검증 helper; rating/rubric 승인과 별개
+- `agents`, `tools`, `rag`, `reporting`, `prompts`: 업무 흐름 미구현
 - `tests/contract/`, `tests/fixtures/contracts.json`: 구조 DTO/state 검증 fixture·tests; 테스트 총수는 실행 결과로만 보고
 - `tests/unit/`, `tests/integration/`: 각 작업의 별도 검증 범위
 - [구현 가이드](docs/README.md): 목표와 승인 전 설계
