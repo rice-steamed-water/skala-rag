@@ -197,6 +197,98 @@ def test_observed_financial_gate(case, fault):
     assert result.evaluations is None
 
 
+@pytest.mark.parametrize("wrong_rating", [False, True])
+def test_approved_observed_gross_margin(case, wrong_rating):
+    import yaml
+    from tests.unit.test_approved_policy import approval_payload
+
+    from skala_rag.agents.finance_verification import ReviewedFinancialFact
+    from skala_rag.scoring.approved_policy import PolicyApprovals, load_approved_policy
+    from skala_rag.scoring.finance import parse_period
+
+    snapshot, _, output, _ = case
+    policy = load_approved_policy(
+        "configs/scoring.v3.json",
+        approvals=PolicyApprovals.model_validate(approval_payload()),
+        approval_verifier=lambda a, p: a.model_dump() == approval_payload()[a.scope],
+    )
+    snapshot.policy_version = policy.policy_version
+    rubric = yaml.safe_load(Path("configs/rubrics/finance.yaml").read_text())
+    template = next(iter(snapshot.evidence.values()))
+    facts = []
+    for role, value in [("revenue", 100), ("cost_of_revenue", 50)]:
+        e = template.model_copy(
+            update={
+                "evidence_id": f"fixture:{role}",
+                "locator": "https://example.com/offline-finance-fixture",
+                "evidence_kind": "reported",
+                "criterion_ids": ["traction.gross_margin"],
+                "value": value,
+                "unit": "one",
+                "currency": "KRW",
+                "period": "2025-01-01/2025-12-31",
+                "value_as_of": snapshot.as_of,
+                "supporting_evidence_ids": [],
+                "conflicts_with": [],
+            }
+        )
+        snapshot.evidence[e.evidence_id] = e
+        snapshot.evidence_ids.append(e.evidence_id)
+        facts.append(
+            ReviewedFinancialFact(
+                **{
+                    k: getattr(snapshot, k)
+                    for k in (
+                        "run_id",
+                        "snapshot_id",
+                        "candidate_id",
+                        "evaluation_round",
+                        "evidence_revision",
+                        "policy_version",
+                    )
+                },
+                reviewer_reference="fixture:review",
+                accounting_entity=snapshot.candidate_id,
+                metric_role=role,
+                funding_round=None,
+                valuation_basis=None,
+                period=parse_period(e.period),
+                evidence=e,
+            )
+        )
+    c = next(
+        c
+        for c in output["traction"]["criteria"]
+        if c["criterion_id"] == "traction.gross_margin"
+    )
+    c.update(
+        status="observed",
+        rating=4 if wrong_rating else 5,
+        missing_reason=None,
+        evidence_ids=[f.evidence.evidence_id for f in facts],
+    )
+    result = evaluate_business_deal(
+        snapshot,
+        policy=policy,
+        rubric=rubric,
+        llm=FakeLLM([output]),
+        clock=FakeClock(datetime(2026, 9, 30, tzinfo=UTC)),
+        schema_version="test",
+        financial_facts=tuple(facts),
+        verifiers=ApprovedVerifiers(
+            "finance-0.1.0",
+            "finance-0.1.0",
+            "finance-0.1.0",
+            lambda c, s: True,
+            lambda c, s: True,
+            lambda c, s: True,
+        ),
+    )
+    assert result.status == ("failure" if wrong_rating else "success")
+    if wrong_rating:
+        assert result.evaluations is None
+
+
 def test_approved_contract_fixture_consumer(case):
     from tests.unit.test_approved_policy import approval_payload
 
