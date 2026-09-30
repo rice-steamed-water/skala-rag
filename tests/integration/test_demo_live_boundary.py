@@ -1,13 +1,17 @@
 """Offline live-boundary tests: real DemoLLM, synthetic HTTP and local corpus."""
 
 import json
+import shutil
+from pathlib import Path
 
 import httpx
 import pytest
 from tests.unit.test_demo_budget import approve
+from tests.unit.test_demo_scoring import missing_review
 from tests.unit.test_local_demo import retrieval_fixture
 
 from skala_rag.demo_context import SCHEMA, research_material
+from skala_rag.demo_scoring import load_demo_rubric
 from skala_rag.tools.openai_attempt import OpenAIResponsesAttempt
 from skala_rag.tools.structured_llm import APPROVED_MODEL
 
@@ -16,6 +20,8 @@ def setup_boundary(root, monkeypatch, *, verdict="pass", instructions=None):
     import skala_rag.local_demo as demo
 
     approve(root)
+    shutil.copytree(Path(__file__).resolve().parents[2] / "configs", root / "configs")
+    rubric = load_demo_rubric(root)
     monkeypatch.setenv("OPENAI_API_KEY", "synthetic-not-a-credential")
 
     def retrieve(**kwargs):
@@ -32,13 +38,22 @@ def setup_boundary(root, monkeypatch, *, verdict="pass", instructions=None):
             stream.write(json.dumps({"model": payload["model"]}) + "\n")
         user = json.loads(payload["input"][1]["content"])
         if "role" in user:
+            assert "CriterionRating" in json.dumps(payload["text"]["format"]["schema"])
+            assert "No ratings" not in payload["input"][0]["content"]
+            assert user["rubric"]["criteria"]
             data = dict(
                 schema_version=SCHEMA,
+                criteria=missing_review(user["role"], rubric)["criteria"],
                 observations=[],
                 interpretations=[],
                 missing=["Synthetic only"],
             )
         elif "draft" in user:
+            assert (
+                "independently check every observed criterion"
+                in payload["input"][0]["content"]
+            )
+            assert user["context"]["scoring"]["rubric"]["criteria"]
             data = dict(
                 schema_version=SCHEMA,
                 verdict=verdict,

@@ -3,6 +3,7 @@
 import html
 import re
 
+import pytest
 from tests.unit.test_html_report import rehash
 from tests.unit.test_v3_report_pipeline import Stub, context
 
@@ -93,7 +94,7 @@ def test_long_excerpt_is_bounded_and_explicitly_marked_without_mutation():
     assert ctx.snapshot()["evidence"][eid]["excerpt"] == original
 
 
-def test_research_scoreboard_counts_records_not_investment_quality():
+def test_research_scoreboard_has_only_five_blank_scores_without_score_evidence():
     draft, data = research_report()
     eid = draft.cited_evidence_ids[0]
     data["evidence"][eid]["confidence"] = "medium"
@@ -113,13 +114,153 @@ def test_research_scoreboard_counts_records_not_investment_quality():
     )
     assert board.count("data-role=") == 5
     row = board.split('data-role="technology"')[1].split("</tr>")[0]
-    assert "<td>2</td><td>1</td><td>1</td><td>1</td><td>2</td>" in row
-    assert "medium 1" in row and "미산정" in row
-    assert "출력 없음" in board
+    assert "<td></td>" in row
+    assert board.count("<td></td>") == 5
+    assert "<th>항목</th><th>점수 / 100</th>" in board
     assert "사업·투자조건" in board
-    assert "품질·coverage·투자 점수가 아닙니다" in board
-    assert "독립 검증" in board
-    assert "50%" not in board and "70%" not in board
+    for removed in ("관측", "해석", "출처", "결측", "신뢰도", "미산정", "기록 수"):
+        assert removed not in board
+    assert not re.search(r"<td>\d", board)
+
+
+def test_synthetic_saved_role_scores_render_exactly_without_recalculation():
+    draft, data = research_report()
+    eid = draft.cited_evidence_ids[0]
+    values = dict(
+        zip(
+            ("founder", "market", "technology", "moat", "business_deal"),
+            ("0", "100", "72.50", "12.125", "90"),
+            strict=True,
+        )
+    )
+    data["role_scores"] = {
+        role: {"score": score, "evidence_ids": [eid]} for role, score in values.items()
+    }
+    ctx = rehash(canonical(data))
+    before = ctx.payload
+    rendered = render_report_html(draft, ctx)
+    board = rendered.split('id="research-scoreboard"')[1].split("</section>")[0]
+    for role, score in values.items():
+        row = board.split(f'data-role="{role}"')[1].split("</tr>")[0]
+        assert f"<td>{score} / 100" in row
+    assert ctx.payload == before
+
+
+@pytest.mark.parametrize(
+    "score",
+    [
+        "NaN",
+        "sNaN",
+        "Infinity",
+        "-Infinity",
+        "-0.1",
+        "100.01",
+        "medium",
+        "<script>",
+        "",
+        "1_0",
+        " 70 ",
+        "1e1",
+        None,
+        True,
+        70,
+        70.5,
+    ],
+)
+def test_synthetic_invalid_scores_are_blank(score):
+    draft, data = research_report()
+    data["role_scores"] = {
+        "technology": {
+            "score": score,
+            "evidence_ids": draft.cited_evidence_ids,
+        }
+    }
+    rendered = render_report_html(draft, rehash(canonical(data)))
+    row = rendered.split('data-role="technology"')[1].split("</tr>")[0]
+    assert row.endswith("<td></td>")
+
+
+@pytest.mark.parametrize(
+    "ids", [[], None, "known", ["unknown"], ["known", "unknown"], [None], [{}], [""]]
+)
+def test_synthetic_scores_require_nonempty_all_valid_evidence(ids):
+    draft, data = research_report()
+    data["evidence"]["known"] = data["evidence"][draft.cited_evidence_ids[0]]
+    data["role_scores"] = {"technology": {"score": "75", "evidence_ids": ids}}
+    rendered = render_report_html(draft, rehash(canonical(data)))
+    row = rendered.split('data-role="technology"')[1].split("</tr>")[0]
+    assert row.endswith("<td></td>")
+
+
+@pytest.mark.parametrize("record", [None, {}, {"source_id": "missing"}])
+def test_synthetic_scores_require_resolvable_evidence_source(record):
+    draft, data = research_report()
+    data["evidence"]["invalid"] = record
+    data["role_scores"] = {
+        "technology": {
+            "score": "75",
+            "evidence_ids": ["invalid"],
+        }
+    }
+    rendered = render_report_html(draft, rehash(canonical(data)))
+    row = rendered.split('data-role="technology"')[1].split("</tr>")[0]
+    assert row.endswith("<td></td>")
+
+
+@pytest.mark.parametrize("scores", [None, [], {"technology": None}, {"technology": []}])
+def test_synthetic_malformed_score_records_are_blank(scores):
+    draft, data = research_report()
+    data["role_scores"] = scores
+    rendered = render_report_html(draft, rehash(canonical(data)))
+    board = rendered.split('id="research-scoreboard"')[1].split("</section>")[0]
+    assert board.count("<td></td>") == 5
+
+
+def test_synthetic_score_only_evidence_has_usable_superscript_target():
+    draft, data = research_report()
+    original = data["evidence"][draft.cited_evidence_ids[0]]
+    data["evidence"]["score-only"] = {**original, "excerpt": "Synthetic score support"}
+    data["role_scores"] = {
+        "technology": {
+            "score": "72.5",
+            "evidence_ids": ["score-only", "score-only"],
+        }
+    }
+    rendered = render_report_html(draft, rehash(canonical(data)))
+    row = rendered.split('data-role="technology"')[1].split("</tr>")[0]
+    assert row.count('<sup class="citation">') == 1
+    match = re.search(r'href="#([^"]+)"', row)
+    assert match is not None
+    target = match.group(1)
+    assert f'id="{target}"' in rendered
+    assert "Synthetic score support" in rendered
+
+
+@pytest.mark.parametrize("scores", [{}, {"technology": {"score": None}}])
+def test_role_score_contract_header_does_not_claim_no_evaluation(scores):
+    draft, data = research_report()
+    legacy = render_report_html(draft, rehash(canonical(data)))
+    assert "자료 기반 / 투자 평가 미실시" in legacy
+    data["role_scores"] = scores
+    rendered = render_report_html(draft, rehash(canonical(data)))
+    header = rendered.split('<header class="report-masthead">')[1].split("</header>")[0]
+    assert "투자 적격성·추천 판정 미실시" in header
+    assert "투자 평가 미실시" not in header
+
+
+def test_synthetic_score_without_reference_section_has_no_dead_link():
+    draft, data = research_report()
+    data["role_scores"] = {
+        "technology": {
+            "score": "72.5",
+            "evidence_ids": draft.cited_evidence_ids,
+        }
+    }
+    draft = draft.model_copy(update={"markdown": "## SUMMARY\nSynthetic summary"})
+    rendered = render_report_html(draft, rehash(canonical(data)))
+    row = rendered.split('data-role="technology"')[1].split("</tr>")[0]
+    assert "72.5 / 100" in row
+    assert "href=" not in row and "<sup" not in row
 
 
 def test_all_saved_review_items_are_preserved_with_role_and_evidence_links():
@@ -201,7 +342,6 @@ def test_review_only_source_is_in_appendix_with_traceable_provenance():
     assert "추가 원문 &lt;검증 아님&gt;" in rendered
     assert "chunk-extra" in rendered and "retrieval-extra" in rendered
     assert "reported" in rendered and "low" in rendered
-    assert "미해소 1" in rendered
     assert "미해소 근거: unresolved" in rendered
     assert "인용 근거 2개 · 고유 출처 2개" in rendered
     assert set(re.findall(r'href="#([^"]+)"', rendered)) <= set(
@@ -219,7 +359,9 @@ def test_editorial_research_style_is_scoped_and_preserves_readable_body():
     assert "font-size: 10.5pt; line-height: 15pt" in rendered
     assert ".research-report .citation {" in rendered
     assert "vertical-align: super" in rendered
-    assert "#research-scoreboard th:first-child { width: 20%" in rendered
+    assert "#research-scoreboard th:first-child { width: 55%" in rendered
+    assert "#research-scoreboard th:nth-child(7)" not in rendered
+    assert "#research-scoreboard th:nth-child(8)" not in rendered
     assert ".research-report #sec-REFERENCE { break-before: page; }" in rendered
     assert "overflow: hidden" not in rendered
     normal = render_report_html(draft, context())

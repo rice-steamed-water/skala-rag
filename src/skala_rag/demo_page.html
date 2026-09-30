@@ -27,7 +27,7 @@ main{max-width:1368px;margin:auto;padding:40px 24px 64px}.intro{margin-bottom:32
 <p class="section-label">01 / 조사 대상</p><h2>기업 보고서 생성</h2>
 <form id="form"><label for="company">기업명</label><input id="company" name="company" value="Physical Intelligence" aria-describedby="company-help" required maxlength="80" autocomplete="off"><p id="company-help" class="hint">이 데모는 Physical Intelligence (피지컬 인텔리전스)만 지원합니다.</p><button id="run" type="submit">새 리서치 실행</button></form>
 <div class="status-box" id="status-box" data-state="ready" role="status" aria-live="polite" aria-atomic="true"><p id="status">실행 준비</p><p id="stage">버튼을 누르면 조사를 시작합니다.</p></div>
-<div class="notice"><strong>조사 데모 · 최종 평가 아님</strong>점수 산정 및 투자 추천을 제공하지 않습니다. 결과는 수업용 조사 자료이며 외부 발행이 허용되지 않습니다. 실행에는 시간이 걸릴 수 있습니다.</div>
+<div class="notice"><strong>조사 데모 · 최종 평가 아님</strong>항목별 점수는 rubric과 검증된 근거로 산정하며 근거 없는 항목은 공란입니다. 투자 적격성 및 투자 추천은 판정하지 않습니다. 결과는 수업용 조사 자료이며 외부 발행이 허용되지 않습니다.</div>
 </aside>
 <section class="panel workspace" aria-labelledby="report-heading">
 <div class="workspace-head"><h2 id="report-heading">리서치 보고서</h2><span class="tag">02 / 결과 · 근거 확인</span></div>
@@ -145,7 +145,7 @@ async function showResult(job) {
   $('receipt-status').textContent = '실행 결과: ' + states[job.status];
   $('run-id').textContent = '실행 ID: ' + receipt.run_id;
   $('elapsed').textContent = '소요 시간: ' + receipt.elapsed_seconds + '초';
-  $('publication').textContent = receipt.publication_allowed === false ? '외부 발행: 허용되지 않음 · 점수 산정 및 투자 추천 아님' : '발행 상태를 확인할 수 없습니다.';
+  $('publication').textContent = receipt.publication_allowed === false ? '외부 발행: 허용되지 않음 · 투자 적격성·추천 미판정' : '발행 상태를 확인할 수 없습니다.';
   const base = '/api/runs/' + encodeURIComponent(job.id) + '/artifacts/';
   const hashes = receipt.artifact_hashes || {};
   if (job.status === 'completed' && hashes['report.pdf']) {

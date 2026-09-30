@@ -2,13 +2,17 @@
 
 import hashlib
 import json
+import shutil
+from pathlib import Path
 
 import pytest
 from tests.unit.test_demo_budget import approve
+from tests.unit.test_demo_scoring import missing_review, observe
 from tests.unit.test_local_demo import retrieval_fixture
 
 from skala_rag.contracts import ReportJudgement
 from skala_rag.demo_context import SCHEMA, WARNING, research_material
+from skala_rag.demo_scoring import load_demo_rubric
 from skala_rag.reporting.v3_pipeline import ReportContentV3
 
 
@@ -17,6 +21,9 @@ def test_synthetic_pipeline_generates_new_verified_artifacts(tmp_path, monkeypat
     import skala_rag.local_demo as demo
 
     approve(tmp_path)
+    project = Path(__file__).resolve().parents[2]
+    shutil.copytree(project / "configs", tmp_path / "configs")
+    rubric = load_demo_rubric(tmp_path)
     monkeypatch.setenv("OPENAI_API_KEY", "synthetic-test-secret")
     stages = []
 
@@ -32,7 +39,16 @@ def test_synthetic_pipeline_generates_new_verified_artifacts(tmp_path, monkeypat
         self.progress(self.node)
         if output_schema is demo.Review:
             eid = next(iter(request["evidence"]))
+            assert request["rubric"]["criteria"]
+            assert "No ratings" not in system
+            review = missing_review(self.node, rubric)
+            if self.node == "technology":
+                observe(review, "technology.maturity", rubric, evidence_id=eid)
+                review["criteria"][0]["supports"][0]["quote"] = request["evidence"][
+                    eid
+                ]["excerpt"]
             return demo.Review(
+                criteria=review["criteria"],
                 schema_version=SCHEMA,
                 observations=[demo.Claim(text="합성 테스트 관측", evidence_ids=[eid])],
                 interpretations=[],
@@ -68,6 +84,14 @@ def test_synthetic_pipeline_generates_new_verified_artifacts(tmp_path, monkeypat
     receipt = json.loads((first / "run-result.json").read_text())
     assert receipt["status"] == "completed", receipt
     assert receipt["publication_allowed"] is False
+    assert receipt["eligibility_checked"] is False
+    context = json.loads((first / "report-context.json").read_text())
+    scores = json.loads((first / "role-scores.json").read_text())
+    assert scores == context["role_scores"]
+    assert scores["technology"]["score"] == "24"
+    assert scores["founder"]["score"] is None
+    assert context["scoring"]["rubric"]["artifacts"] == rubric["artifacts"]
+    assert (first / "reviews.json").is_file()
     assert (first / "report.pdf").read_bytes().startswith(b"%PDF")
     assert (
         receipt["artifact_hashes"]["report.pdf"]

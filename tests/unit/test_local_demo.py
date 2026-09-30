@@ -212,6 +212,7 @@ def test_demo_llm_uses_existing_approved_transport_limits(tmp_path):
                                 "text": json.dumps(
                                     {
                                         "schema_version": SCHEMA,
+                                        "criteria": [],
                                         "observations": [],
                                         "interpretations": [],
                                         "missing": ["synthetic"],

@@ -25,6 +25,14 @@ def render_research(tmp_path, *, overflow=False):
     draft, data = research_report()
     eid = draft.cited_evidence_ids[0]
     data["evidence"][eid]["confidence"] = "medium"
+    # Explicitly synthetic saved scores; never written to live artifacts.
+    data["role_scores"] = {
+        role: {
+            "score": "72.50" if role == "technology" else None,
+            "evidence_ids": [eid] if role == "technology" else [],
+        }
+        for role in ROLES
+    }
     data["live_reviews"] = {
         role: {
             "observations": [
@@ -63,7 +71,11 @@ def test_research_pdf_has_clickable_superscripts_full_text_and_valid_layout(tmp_
                 assert squash(item["text"]) in text
         for missing in review["missing"]:
             assert squash(missing) in text
-    assert "미산정" in text
+    assert "72.50/100" in text
+    board = rendered.split('id="research-scoreboard"')[1].split("</section>")[0]
+    assert board.count("<td></td>") == 4
+    assert "미산정" not in board and "기록 수" not in board
+    assert "투자적격성·추천판정미실시" in text
     assert '<sup class="citation">' in rendered
     links = [a.get_object() for page in reader.pages for a in page.get("/Annots", [])]
     assert links and all(a.get("/Dest") for a in links)

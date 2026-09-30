@@ -18,6 +18,7 @@ from skala_rag.reporting.research_presentation import (
     review_evidence_ids,
     role_details,
     scoreboard,
+    usable_role_score,
 )
 from skala_rag.reporting.v3_context import ReportContextV3
 
@@ -111,6 +112,11 @@ class _Builder:
         source_ids = list(draft.reference_source_ids)
         if self.research:
             for role in ROLES:
+                score = usable_role_score(data, role)
+                if score is not None:
+                    for eid in score["evidence_ids"]:
+                        evidence_ids.append(eid)
+                        source_ids.append(self.evidence[eid]["source_id"])
                 for eid in review_evidence_ids(
                     data.get("live_reviews", {}).get(role, {})
                 ):
@@ -363,7 +369,10 @@ def render_report_html(draft: ReportDraft, context: ReportContextV3) -> str:
             f"{extra}</section>"
         )
         if name == "SUMMARY" and builder.research:
-            body.append(scoreboard(data))
+            score_inline = (
+                builder.inline if any(n == "REFERENCE" for n, _ in sections) else None
+            )
+            body.append(scoreboard(data, score_inline))
     banner = (
         f'<div class="banner">{BANNER}</div>'
         if data["execution_mode"] == "fixture"
@@ -376,9 +385,14 @@ def render_report_html(draft: ReportDraft, context: ReportContextV3) -> str:
     header = f'<h1>{_e(title)}</h1><p class="meta">{meta}</p>{banner}'
     body_tag, styles = "<body>", CSS
     if builder.research:
+        qualifier = (
+            "투자 적격성·추천 판정 미실시"
+            if "role_scores" in data
+            else "투자 평가 미실시"
+        )
         header = (
             '<header class="report-masthead"><p class="edition">RESEARCH BRIEF · '
-            "자료 기반 / 투자 평가 미실시</p>" + header + "</header>"
+            f"자료 기반 / {qualifier}</p>" + header + "</header>"
         )
         body_tag, styles = '<body class="research-report">', CSS + RESEARCH_CSS
     return (

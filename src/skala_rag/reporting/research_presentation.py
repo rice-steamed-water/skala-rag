@@ -1,6 +1,7 @@
 """Deterministic display of saved research outputs; never a scoring policy."""
 
-from collections import Counter
+import re
+from decimal import Decimal
 from html import escape
 
 CSS = """
@@ -20,9 +21,7 @@ CSS = """
 .research-report #research-scoreboard { margin: 9pt 0; break-inside: avoid; }
 .research-report #research-scoreboard h3 { margin: 0 0 4pt; }
 .research-report #research-scoreboard table { font-size: 9pt; line-height: 12pt; }
-.research-report #research-scoreboard th:first-child { width: 20%; }
-.research-report #research-scoreboard th:nth-child(7) { width: 18%; }
-.research-report #research-scoreboard th:nth-child(8) { width: 14%; }
+.research-report #research-scoreboard th:first-child { width: 55%; }
 .research-report th, .research-report td { border: 0; border-bottom: .5pt solid #d4dddF;
   padding: 4pt 3pt; font-variant-numeric: tabular-nums; }
 .research-report thead th { background: #eaf0f1; color: #182c40; }
@@ -122,59 +121,50 @@ def role_details(data, section, inline):
     return "".join(parts)
 
 
-def scoreboard(data):
-    """Counts are inventory, not quality, coverage or calibrated confidence."""
-    reviews, evidence, sources = (
-        data.get("live_reviews", {}),
-        data["evidence"],
-        data["sources"],
-    )
+def usable_role_score(data, role):
+    """Validate the display contract, not the rubric or evidence semantics."""
+    scores = data.get("role_scores")
+    record = scores.get(role) if isinstance(scores, dict) else None
+    if not isinstance(record, dict):
+        return None
+    score, ids = record.get("score"), record.get("evidence_ids")
+    if not isinstance(score, str) or not re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", score):
+        return None
+    number = Decimal(score)
+    if not number.is_finite() or not 0 <= number <= 100:
+        return None
+    if not isinstance(ids, list) or not ids:
+        return None
+    for eid in ids:
+        if not isinstance(eid, str) or not eid:
+            return None
+        evidence = data["evidence"].get(eid)
+        if not isinstance(evidence, dict):
+            return None
+        sid = evidence.get("source_id")
+        if not isinstance(sid, str) or not isinstance(data["sources"].get(sid), dict):
+            return None
+    return record
+
+
+def scoreboard(data, inline):
+    """Display saved role scores only; absent scores remain blank."""
     parts = [
-        '<section id="research-scoreboard"><h3>항목별 스코어보드 · 기록 수</h3>',
-        '<p class="meta">품질·coverage·투자 점수가 아닙니다. '
-        "고유 출처 수는 독립 검증·교차 확인 횟수가 아닙니다. "
-        "신뢰도는 참조 근거의 저장 범주별 건수이며 수치 신뢰도는 미산정입니다.</p>",
-        "<table><thead><tr><th>분석 역할</th><th>관측</th><th>해석</th>"
-        "<th>근거</th><th>출처</th><th>결측</th><th>근거 신뢰도</th>"
-        "<th>수치 신뢰도</th></tr></thead><tbody>",
+        '<section id="research-scoreboard"><h3>항목별 스코어보드</h3>',
+        "<table><thead><tr><th>항목</th><th>점수 / 100</th></tr></thead><tbody>",
     ]
     for role, label in ROLES.items():
-        review = reviews.get(role)
-        if review is None:
-            cells = '<td colspan="7">출력 없음 · 집계 불가 · 수치 신뢰도 미산정</td>'
-        else:
-            ids = review_evidence_ids(review)
-            known = [eid for eid in ids if eid in evidence]
-            source_ids = {
-                evidence[eid].get("source_id")
-                for eid in known
-                if evidence[eid].get("source_id") in sources
-            }
-            confidence = Counter(
-                evidence[eid].get("confidence") or "unknown" for eid in known
+        record = usable_role_score(data, role)
+        value = ""
+        if record is not None:
+            citations = " ".join(
+                f"[@evidence:{eid}]" for eid in dict.fromkeys(record["evidence_ids"])
             )
-            distribution = (
-                " · ".join(
-                    f"{escape(str(k))} {v}" for k, v in sorted(confidence.items())
-                )
-                or "없음"
-            )
-            unresolved = len(ids) - len(known)
-            if unresolved:
-                distribution += f" · 미해소 {unresolved}"
-            counts = [
-                len(review.get("observations", [])),
-                len(review.get("interpretations", [])),
-                len(known),
-                len(source_ids),
-                len(set(review.get("missing", []))),
-            ]
-            cells = "".join(f"<td>{n}</td>" for n in counts)
-            cells += f"<td>{distribution}</td><td>미산정</td>"
-        parts.append(f'<tr data-role="{role}"><th scope="row">{label}</th>{cells}</tr>')
-    parts.append(
-        '</tbody></table><p class="meta">관측·해석: 원본 항목 수 / '
-        "근거·출처: 역할 내 고유 ID 수 / 결측: 동일 문자열 중복 제거. "
-        "역할 간 합산은 중복을 포함합니다.</p></section>"
-    )
+            value = f"{escape(record['score'])} / 100"
+            if inline is not None:
+                value += " " + inline(citations)
+        parts.append(
+            f'<tr data-role="{role}"><th scope="row">{label}</th><td>{value}</td></tr>'
+        )
+    parts.append("</tbody></table></section>")
     return "".join(parts)

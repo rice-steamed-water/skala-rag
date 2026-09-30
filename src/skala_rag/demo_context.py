@@ -1,7 +1,7 @@
-"""Validated unscored research adapter, distinct from the investment selector.
+"""Validated research/role-score adapter, distinct from the investment selector.
 
 Only locally hash-verified sources and chunks returned in this run are admitted.
-The existing report format is reused without manufacturing score/outcome DTOs.
+Optional rubric scores do not manufacture investment score/outcome DTOs.
 """
 
 import hashlib
@@ -9,13 +9,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from skala_rag.contracts import Evidence, RetrievalBundle, RetrievalRecord
+from skala_rag.demo_scoring import score_reviews
 from skala_rag.reporting.v3_context import ReportContextV3, canonical
 
 SCHEMA = "local-demo-v1"
 COMPANY = "Physical Intelligence"
 CANDIDATE_ID = "co-physical-intelligence"
 WARNING = (
-    "자료 기반 검토 초안 — 투자 적격성·정량 점수·추천은 판정하지 않았습니다. "
+    "자료 기반 검토 초안 — 역할 점수는 rubric과 항목별 근거로 산정하며, "
+    "근거 없는 역할은 공란입니다. 투자 적격성·추천은 판정하지 않았습니다. "
     "논문 저자의 보고와 분석자의 해석을 구분하며, 전체 M3 검증 완료가 아닙니다."
 )
 
@@ -154,7 +156,7 @@ def _validate_provenance(material: dict) -> None:
 
 
 def build_research_context(
-    *, run_id: str, material: dict, reviews: dict
+    *, run_id: str, material: dict, reviews: dict, rubric: dict | None = None
 ) -> ReportContextV3:
     if material["run_id"] != run_id or not material["evidence"]:
         raise ValueError("RESEARCH_CONTEXT_INVALID")
@@ -165,8 +167,20 @@ def build_research_context(
                 material["evidence"]
             ):
                 raise ValueError("REVIEW_EVIDENCE_INVALID")
+    scoring_payload = {}
+    if rubric is not None:
+        scoring_payload = {
+            "role_scores": score_reviews(
+                reviews, evidence=material["evidence"], rubric=rubric
+            ),
+            "scoring": {"method": rubric["method"], "rubric": rubric},
+            "eligibility_checked": False,
+            "recommendation_performed": False,
+            "publication_allowed": False,
+        }
     payload = canonical(
         {
+            **scoring_payload,
             "schema_version": SCHEMA,
             "run_id": run_id,
             "execution_mode": "live",
