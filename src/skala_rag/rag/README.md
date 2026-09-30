@@ -1,5 +1,9 @@
 # Fixture 검색과 근거 수집
 
+#54의 주입형 index 검색 경계는 `rag.adapter.IndexedRetriever`와
+[검색 adapter 가이드](../../../docs/implementation/retrieve-adapter.md)를 따른다.
+실제 모델·store·검색 검증은 #52 대기 상태이며 아래 fixture 검색과 구별한다.
+
 `rag.fixture.FixtureRetriever`는 #12 공통 fixture의 RetrievalBundle을 메모리에
 복사해 검색한다. Retrieve Protocol을 만족하며 실행 모드는 fixture만 허용한다.
 query로 의미 검색하지 않고 fixture Chunk 순서대로 기업·허용 출처·corpus·기준일을

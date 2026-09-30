@@ -16,6 +16,8 @@ from collections.abc import Callable
 from datetime import date, datetime
 from typing import Literal
 
+from pydantic import ValidationError
+
 from skala_rag.contracts.bundles import RetrievalBundle
 from skala_rag.contracts.error_codes import ERROR_SPECS, ErrorCode, is_retryable
 from skala_rag.contracts.interfaces import Clock
@@ -127,22 +129,35 @@ class GuardedRetriever:
         error: tuple[ErrorCode, str] | None = None
         if bundle is None:
             try:
-                bundle = RetrievalBundle.model_validate(
-                    self._search(request).model_dump(mode="json"),
-                    context=self._context,
-                )
+                raw_bundle = self._search(request)
             except SearchError as exc:
                 error = (exc.error_code, exc.message_redacted)
             else:
-                violations = bundle_violations(request, bundle)
-                if violations:
-                    bundle = None
+                if not isinstance(raw_bundle, RetrievalBundle):
                     error = (
                         ErrorCode.TOOL_RESPONSE_INVALID,
-                        "; ".join(violations),
+                        "INVALID_RETRIEVAL_BUNDLE",
                     )
                 else:
-                    self._cache[key] = bundle
+                    try:
+                        bundle = RetrievalBundle.model_validate(
+                            raw_bundle, context=self._context
+                        )
+                    except ValidationError:
+                        error = (
+                            ErrorCode.TOOL_RESPONSE_INVALID,
+                            "INVALID_RETRIEVAL_BUNDLE",
+                        )
+                    else:
+                        violations = bundle_violations(request, bundle)
+                        if violations:
+                            bundle = None
+                            error = (
+                                ErrorCode.TOOL_RESPONSE_INVALID,
+                                "; ".join(violations),
+                            )
+                        else:
+                            self._cache[key] = bundle
         finished_at = self._clock.now()
 
         errors: list[dict] = []

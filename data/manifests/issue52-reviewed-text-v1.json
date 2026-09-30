@@ -1,0 +1,265 @@
+{
+  "schema_version": "extraction-v1",
+  "corpus_version": "issue52-reviewed-text-v1",
+  "previous_corpus_version": "issue49-real-validation-v1",
+  "documents": [
+    {
+      "schema_version": "extraction-v1",
+      "document_id": "2410.24164v4",
+      "source_id": "src-4cdd7140c49610b1dbdd6731",
+      "origin_url": "https://arxiv.org/pdf/2410.24164v4",
+      "local_path": "data/local/issue49/2410.24164v4.pdf",
+      "content_hash": "sha256:fbdfba56258bdbd220207ba63410c6c943e43a73e97a7a5a47ca0bc74204f821",
+      "title": "π0: A Vision-Language-Action Flow Model for General Robot Control",
+      "publisher": "Physical Intelligence / arXiv",
+      "publication_date": "2026-01-08",
+      "language": "en",
+      "permission_note": "2026-09-30 사용자 「전부 다 허용하고 진행해줘」에 따른 로컬 추출 검증 승인. arXiv 공개 원문이며 원문/추출 텍스트를 재배포하거나 커밋하지 않음. 별도 재배포 권한을 주장하지 않음.",
+      "candidate_ids": [
+        "co-physical-intelligence"
+      ],
+      "scope": "company",
+      "extraction_status": "partial",
+      "reviewer": "wjd990819-ops",
+      "approved": true,
+      "text_index_review": {
+        "schema_version": "extraction-v1",
+        "indexing_scope": "text_only",
+        "source_content_hash": "sha256:fbdfba56258bdbd220207ba63410c6c943e43a73e97a7a5a47ca0bc74204f821",
+        "approved_by": "xxhigh",
+        "approved_on": "2026-09-30",
+        "approval_record": "https://github.com/rice-steamed-water/skala-rag/issues/52#issuecomment-5905563007",
+        "page_count": 17,
+        "page_text_hashes": {
+          "1": "sha256:430fab0f224ed3ef348d95229a4a6e32904eda5207dbe48ec5ae9bc356313940",
+          "2": "sha256:d79220a2ffa285365aa638191ae332c1a53002a6a59dc6e62d9aa61bb2f7103c",
+          "3": "sha256:8bc4cd06fce24c311bd6693ba10e985794f92cb08530b63cdde4f3a2a17ce4a7",
+          "4": "sha256:992102db95c1ae2ae159bb247012ad80b71e7d44f5ca65874fddf7f095a00ada",
+          "5": "sha256:43ae637881343893d459a52134ef2038bcc783571b896de0a11bcf557c62dbe6",
+          "6": "sha256:0c222d3fe8d6fc4658ee05535f888c6d37f60ab3f6e72649d5147f9d04b828e8",
+          "7": "sha256:bbdf5938e1e6b6ead9dd583b2ff48ad3b9224be35c0ac5474d0fe1d43256345f",
+          "8": "sha256:b2150728efe1c39a93def1190cee4fd7323f97064e6c5e23dd23096c8106e3ad",
+          "9": "sha256:01507531dcfcd0a1d4b3049956afa01d27f31b6c8e651299cd5cdca0d939e15b",
+          "10": "sha256:b8efbe10b6ccf84d33541721e75de249644a41ae627fb63ba8128b218914dce7",
+          "11": "sha256:847ff303142b005697782377f52d29c5890dc4b193f2c3edba656b953c54b37d",
+          "12": "sha256:e093c81955e8e6cf41679d2b947a37b87b57d49f4b15435b3991d91f3afe59a8",
+          "13": "sha256:4c400a392374cadbb6f190f12b4c0cb8b685e68144faaf5ca1b62e6e64a44198",
+          "14": "sha256:03950995442503d4f2c3084c646d521212164e657f4abc06b4fb7eb8205556cd",
+          "15": "sha256:a902dd29f1d49ba70ff688e7f5a6f7b25cef59dd7126175de30fd89c9a3f859d",
+          "16": "sha256:e9d5dcf145370bc896a7165af94b9fc6f59b7c557fe4402b56c458b480f07260",
+          "17": "sha256:1957015c33ba879551a323882df88ae72c3e09c7486bb884a05d0e5610be4313"
+        },
+        "extraction_settings": {
+          "max_characters": 12000,
+          "overlap": 0,
+          "tokenizer": "none-page-atomic",
+          "document_kind": "technical_whitepaper",
+          "version": "issue49-real-v2",
+          "section_mode": "pdf-outline"
+        },
+        "omissions": [
+          {
+            "schema_version": "extraction-v1",
+            "code": "TEXT_LAYOUT_WARNING",
+            "page": 1,
+            "explanation": "Rotated arXiv identifier checked; layout warning retained."
+          },
+          {
+            "schema_version": "extraction-v1",
+            "code": "VISUAL_CONTENT_NOT_EXTRACTED",
+            "page": 1,
+            "explanation": "Visual content excluded; no values inferred."
+          },
+          {
+            "schema_version": "extraction-v1",
+            "code": "VISUAL_CONTENT_NOT_EXTRACTED",
+            "page": 2,
+            "explanation": "Visual content excluded; no values inferred."
+          },
+          {
+            "schema_version": "extraction-v1",
+            "code": "VISUAL_CONTENT_NOT_EXTRACTED",
+            "page": 4,
+            "explanation": "Visual content excluded; no values inferred."
+          },
+          {
+            "schema_version": "extraction-v1",
+            "code": "VISUAL_CONTENT_NOT_EXTRACTED",
+            "page": 5,
+            "explanation": "Visual content excluded; no values inferred."
+          },
+          {
+            "schema_version": "extraction-v1",
+            "code": "VISUAL_CONTENT_NOT_EXTRACTED",
+            "page": 6,
+            "explanation": "Visual content excluded; no values inferred."
+          },
+          {
+            "schema_version": "extraction-v1",
+            "code": "VISUAL_CONTENT_NOT_EXTRACTED",
+            "page": 7,
+            "explanation": "Visual content excluded; no values inferred."
+          },
+          {
+            "schema_version": "extraction-v1",
+            "code": "VISUAL_CONTENT_NOT_EXTRACTED",
+            "page": 8,
+            "explanation": "Visual content excluded; no values inferred."
+          },
+          {
+            "schema_version": "extraction-v1",
+            "code": "VISUAL_CONTENT_NOT_EXTRACTED",
+            "page": 9,
+            "explanation": "Visual content excluded; no values inferred."
+          },
+          {
+            "schema_version": "extraction-v1",
+            "code": "VISUAL_CONTENT_NOT_EXTRACTED",
+            "page": 11,
+            "explanation": "Visual content excluded; no values inferred."
+          }
+        ],
+        "limitations": [
+          "Images/graphs were not extracted; their values are not Evidence.",
+          "Column reading order and mathematical glyphs are not fully certified."
+        ]
+      }
+    },
+    {
+      "schema_version": "extraction-v1",
+      "document_id": "2504.16054v1",
+      "source_id": "src-8b9d0942c94fc60a1c8890d7",
+      "origin_url": "https://arxiv.org/pdf/2504.16054v1",
+      "local_path": "data/local/issue49/2504.16054v1.pdf",
+      "content_hash": "sha256:6a1029fd8ab6944b74cf22f5e5d30e60bc15699d964b2900af799b807a34b64c",
+      "title": "π0.5: a Vision-Language-Action Model with Open-World Generalization",
+      "publisher": "Physical Intelligence / arXiv",
+      "publication_date": "2025-04-22",
+      "language": "en",
+      "permission_note": "2026-09-30 사용자 「전부 다 허용하고 진행해줘」에 따른 로컬 추출 검증 승인. arXiv 공개 원문이며 원문/추출 텍스트를 재배포하거나 커밋하지 않음. 별도 재배포 권한을 주장하지 않음.",
+      "candidate_ids": [
+        "co-physical-intelligence"
+      ],
+      "scope": "company",
+      "extraction_status": "partial",
+      "reviewer": "wjd990819-ops",
+      "approved": true,
+      "text_index_review": {
+        "schema_version": "extraction-v1",
+        "indexing_scope": "text_only",
+        "source_content_hash": "sha256:6a1029fd8ab6944b74cf22f5e5d30e60bc15699d964b2900af799b807a34b64c",
+        "approved_by": "xxhigh",
+        "approved_on": "2026-09-30",
+        "approval_record": "https://github.com/rice-steamed-water/skala-rag/issues/52#issuecomment-5905563007",
+        "page_count": 19,
+        "page_text_hashes": {
+          "1": "sha256:b47ab310826af6a055daabe6690abc8704ca52321fa7d0919c250446e55e2a9d",
+          "2": "sha256:7d0d3d8634abc7739fe006bd74462c5df5b2542a1eea5631d2f48e9fdf2e8d5e",
+          "3": "sha256:639e085a46f44b364703ef712000e88c40f344c312c3c4248dbf5bf44cbd2a96",
+          "4": "sha256:9f0ffd46ba1f69b88dfd053abbc7962810461e8cffaf555699876683667ded87",
+          "5": "sha256:1f6547445bfa4a1ad469cb3333c6953b328a23d147f4ae097716f2149d361642",
+          "6": "sha256:19f93b085aa69106bf54b2e571f62b9170fc69b053cdd6259a6ac75ff1e26fc0",
+          "7": "sha256:aa12d444b3295c87e08b54ed0e5a82428bfeccc8826702c7180e4dabf5da83df",
+          "8": "sha256:5e65c0f56c36280abff20e90ebc2f2fc32c689da8d80de083f805bd66b2dadc1",
+          "9": "sha256:41fab43aacef612ff1dfb41f7748fb5c433f6122c32f3d9c91b1a9011975f22e",
+          "10": "sha256:7dd687dd7594b325565ef61cb3baaf96f4bcb3f371d8da7fc44fe391cb44776e",
+          "11": "sha256:a0219f74a834f32816faf4b6d252e0a932b4f7e433eec10d3ac9d660518a1093",
+          "12": "sha256:2956eb5d355995b63751a94d4512554fb97c858ac65c12f103209c2eace07b81",
+          "13": "sha256:65a1072e48c38f014dd4e05c3aef10df0c50d56564839f24793e6521310d5f5e",
+          "14": "sha256:3bb4d8ebe67e153b74cfff1574991237aff6da8dc765ca63b0c857d6097bcf8f",
+          "15": "sha256:40447e1083af3deb575a1a43a7ea97b997e9412da58faf6c6956609bdf3769cd",
+          "16": "sha256:811073fa0697c5055f6a4f8625ed2a223996e60cf258fa5a5e371ed7d73b84ec",
+          "17": "sha256:1517ec60eba987e46b1a2b0bb0acf25509c0fb512723ee161e90945c97aec9b7",
+          "18": "sha256:a0eaa07d8bbfe14aee389859b68239e950a59d34e34a98e003a6c0781df85925",
+          "19": "sha256:40792bb07088b5f541cc19700b0d88c1c11b15279a99b71fea41ca3d5215a0f8"
+        },
+        "extraction_settings": {
+          "max_characters": 12000,
+          "overlap": 0,
+          "tokenizer": "none-page-atomic",
+          "document_kind": "technical_whitepaper",
+          "version": "issue49-real-v2",
+          "section_mode": "pdf-outline"
+        },
+        "omissions": [
+          {
+            "schema_version": "extraction-v1",
+            "code": "TEXT_LAYOUT_WARNING",
+            "page": 1,
+            "explanation": "Rotated arXiv identifier checked; layout warning retained."
+          },
+          {
+            "schema_version": "extraction-v1",
+            "code": "VISUAL_CONTENT_NOT_EXTRACTED",
+            "page": 1,
+            "explanation": "Visual content excluded; no values inferred."
+          },
+          {
+            "schema_version": "extraction-v1",
+            "code": "VISUAL_CONTENT_NOT_EXTRACTED",
+            "page": 2,
+            "explanation": "Visual content excluded; no values inferred."
+          },
+          {
+            "schema_version": "extraction-v1",
+            "code": "VISUAL_CONTENT_NOT_EXTRACTED",
+            "page": 4,
+            "explanation": "Visual content excluded; no values inferred."
+          },
+          {
+            "schema_version": "extraction-v1",
+            "code": "VISUAL_CONTENT_NOT_EXTRACTED",
+            "page": 6,
+            "explanation": "Visual content excluded; no values inferred."
+          },
+          {
+            "schema_version": "extraction-v1",
+            "code": "VISUAL_CONTENT_NOT_EXTRACTED",
+            "page": 7,
+            "explanation": "Visual content excluded; no values inferred."
+          },
+          {
+            "schema_version": "extraction-v1",
+            "code": "VISUAL_CONTENT_NOT_EXTRACTED",
+            "page": 8,
+            "explanation": "Visual content excluded; no values inferred."
+          },
+          {
+            "schema_version": "extraction-v1",
+            "code": "VISUAL_CONTENT_NOT_EXTRACTED",
+            "page": 9,
+            "explanation": "Visual content excluded; no values inferred."
+          },
+          {
+            "schema_version": "extraction-v1",
+            "code": "VISUAL_CONTENT_NOT_EXTRACTED",
+            "page": 10,
+            "explanation": "Visual content excluded; no values inferred."
+          },
+          {
+            "schema_version": "extraction-v1",
+            "code": "VISUAL_CONTENT_NOT_EXTRACTED",
+            "page": 11,
+            "explanation": "Visual content excluded; no values inferred."
+          },
+          {
+            "schema_version": "extraction-v1",
+            "code": "VISUAL_CONTENT_NOT_EXTRACTED",
+            "page": 18,
+            "explanation": "Visual content excluded; no values inferred."
+          },
+          {
+            "schema_version": "extraction-v1",
+            "code": "VISUAL_CONTENT_NOT_EXTRACTED",
+            "page": 19,
+            "explanation": "Visual content excluded; no values inferred."
+          }
+        ],
+        "limitations": [
+          "Images/graphs were not extracted; their values are not Evidence.",
+          "Column reading order and mathematical glyphs are not fully certified."
+        ]
+      }
+    }
+  ]
+}
