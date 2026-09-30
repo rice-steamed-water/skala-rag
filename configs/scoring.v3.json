@@ -1,0 +1,247 @@
+{
+  "policy_version": "v3-operational-1.0.0",
+  "execution_mode": "fixture",
+  "approval": {
+    "status": "operational_approved",
+    "source": "rice-steamed-water/skala-rag#82",
+    "approved_on": "2026-09-30",
+    "rubric_status": "not_approved",
+    "live_readiness": "not_approved",
+    "live_budget": "not_approved"
+  },
+  "criteria": [
+    {
+      "criterion_id": "founder.expertise",
+      "dimension": "founder",
+      "display_name": "도메인 전문성",
+      "weight": 2
+    },
+    {
+      "criterion_id": "founder.industry",
+      "dimension": "founder",
+      "display_name": "관련 산업 경험",
+      "weight": 2
+    },
+    {
+      "criterion_id": "founder.execution",
+      "dimension": "founder",
+      "display_name": "창업/사업화 경험",
+      "weight": 1
+    },
+    {
+      "criterion_id": "market.size",
+      "dimension": "market",
+      "display_name": "목표 시장 규모",
+      "weight": 10
+    },
+    {
+      "criterion_id": "market.growth",
+      "dimension": "market",
+      "display_name": "시장 성장성",
+      "weight": 10
+    },
+    {
+      "criterion_id": "market.demand",
+      "dimension": "market",
+      "display_name": "수요/확장성",
+      "weight": 10
+    },
+    {
+      "criterion_id": "technology.maturity",
+      "dimension": "technology",
+      "display_name": "핵심 기술 완성도",
+      "weight": 10
+    },
+    {
+      "criterion_id": "technology.reliability",
+      "dimension": "technology",
+      "display_name": "실제 환경 성능/안정성",
+      "weight": 5
+    },
+    {
+      "criterion_id": "technology.integration",
+      "dimension": "technology",
+      "display_name": "AI/HW/SW 통합",
+      "weight": 5
+    },
+    {
+      "criterion_id": "technology.commercialization",
+      "dimension": "technology",
+      "display_name": "확장/상용화 가능성",
+      "weight": 5
+    },
+    {
+      "criterion_id": "moat.differentiation",
+      "dimension": "moat",
+      "display_name": "경쟁사 대비 차별성",
+      "weight": 5
+    },
+    {
+      "criterion_id": "moat.ip",
+      "dimension": "moat",
+      "display_name": "기술/특허 진입장벽",
+      "weight": 5
+    },
+    {
+      "criterion_id": "moat.data",
+      "dimension": "moat",
+      "display_name": "데이터/학습 경쟁력",
+      "weight": 5
+    },
+    {
+      "criterion_id": "moat.lock_in",
+      "dimension": "moat",
+      "display_name": "고객 락인/생태계",
+      "weight": 5
+    },
+    {
+      "criterion_id": "traction.revenue_growth",
+      "dimension": "traction",
+      "display_name": "매출 성장률",
+      "weight": 3
+    },
+    {
+      "criterion_id": "traction.gross_margin",
+      "dimension": "traction",
+      "display_name": "매출총이익률",
+      "weight": 2
+    },
+    {
+      "criterion_id": "traction.burn",
+      "dimension": "traction",
+      "display_name": "번레이트",
+      "weight": 1
+    },
+    {
+      "criterion_id": "traction.runway",
+      "dimension": "traction",
+      "display_name": "런웨이",
+      "weight": 2
+    },
+    {
+      "criterion_id": "traction.concentration",
+      "dimension": "traction",
+      "display_name": "고객 집중도",
+      "weight": 1
+    },
+    {
+      "criterion_id": "traction.rule_of_40",
+      "dimension": "traction",
+      "display_name": "Rule of 40",
+      "weight": 1
+    },
+    {
+      "criterion_id": "deal_terms.stage",
+      "dimension": "deal_terms",
+      "display_name": "투자 시리즈",
+      "weight": 2
+    },
+    {
+      "criterion_id": "deal_terms.valuation",
+      "dimension": "deal_terms",
+      "display_name": "Valuation",
+      "weight": 5
+    },
+    {
+      "criterion_id": "deal_terms.ownership",
+      "dimension": "deal_terms",
+      "display_name": "지분율",
+      "weight": 3
+    }
+  ],
+  "dimension_weights": [
+    {
+      "dimension": "founder",
+      "weight": 5
+    },
+    {
+      "dimension": "market",
+      "weight": 30
+    },
+    {
+      "dimension": "technology",
+      "weight": 25
+    },
+    {
+      "dimension": "moat",
+      "weight": 20
+    },
+    {
+      "dimension": "traction",
+      "weight": 10
+    },
+    {
+      "dimension": "deal_terms",
+      "weight": 10
+    }
+  ],
+  "numeric": {
+    "priority_score": "80",
+    "recommend_score": "70",
+    "watchlist_score": "60",
+    "weighted_missing_pct": "30",
+    "low_dimension_ratio_pct": "40",
+    "low_dimension_scope": [
+      "market",
+      "technology"
+    ],
+    "guard_order": [
+      "missing",
+      "low_dimension",
+      "score"
+    ],
+    "missing_comparison": ">=",
+    "low_dimension_comparison": "<=",
+    "score_comparison": ">=",
+    "score_basis": "normalized_score",
+    "comparison_precision": "exact_unrounded",
+    "labels_descending": [
+      "RECOMMEND_PRIORITY",
+      "RECOMMEND",
+      "WATCHLIST",
+      "PASS"
+    ]
+  },
+  "applicability": {
+    "lack_of_evidence": "missing",
+    "na_requires": [
+      "applicability_reason",
+      "approved_rule",
+      "applicability_evidence"
+    ],
+    "rule_authorization": "required_external_controller_input",
+    "denominator": "include_missing_exclude_not_applicable",
+    "zero_denominator": "no_score_candidate_error_archive_then_advance"
+  },
+  "selection": {
+    "candidates": "eligible_normal_evaluated",
+    "ordering": [
+      "recommend_label_priority",
+      "normalized_score_desc",
+      "weighted_missing_pct_asc",
+      "original_candidate_id_asc"
+    ],
+    "no_recommendation": "no_selection_comparison_report"
+  },
+  "research": {
+    "additional_requests_per_candidate": 2,
+    "initial_collection": "excluded",
+    "decrement": "before_request",
+    "empty_or_failure": "consumes_attempt",
+    "post_evaluation": "forbidden"
+  },
+  "report": {
+    "shared_revisions": 2,
+    "revision_scope": [
+      "structural",
+      "semantic"
+    ],
+    "initial_generation": "excluded",
+    "exhausted_status": "completed",
+    "exhausted_notice": "Warning",
+    "exhausted_output": "current_draft_and_findings",
+    "validated_final": "forbidden_when_exhausted",
+    "exhausted_cli_exit": 2,
+    "corrupt_context_or_upstream": "failed"
+  }
+}
