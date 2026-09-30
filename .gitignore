@@ -9,7 +9,9 @@
 !.env.example
 
 # Python / uv
+.python-version
 .venv/
+venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -19,6 +21,10 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+
+# Local environment scaffolding
+pyproject.toml
+uv.lock
 
 # Local data and run outputs
 data/local/
