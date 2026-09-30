@@ -44,3 +44,24 @@ renderer 자체에는 retry loop가 없다. 입력 문장을 수정하면 새 dr
 원래 artifact와 같은 경로가 이미 있으면 덮어쓰지 않으므로 실행마다 새 output_dir을
 명시한다. outputs는 커밋하지 않는다. 실제 자료 보고서의 성공 증거는 #94/#96의 동일
 최종 artifact로 확인하며 renderer fixture 통과를 M3 live 완료로 표시하지 않는다.
+
+## 시각 디자인 (#173)
+
+ReportLab renderer 위에 절제된 navy/teal 투자 보고서 스타일을 적용한다(A4·NanumGothic·
+18mm 여백·≤5페이지·SUMMARY ≤0.5페이지·proof/hash/final 게이트는 그대로). 구현은
+`reporting/pdf_presentation.py`(private)와 `pdf.py`다.
+
+- 타이포그래피: 제목/섹션(navy)·소제목(teal)·본문(ink), 표 헤더는 navy 배경·흰 글씨,
+  줄무늬 행. 모든 페이지에 헤더(보고서명)와 푸터(모드 FIXTURE/LIVE, PAGE n).
+- 시각 요소: 후보 비교 표, 후보별 점수 카드(normalized_score·label·coverage_pct·
+  weighted_missing_pct), 영역별 `dimension_score_pct` 막대(고정 0–100 트랙).
+- 데이터 출처: v3 구조 검증(`validate_report_v3`)이 통과한 뒤 같은 proof의
+  `checks["pdf_presentation"]`에 담은 검증된 `ScoreSummary`/`InvestmentDecision`/
+  `CandidateOutcome`만 쓴다. renderer가 context_id·draft_hash·execution_mode·정확한
+  draft 블록 일치를 다시 확인하며 불일치는 렌더 실패(fail-closed)다. 본문 prose에서
+  숫자를 추출하지 않으며, proof가 없으면 시각 요소는 0개다.
+- 값 표기: Decimal 원문 그대로 표시(반올림 없음). None은 "미상"으로 표시하고 막대/채움을
+  그리지 않으며 0으로 렌더하지 않는다. 선택 없음(no-selection) 모드는 그대로 유지된다.
+- 측정: `layout_measurements`에 `presentation_version`과 `visualizations` 개수를 기록한다.
+- 검증: `tests/unit/test_pdf_design.py`가 실제 PDF를 만들어 텍스트 추출로 확인한다.
+  시각(육안·래스터) 검증은 수행하지 않았다.
