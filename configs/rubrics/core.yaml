@@ -55,7 +55,7 @@ dimensions:
           4: 기업에서 AI/로봇 제품 개발 3년 이상
           5: AI/로봇 제품 출시·양산 리드 경험
       founder.execution:
-        name: 창업·사업화 경험
+        name: 창업/사업화 경험
         weight: 1
         minimum_evidence: [이전 창업·제품 출시·사업화 참여 이력 (현 회사 성과 제외)]
         missing_when: [attribution_unverified, not_disclosed]
@@ -98,7 +98,7 @@ dimensions:
           - {rating: 4, min: 15, max: 25}
           - {rating: 5, min: 25}
       market.demand:
-        name: 시장 수요·확장성
+        name: 수요/확장성
         weight: 10
         minimum_evidence: [세부 시장의 구체적 문제, 실제 도입 사례]
         missing_when: [segment_mismatch, proxy_only, not_disclosed]
@@ -124,7 +124,7 @@ dimensions:
           4: TRL 7–8 실제 환경 파일럿·인증 완료
           5: TRL 9 상용 판매·운영, 제3자 확인
       technology.reliability:
-        name: 실제 환경 성능·안정성
+        name: 실제 환경 성능/안정성
         weight: 5
         minimum_evidence: [테스트 조건과 결과 수치]
         missing_when: [attribution_unverified, not_disclosed]
@@ -135,7 +135,7 @@ dimensions:
           4: 실제 환경 테스트 수치 공개(조건 명시)
           5: 고객 현장 장기 운용 지표 교차확인
       technology.integration:
-        name: AI·HW·SW 통합 역량
+        name: AI/HW/SW 통합
         weight: 5
         minimum_evidence: [구성요소와 연결 구조를 설명하는 기술 문서·논문·발표]
         missing_when: [attribution_unverified, not_disclosed]
@@ -146,7 +146,7 @@ dimensions:
           4: 핵심 3요소 이상 자체 개발, 통합 구조 설명
           5: 4 + 통합 성과가 논문·제3자로 확인
       technology.commercialization:
-        name: 확장·상용화 가능성
+        name: 확장/상용화 가능성
         weight: 5
         minimum_evidence: [출시 단계, PoC·계약·양산 계획 또는 관측 결과]
         missing_when: [attribution_unverified, not_disclosed]
@@ -172,7 +172,7 @@ dimensions:
           4: 같은 조건 비교에서 1개 이상 핵심 지표 정량 우위
           5: 복수 핵심 지표 정량 우위 + 독립 출처
       moat.ip:
-        name: 기술·특허 진입장벽
+        name: 기술/특허 진입장벽
         weight: 5
         minimum_evidence: [출원인 식별이 확인된 특허 목록과 핵심 기술 관련성]
         missing_when: [attribution_unverified, not_disclosed]
@@ -184,7 +184,7 @@ dimensions:
           4: 핵심 관련 등록 3건 이상 또는 해외 Family
           5: 핵심 관련 등록 10건 이상 + 해외 Family + 피인용
       moat.data:
-        name: 데이터·학습 경쟁력
+        name: 데이터/학습 경쟁력
         weight: 5
         minimum_evidence: [데이터 확보 방식·규모·종류와 학습 구조의 구체적 설명]
         missing_when: [proxy_only, not_disclosed]
@@ -195,7 +195,7 @@ dimensions:
           4: 현장 데이터 수집→재학습 구조 확인
           5: 4 + Data Flywheel 성능 향상 수치 확인
       moat.lock_in:
-        name: 고객 락인·생태계
+        name: 고객 락인/생태계
         weight: 5
         minimum_evidence: [연동·전용 플랫폼·계약 구조·파트너십 중 하나 이상의 구체 근거]
         missing_when: [proxy_only, not_disclosed]

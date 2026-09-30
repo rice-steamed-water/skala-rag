@@ -123,3 +123,22 @@ def test_document_boundary_examples(rubric, criterion, value, expected):
 def test_tam_only_caps_market_size_at_3(rubric):
     caps = _criteria(rubric)["market.size"]["caps"]
     assert {"condition": "tam_only", "max_rating": 3} in caps
+
+
+def test_matches_draft_policy_catalog(rubric):
+    """#9 draft 정책 catalog(configs/scoring.draft.json)와 ID·비중·표시명 일치."""
+    from skala_rag.scoring.catalog import load_policy
+
+    policy = load_policy(
+        ROOT / "configs" / "scoring.draft.json", execution_mode="fixture"
+    )
+    catalog = {
+        c.criterion_id: (c.weight, c.display_name)
+        for c in policy.criteria
+        if c.dimension in DIMENSIONS
+    }
+    assert {
+        cid: (c["weight"], c["name"]) for cid, c in _criteria(rubric).items()
+    } == catalog
+    for dim, weight in DIMENSIONS.items():
+        assert policy.dimension_weights[dim] == weight
