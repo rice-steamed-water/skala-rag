@@ -201,7 +201,7 @@ def test_scope_is_filtered_before_top_k_and_cache_separated(data, setup, update)
     retrieve = build()
     retrieve(request(data))
     result = retrieve(request(data, **update))
-    assert len(backend.calls) == 2
+    assert len(backend.calls) == (1 if result.status == "empty" else 2)
     assert len(retrieve.cache_keys) == 2
     for chunk in result.data.chunks:
         assert chunk.chunk_id in backend.calls[-1][1]
@@ -262,7 +262,7 @@ def test_unknown_date_acquisition_and_future_snapshot(data, setup):
         s.retrieved_at = datetime(2026, 10, 1, tzinfo=UTC)
     result = build()(request(data))
     assert result.status == "empty"
-    assert backend.calls[0][1] == ()
+    assert backend.calls == []
 
 
 def test_exception_redaction_and_no_failure_cache(data, setup):

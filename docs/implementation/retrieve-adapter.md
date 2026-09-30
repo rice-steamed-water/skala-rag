@@ -3,7 +3,7 @@
 `rag.adapter.IndexedRetriever`는 기존 `Retrieve` Protocol의
 `RetrievalRequest → ToolResult[RetrievalBundle]` 경계를 구현한다.
 현재 제공하는 것은 주입형 backend와 synthetic index를 사용한 오프라인 검증이다.
-실제 BGE-M3 로딩·vector store·index 재오픈·검색 품질을 구현하거나 검증한 것은 아니다.
+실제 BGE-M3 로딩·vector store·index 재오픈·검색 품질을 검증한 것은 아니다.
 
 ## 구성과 호출
 
@@ -25,6 +25,47 @@ Backend는 similarity를 Evidence confidence/rating/사실 수치로 반환하�
 사용량은 현재 Bundle 인터페이스에서 실측되지 않으므로 `None`이며,
 runtime은 주입된 요청 최대 예산을 보수적으로 유지한다. 실제 query encoder 비용을
 사용하는 연결에서는 그 최대 비용을 allowance에 포함해야 한다.
+
+### 병합된 #52 plan과 dense backend 연결
+
+`rag.dense.snapshot_from_plan(plan, manifest=..., reopened_metadata=...,
+search_settings={"metric": "cosine"}, execution_mode=...)`은 #52 `IndexPlan`의
+Source/Chunk snapshot과 settings로 `build_index_plan`을 재실행한다. 현재 manifest
+hash·승인 gate·설정·index version·Chunk ID 전체를 대조하고, store에서 읽어온
+metadata가 plan과 정확히 같은지 확인한 뒤 `IndexSnapshot`을 만든다. partial
+manifest, 변경된 plan/metadata는 거절한다. 이 함수는 원문 바이트를 읽거나 실제
+store transaction/reopen이 일어났음을 증명하지 않는다.
+
+`DenseVectorSearch(snapshot=..., vectors=..., encoder=..., execution_mode=...)`는
+#52의 `EmbeddingVector`와 명시적 `QueryEncoder.encode_once`를 소비한다. vector의
+ID 집합·차원·모델/revision·유한값·0벡터를 검사하고 허용 Chunk만 대상으로 exact
+cosine 순위를 계산한다. 동점은 Chunk ID 순서로 결정한다. cosine은 이 연결에서
+명시적으로 주입해야 하는 지원 metric이며 product store/검색 정책 기본값이 아니다.
+query encoder에는 index plan의 tokenizer·전처리·embedding 설정 전체와 runtime
+timeout을 전달한다. 반환 `QueryVector`의 모델/revision·차원·유한값을 다시 검사한다.
+실제 BGE-M3 encoder 구현·다운로드·API·store 선택은 포함하지 않는다.
+
+```python
+snapshot = snapshot_from_plan(
+    plan,
+    manifest=manifest,
+    reopened_metadata=metadata_from_store,
+    search_settings={"metric": "cosine"},
+    execution_mode="fixture",
+)
+backend = DenseVectorSearch(
+    snapshot=snapshot,
+    vectors=vectors_from_store,
+    encoder=injected_query_encoder,
+    execution_mode="fixture",
+)
+# IndexedRetriever에 snapshot, backend, runtime/readiness/budget/allowance를 주입한다.
+```
+
+이 예시의 fixture mode나 synthetic model revision을 live 성공으로 바꾸지 않는다.
+query encoder는 hidden retry·모델 자동 다운로드 없이 whole-attempt timeout을 지켜야
+한다. 문서 후보가 없거나 top_k=0인 요청은 로컬 empty 이력을 남기며 encoder 호출이나
+물리 요청 예산 차감이 없다. 그 외 miss는 runtime의 한 번의 시도에 한 번 인코딩한다.
 
 ## 반환 및 cache 격리
 
@@ -53,7 +94,8 @@ collector는 기존처럼 반환 Chunk를 저장하고 Evidence provenance를 �
 
 ## 남은 완료 조건
 
-#52는 아직 Draft/blocked이다. #49의 실제 π0/π0.5 자료는 `partial`이므로 현 index
+#52의 offline index 계약은 PR #112로 병합됐지만 실제 index는 여전히 blocked이다.
+#49의 실제 π0/π0.5 자료는 `partial`이므로 현 index
 gate가 거절하며, 본 adapter가 이를 승인/ok로 승격하지 않는다. 실제 승인 corpus,
 BGE-M3 revision/LICENSE·query encoder·store·read-back·readiness·실행 승인 이후
 실제 index의 검색 Chunk/Source/page trace와 검색 품질을 확인해야 #54를 완료할 수 있다.

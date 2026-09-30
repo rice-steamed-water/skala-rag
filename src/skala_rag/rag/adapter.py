@@ -249,6 +249,11 @@ class IndexedRetriever:
                 or runtime.clock.now() < self._budget.deadline
             )
         )
+        cache_hit = key in self._cache
+        if cache_allowed and not cache_hit and (not allowed or request.top_k == 0):
+            self._cache[key] = RetrievalBundle(
+                schema_version=self._schema_version, chunks=[], sources={}
+            )
         if cache_allowed and key in self._cache:
             bundle = self._cache[key].model_copy(deep=True)
             now = runtime.clock.now()
@@ -271,7 +276,7 @@ class IndexedRetriever:
                 source_ids=sorted(bundle.sources),
                 chunk_ids=[c.chunk_id for c in bundle.chunks],
                 evidence_ids=[],
-                cache_hit=True,
+                cache_hit=cache_hit,
             )
             return ToolResult(
                 schema_version=self._schema_version,
