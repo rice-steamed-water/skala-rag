@@ -77,3 +77,39 @@ evidence_research_stage(research, budget=...) -> CandidateNodes.collect
 RAG는 #54 `IndexedRetriever`에 가상 backend를, 추출은 가상 LLM을 쓴다. 실제 BGE-M3
 index·LLM 호출은 하지 않았으므로 검색 품질·추출 품질이나 live 성공 증거가 아니다.
 gap 질의용 실제 Web 검색 adapter는 아직 없다(#48 Tavily는 후보 발견 전용).
+
+## 실제 로컬 index smoke — 실행 대기
+
+`rag.evidence_research_validation`은 #54 `retrieve_validation`과 같은 #145 로컬 산출물
+(BGE-M3 모델, SQLite index, receipt)을 재검증해 `IndexedRetriever`를 만든다. 그 위에서
+`evidence_research_stage`를 최초 수집 1회와 gap 재조사 1회로 실행한다. 산출물이 있는
+PC에서만 동작하며, 결과는 Git 제외 `outputs/` 아래 `validation.json`에 쓴다.
+
+```bash
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HUB_DISABLE_IMPLICIT_TOKEN=1 \
+uv run python -m skala_rag.rag.evidence_research_validation \
+  --root /path/to/repo \
+  --model-path /path/to/repo/data/local/models/bge-m3-5617a9f \
+  --store-path /path/to/repo/outputs/issue145-local-bge-final/index.sqlite \
+  --receipt-path /path/to/repo/outputs/issue145-local-bge-final/validation.json \
+  --output-dir /path/to/repo/outputs/issue55-evidence-research-none \
+  --timeout-seconds 60 --llm none --top-k 2 \
+  --initial-criterion technology.maturity \
+  --initial-query "Physical Intelligence vision-language-action model" \
+  --gap-criterion technology.reliability \
+  --gap-query "evaluation success rate on real robot tasks"
+```
+
+- `--llm none`: 외부 호출 없이 검색 → 구간 → 이력 trace만 확인한다. Evidence는 0개다.
+- `--llm openai`: `OPENAI_API_KEY`가 필요하다. `--output-dir`을 바꿔 다시 실행한다.
+  - M2 승인 B 상한을 코드에서 강제한다: LLM 요청 8회, 요청당 입력 8,000/출력 2,000
+    token, 전체 입력 64,000/출력 16,000 token, USD 1.00.
+  - 요청당 입력 상한을 넘는 페이지는 호출하지 않고 batch를 멈춘다. 이때 결과는
+    `failed`로 기록된다.
+  - `top_k`는 1~4만 받는다. 두 batch의 페이지 수가 요청 8회 안에 들어야 하기 때문이다.
+- criterion·질의·top_k는 OPEN 정책을 대신하는 smoke 인자일 뿐, 승인된 값이 아니다.
+- #50 규칙상 기업 근거의 발췌에는 기업명("Physical Intelligence")이 있어야 한다.
+  그래서 논문 본문 페이지의 주장은 대부분 `SUBJECT_NOT_IN_EXCERPT`로 거절될 수 있다.
+  이는 보수적 추출 규칙의 결과이며 검색 실패가 아니다.
+- 스크립트 흐름은 `tests/unit/test_evidence_research_validation.py`에서 가상 index로
+  확인했다. #145 산출물 로딩 부분은 #54 경로를 그대로 쓰므로 여기서는 재검증하지 않았다.
