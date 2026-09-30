@@ -177,3 +177,9 @@ def test_empty_reference_needs_reason(ctx):
         pytest.skip("single_candidate는 인용 필수")
     draft = _draft(ctx, cite=0, overrides={"REFERENCE": "인용 자료 없음:"})
     assert "SV07" in _codes(validate_report(draft, ctx))
+
+
+def test_summary_without_decision_is_fail_not_crash(ctx):
+    bad = ctx.model_copy(update={"decisions": {}})
+    result = validate_report(_draft(ctx), bad)
+    assert "SV01" in _codes(result) and result.checks["action"] == "fail"
