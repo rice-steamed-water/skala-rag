@@ -229,8 +229,12 @@ def build_user_prompt(
     snapshot: EvaluationSnapshot,
     rubric: Mapping[str, object],
     policy: ScoringPolicy,
+    context: Mapping[str, object] | None = None,
 ) -> str:
-    """rubric 해당 영역과 snapshot 근거만 담은 결정적 JSON prompt."""
+    """rubric 해당 영역과 snapshot 근거만 담은 결정적 JSON prompt.
+
+    ``context``는 영역별 호출자가 검증해 넘긴 추가 맥락(예: 시장 정의)이다.
+    """
     dims = rubric.get("dimensions")
     rubric_dim = dims.get(dimension, {}) if isinstance(dims, Mapping) else {}
     payload = {
@@ -257,6 +261,8 @@ def build_user_prompt(
             for e in snapshot.evidence.values()
         ],
     }
+    if context is not None:
+        payload["context"] = dict(context)
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
 
 
@@ -308,21 +314,28 @@ def evaluate_dimension(
     clock: Clock,
     schema_version: str,
     max_repairs: int = 1,
+    system_prompt: str = SYSTEM_PROMPT,
+    prompt_context: Mapping[str, object] | None = None,
+    extra_validator: Callable[[DimensionAssessmentOutput], list[str]] | None = None,
 ) -> EvaluationResult:
     """한 영역을 평가해 terminal ``EvaluationResult``를 돌려준다(contracts §4).
+
+    영역별 호출자는 versioned ``system_prompt``·``prompt_context``와 영역 고유
+    계약 검사 ``extra_validator``를 넘길 수 있다. 추가 위반도 공통 위반과 같이
+    구조 수정 1회 → failure로 처리한다(위반 문자열은 ``CODE: 내용`` 형식).
 
     - schema 오류(LLM_OUTPUT_INVALID·ValidationError)와 계약 위반은 위반 내용을
       붙여 ``max_repairs``회 구조 수정을 요청한다. 그래도 실패하면 failure.
     - 그 밖의 LLM 오류(timeout 등)는 이 wrapper에서 재시도하지 않고 failure
       (재시도 예산은 M2 adapter 범위).
     """
-    user = build_user_prompt(dimension, snapshot, rubric, policy)
+    user = build_user_prompt(dimension, snapshot, rubric, policy, prompt_context)
     prompt = user
     last_problem = ""
     for attempt in range(1, max_repairs + 2):
         try:
             output = llm.generate(
-                system=SYSTEM_PROMPT,
+                system=system_prompt,
                 user=prompt,
                 output_schema=DimensionAssessmentOutput,
             )
@@ -334,6 +347,8 @@ def evaluate_dimension(
                 rubric=rubric,
                 schema_version=schema_version,
             )
+            if extra_validator is not None and (extra := extra_validator(output)):
+                raise EvaluationValidationError(extra)
         except LLMError as err:
             if err.error_code != ErrorCode.LLM_OUTPUT_INVALID:
                 return _failure(
