@@ -229,6 +229,20 @@ workflow_status/RunOutcome 값은 #7 State enum을 재사용한다.
 - Decimal 관측·nullable 비율·네 label은 구조 검증만 한다. catalog 완전성·계산·0분모 후보 라우팅·selector·Warning/CLI·live 연결은 미구현이다.
 - #82 운영 규칙은 승인되었지만 PR #85 OPEN Draft의 config/loader는 이 기준에 없다. 미병합 코드를 import하지 않는다.
 
+### #168 승인 값의 별도 live-compatible 계약
+
+`scoring.approved_policy.load_approved_policy`는 #82 운영 값과 Core `core-0.1.0` /
+Finance `finance-0.1.0`의 외부 승인 근거를 받는 별도 계약이다. 기본 모드는 fixture다.
+기존 draft loader와 v3 config/산술 함수의 fixture 제한은 그대로이며, 승인 문자열만으로
+live가 열리지 않는다. 정책/rubric 승인, runtime readiness, call/token 예산, cost 예산을
+독립 검증하고 #158의 네 provider 제외를 유지한다. 실제 요청·예산 예약은 실행하지 않는다.
+
+`ApprovedScoringPolicy.criteria/policy_version` catalog view의 공통 evaluator helper
+호환성을 회귀 테스트한다. legacy threshold/budget로 변환하지 않으며 실제 evaluator
+semantic gate, runtime admission, Graph/selector 연결 또는 M3 완료를 의미하지 않는다.
+정확한 호출 signature, 신뢰된 외부 verifier의 책임, stale fixture metadata와의 경계 및
+남은 controller gate는 [live scoring 계약](live-scoring-policy.md)을 따른다.
+
 ## 2. 입력과 후보
 
 | DTO | 필드 계약 | 검증 |

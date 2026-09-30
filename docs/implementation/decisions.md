@@ -14,6 +14,22 @@ Evidence 부족은 missing이며 rubric/evaluator semantic gate를 완화하지 
 
 새 구현은 v3를 따른다. **방향 승인, 운영 규칙 승인, 구조 DTO 가용성, 실제 runtime 구현은 별개**다. #3의 D01–D06·D08, #14의 D09 부분 승인과 D14 OPEN 원본 10개 레코드는 아래에 byte-identical 이력으로 보존한다. 과거 기록의 상태·날짜·근거를 소급 변경하지 않는다. 아래 후속 승인이 현재 v3 범위를 정하며, 남은 `v3-OPEN`만 기본값 설치/live 실행의 gate다.
 
+## #168 승인 값의 live-compatible scoring 계약 — 2026-09-30
+
+- Status: APPROVED (기존 승인 값의 계약 코드 호환 경계만).
+- Source: #168 본문의 사용자 확인 UI 기록과 이번 구현 지시. #82 운영 값,
+  Core `core-0.1.0`, Finance `finance-0.1.0`의 기존 값만 보존한다.
+- Decision: legacy draft 계약을 live로 확장하지 않고 별도 승인 계약을 둔다.
+  외부 승인 근거/버전을 신뢰된 caller verifier가 확인하며, runtime readiness와
+  call/token/cost 예산 gate는 별도로 확인한다. fixture가 기본이며 OPEN 의존성은 차단한다.
+- Not approved: 새 점수/rubric/ranking 값, 최소 Evidence/Coverage gate, 새 RNG,
+  시간·호출·비용 상한, 네 제외 provider 복구, paid fallback, 실제 유료 호출 또는 M3.
+- Implementation: [호출 계약 및 남은 gate](live-scoring-policy.md). 기존 fixture
+  config의 `not_approved` budget/readiness를 승인으로 덮어쓰지 않는다. rubric 파일의
+  승인 상태 반영과 실제 semantic verifier는 각 owner 작업이며 여기서 완료하지 않는다.
+- Historical records: 아래 기존 D14 OPEN 기록은 소급 변경하지 않는다. #168이
+  참조하는 정확한 Core/Finance 버전 승인과 미결정 controller 세부를 구분한다.
+
 ## v3 전환 방향 승인 — 별도 기록
 
 - Decision ID: V3-TRANSITION
