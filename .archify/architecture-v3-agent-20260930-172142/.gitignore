@@ -1,0 +1,5 @@
+# Machine-local provenance and browser evidence; regenerate locally.
+*.json
+!candidate.json
+review-*/
+visual-check/
