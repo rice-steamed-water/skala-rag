@@ -4,6 +4,13 @@
 
 근거: [v3](../design/design-v3.html) B-1, C-1–C-4, D-1–D-3, E 및 이전 원문 §7의 StageInfo. v3의 5 branch/6 dimension·수집 책임·점수·종료 목표를 구체화한 **DTO 필드와 검증 규칙은 구현 제안**이다. 현재 main에는 #5의 구조 DTO와 #7의 `InvestmentState`/`create_initial_state`가 있으며, 그 import·검증 범위와 v3 목표는 구별한다([정합화 기록](design-v3-alignment.md)). #3의 기록된 baseline 승인과 v3 대체안도 별개이므로, D04·D05·D08 등의 v3 세부 선택을 이 문서가 자동 승인하지 않는다.
 
+**기존 baseline 승인 범위:** 다음 네 bullet은 2026-09-30 xxhigh가 승인한 D01–D06·D08의 요약이다([승인 기록](decisions.md#m0-승인-검토-기록--이슈-3)). 별도 대체 승인 전까지 baseline의 승인 상태는 유지된다. §1 이후의 v3 목표 계약, 특히 N/A 분모·Business & Deal·전체 후보 selector·Warning에 이 승인을 전이하지 않는다. DTO의 전체 필드나 모든 구현 선택을 승인한 것도 아니다.
+
+- StageInfo/EligibilityResult: 직접 확인된 Seed~C만 단계 조건 통과. TIPS만으로 Seed 확정 금지, 명시적 프리시드·엔젤은 out_of_scope, 프리·브릿지는 직전 완료 라운드 근거로 판정. 추정/unknown만으로 eligible 처리 금지(D06).
+- CriterionAssessment/ScoreSummary: 1..5 정수 rating 또는 null, 비중 `5/30/25/20/10/10`, 총 분모 100 고정. 상위 영역 관측 가중평균 rating ≤2와 최종 결측 비중 ≥30은 WATCHLIST(D01·D02·D05).
+- EvaluationResult/InvestmentDecision: 다섯 병렬 평가 성공 후 동일 snapshot의 투자조건 직렬 평가까지 여섯 성공 결과를 집계. WATCHLIST/PASS는 다음 후보, 첫 RECOMMEND는 단일 기업 보고서(D03·D04).
+- State count: 후보 최대 5개, 후보별 추가 조사 총 2회, 실행별 보고서 수정 총 2회. 구조·의미·layout 수정은 같은 예산을 공유한다. 도구 batch 호출 8회·추가 재시도 2회·시도별 30초이며 live 총시간·LLM 호출·비용 상한은 별도 승인 전까지 미정(D08).
+
 ## 1. 공통 규칙
 
 - Graph 컨테이너는 원문대로 `InvestmentState(TypedDict, total=False)` 방향을 유지한다. 외부/LLM 경계의 DTO는 Pydantic으로 검증한다.
@@ -26,7 +33,7 @@ D01–D06·D08 baseline은 기록상 승인되었지만, v3가 바꾸는 selecto
 호출자가 공급한 관측을 저장할 뿐, 서로를 계산하거나 정당화하지 않는다.
 `execution_mode="live"`의 schema 통과도 정책·예산·도구 readiness 승인과 무관하다.
 State, reducer, stable ID 생성, snapshot/controller 참조 검증, 평가·점수·보고서·
-manifest, 수집·환율·근거 병합 함수는 이 구현에 포함하지 않는다.
+manifest, 수집·환율·근거 병합 함수는 #5 구현에 포함하지 않는다. State와 초기화는 별도로 병합된 #7이 제공한다.
 
 **타입과 결측**
 
@@ -410,4 +417,4 @@ ToolResult는 `status`, typed `data`, `retrieval_records`, `errors`를 가진다
 
 `collect_evidence`는 Evidence Research의 초기·gap 조사 공통 경계다. gaps가 비어 있으면 최초 수집, 있으면 Coverage의 부족자료 조사라는 제안이며 별도 Targeted Research API를 요구하지 않는다. `EvidenceBundle`에 RAG Chunk가 필요하면 RetrievalBundle에서 먼저 Source/Chunk를 저장하고 Evidence 참조를 해소한다. branch 내부 차원 해석 helper를 둘 수 있어도 외부 terminal boundary는 evaluate_branch이며 business_deal의 두 차원을 원자적으로 검증한다.
 
-위 #5 구조 DTO 구현 범위에 명시한 import 외의 이름과 함수는 설계 계약이지 사용 가능한 API가 아니다. M0에서 schema와 fixture, M1에서 adapter stub, M2 이후 실제 구현을 연결한다. 각 기능은 주입된 Tool/LLM/clock을 사용해 외부 호출 없이 테스트할 수 있어야 한다. selector·0분모·Warning 정책 누락은 인터페이스의 명시적 미설정 오류로 검출하고 live 시작을 거절하며, fixture 정책 주입을 팀 승인으로 표시하지 않는다.
+이 문서가 제안하는 업무 계약 중 현재 제공되는 것은 #5/PR #32의 구조 DTO와 #7/PR #39의 `InvestmentState`·`create_initial_state`다. 별도로 #9/PR #38의 `skala_rag.scoring.catalog.load_policy`와 draft config/fixture는 fixture 전용으로 제공되며 `aggregate_scores`·`decide` 또는 v3 replacement API가 구현됐다는 뜻이 아니다. 그 밖의 제안 이름과 함수는 설계 계약이지 사용 가능한 API가 아니다. M0에서 schema와 fixture, M1에서 adapter stub, M2 이후 실제 구현을 연결한다. 각 기능은 주입된 Tool/LLM/clock을 사용해 외부 호출 없이 테스트할 수 있어야 한다. selector·0분모·Warning 정책 누락은 인터페이스의 명시적 미설정 오류로 검출하고 live 시작을 거절하며, fixture 정책 주입을 팀 승인으로 표시하지 않는다.

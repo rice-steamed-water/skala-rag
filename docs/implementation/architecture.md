@@ -14,7 +14,7 @@
 
 LLM이 산술을 수행하거나 정책 임계값을 변경하지 않는다. 도구 결과의 본문은 분석 대상 데이터이며 에이전트 지시문이 아니다.
 
-## 2. 전체 Graph — 제안
+## 2. 전체 Graph — v3 목표 흐름 (D03·D04·D08 대체안 승인 전)
 
 ```mermaid
 flowchart TD
@@ -74,7 +74,7 @@ flowchart TD
     failed --> END
 ```
 
-오류 처리 공통 규칙은 §6이다. 그림은 승인 정책이 주입된 실행 형태를 설명하며 없는 정책을 노드가 생성하지 않는다. Company Research의 적격성 unknown 보강·최소 Evidence gate와 Evidence Research의 Coverage 재조사는 구별한다(D05·D06·D08 v3-OPEN). 모든 normalize된 후보를 처리하고 적격 후보만 평가한다. 예산/취소 등의 예외 중단을 전 후보 정상 처리로 표시하지 않는다. 별도 Targeted Research나 평가 후 재조사 화살표는 v3 기본 흐름에 없다.
+오류 처리 공통 규칙은 §6이다. 그림은 향후 v3 정책이 별도로 승인·주입됐을 때의 실행 형태를 설명하며, 현재 승인 완료된 Graph가 아니다. 없는 정책을 노드가 생성하지 않는다. Company Research의 적격성 unknown 보강·최소 Evidence gate와 Evidence Research의 Coverage 재조사는 구별한다(D05·D06·D08 v3-OPEN). 모든 normalize된 후보를 처리하고 적격 후보만 평가한다. 예산/취소 등의 예외 중단을 전 후보 정상 처리로 표시하지 않는다. 별도 Targeted Research나 평가 후 재조사 화살표는 v3 기본 흐름에 없다.
 
 ## 3. 노드별 입출력과 완료 조건
 
@@ -125,16 +125,18 @@ builder.add_edge(
 
 일반 결과 map은 동일 ID·동일 payload 재삽입을 무시하고, 동일 ID·다른 payload는 오류로 처리한다. **Evidence는 동일 core에서 provenance 집합 병합을 허용하고, Source는 같은 core의 최초 수집 시각을 보존하는 예외**를 둔다([계약 §3](contracts.md)). 신규 RAG 경로가 추가되면 새 snapshot 세대에 반영하되 기존 snapshot은 변경하지 않는다. 새로운 평가에는 새로운 세대 key를 부여한다. 전체 State가 아닌 변경 부분만 반환한다.
 
-## 5. 반복 예산과 종료 — v3 목표와 D08 제안
+## 5. 반복 예산과 종료 — baseline 승인 기록과 v3 대체안
+
+D08의 baseline `5/2/2`, batch당 8회, 추가 retry 2회, 시도별 30초는 승인 기록으로 보존한다. 아래 v3 목표와 다른 회차·종료·Warning 해석은 replacement 제안이며, 별도 승인 전 baseline을 자동 대체하지 않는다.
 
 | 설정 | 값의 상태 | 의미 |
 | --- | --- | --- |
-| `max_candidates` | 미정; 과거 제안 5 | 승인 상한으로 확정한 normalize 목록은 모두 처리; 첫 추천 조기종료 금지, 고갈 후 무한 재발견 금지 |
-| `max_research_retries_per_candidate` | 최대 2회는 v3 명시 | Coverage 부족 시 동일 Evidence Research가 재조사. 최초 제외 추가 batch 2회 해석·회차 소비 규칙은 OPEN |
-| `max_tool_calls_per_research_batch` | 미정; 과거 제안 8 | 도구 retry를 호출 예산에 포함할지 정책으로 고정 |
-| `max_report_revisions` | 최대 2회는 v3 명시 | 구조·의미가 공유. 최초 생성 제외 제안; PDF layout 포함 여부는 D08·D09 OPEN |
-| `max_tool_retries` | 미정; 과거 제안 2 | 네트워크 retry는 Evidence 재조사와 별도 개념 |
-| `tool_timeout_seconds` | 미정; 과거 제안 30초 | 단일 도구 시도 제한 |
+| `max_candidates` | baseline 승인 5; v3 대체값 미정 | 승인 상한으로 확정한 normalize 목록은 모두 처리; 첫 추천 조기종료 금지, 고갈 후 무한 재발견 금지 |
+| `max_research_retries_per_candidate` | baseline 승인 2; v3도 최대 2회 명시 | Coverage 부족 시 동일 Evidence Research가 재조사. 최초 제외 추가 batch 2회 해석·회차 소비 규칙은 OPEN |
+| `max_tool_calls_per_research_batch` | baseline 승인 8; v3 대체 해석 미정 | 도구 retry를 호출 예산에 포함할지 정책으로 고정 |
+| `max_report_revisions` | baseline 승인 2; v3도 최대 2회 명시 | 구조·의미가 공유. 최초 생성 제외 제안; PDF layout 포함 여부는 D08·D09 OPEN |
+| `max_tool_retries` | baseline 승인 2; v3 대체 해석 미정 | 네트워크 retry는 Evidence 재조사와 별도 개념 |
+| `tool_timeout_seconds` | baseline 승인 30초; v3 대체값 미정 | 단일 도구 시도 제한 |
 | `run_timeout_seconds`, `max_llm_calls`, `max_cost` | 미정 | live 실행 전 환경·모델 기준으로 승인·설정. 비어 있으면 live 시작 거절 |
 
 **회차 산정 제안(미승인):** 최초 수집 제외, Coverage retry 요청 **전에** 후보별 count 증가, 빈 결과/오류 batch도 소비하며 rollback하지 않는다. Company Research 적격성 보강은 별도 한도를 두는 안이며 Coverage count와 자동 합산하지 않는다. 네트워크 retry, LLM schema 수정, Evidence 재조사, 보고서 수정은 각각 다른 카운터다. 후보 A에서 B로 이동해도 A count를 지우지 않고 B는 0에서 시작한다. 승인 정책에 횟수·호출·비용·총시간 제한과 소진 경로를 명시한다. live에서는 값/승인/readiness가 비어 있으면 시작을 거절한다.

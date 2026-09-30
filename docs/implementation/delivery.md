@@ -2,7 +2,7 @@
 
 [문서 홈](../README.md) · [아키텍처](architecture.md) · [계약](contracts.md) · [결정 목록](decisions.md)
 
-**상태: v3 목표에 맞춘 승인 전 실행 계획.** [v3](../design/design-v3.html)의 명시 목표·현재 main 구현·OPEN 정책은 [정합화 기록](design-v3-alignment.md)으로 구별한다. 아래 WP는 구현 묶음이지 사람·역할 배정이 아니다. 실제 작업은 GitHub 이슈로 나누고 assignee 규칙을 따른다([협업 규칙](../../CONTRIBUTING.md#이슈로-일하기)).
+**상태: v3 목표에 맞춘 실행 계획. baseline D01–D06·D08은 승인 기록으로 보존되며 v3 replacement 세부는 별도 승인 전까지 OPEN이다.** [v3](../design/design-v3.html)의 명시 목표·현재 main 구현·OPEN 정책은 [정합화 기록](design-v3-alignment.md)으로 구별한다. 아래 WP는 구현 묶음이지 사람·역할 배정이 아니다. 실제 작업은 GitHub 이슈로 나누고 assignee 규칙을 따른다([협업 규칙](../../CONTRIBUTING.md#이슈로-일하기)).
 
 ## 1. 작업 패키지
 
@@ -23,13 +23,15 @@
 
 main의 `pyproject.toml`은 Python `>=3.11`과 직접 의존성·uv/ruff/pytest를 명시하고 `uv.lock`이 설치 해석 결과를 고정한다. #5의 구조 DTO (`skala_rag.contracts`)와 #7의 `InvestmentState`/`create_initial_state`, 그 contract fixture·test는 현재 존재한다. 이는 storage/검증·초기 state 범위이며 Coverage 계산, Graph/reducer wiring, CLI, live RAG, 점수·보고서 구현을 뜻하지 않는다. 설치·기존 테스트 명령은 [루트 README](../../README.md)에 있다. `CONTRIBUTING.md`의 “첫 코드 PR에서 만든다”는 시점 문구보다 현재 파일과 [기준 SHA](design-v3-alignment.md)를 본다. 그 협업문서는 #35 수정 범위 밖이다.
 
+#9/PR #38의 `scoring.catalog.load_policy`, `configs/scoring.draft.json`과 계산 fixture도 기준 main에 있다. fixture 전용 draft이며 v3 `aggregate_scores`·`decide` 구현이나 정책 승인으로 보지 않는다.
+
 Vector store, LLM provider/model, 최종 embedding, PDF renderer는 미정이다. BGE-M3의 v3 1차 선택이 모델 설치·벤치마크·D07 최종 승인을 뜻하지 않는다. WP1의 fixture 실행 명령은 실제 구현·검증 후 Usage에 추가한다.
 
 ## 3. 구현 순서와 병렬화
 
 ### M0 — 공통 계약과 정책 합의
 
-**선행:** v3·과제 원문·정합화 기록을 읽고 D01–D06·D08·D14의 구현 정책을 승인한다. D09 목차/인용/Warning 예외는 보고서 fixture 전, renderer는 M3 전 합의한다. D07·D12·D13은 해당 live 기능 전에 해소한다. 미승인 질문은 주입된 fixture 정책으로만 검증하고 live 기본값으로 설치하지 않는다.
+**선행:** v3·과제 원문·정합화 기록을 읽고 baseline D01–D06·D08과 충돌하는 v3 replacement 세부 및 D14의 구현 정책을 별도 승인한다. D09 목차/인용/Warning 예외는 보고서 fixture 전, renderer는 M3 전 합의한다. D07·D12·D13은 해당 live 기능 전에 해소한다. 미승인 질문은 주입된 fixture 정책으로만 검증하고 live 기본값으로 설치하지 않는다.
 
 - WP1: schema, catalog interface, mock Tool/LLM, failure 타입, 최소 실행환경 설정.
 - WP4/WP5: 23개 criterion rubric, missing/not_applicable 조건, 정규화·네 label·핵심차원 fixture.

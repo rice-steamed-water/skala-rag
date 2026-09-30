@@ -1,6 +1,6 @@
 # 팀 구현 가이드 — Robotics Startup Agentic RAG
 
-> 상태: **v3 목표 정합화 / baseline 승인 기록과 v3 대체안 분리 필요** · 기준일: 2026-09-30 KST
+> 상태: **v3 목표 정합화 / baseline 승인 기록 보존 / v3 대체안 별도 승인 필요** · 기준일: 2026-09-30 KST
 > 대상: 기능을 나누어 구현하고 통합할 팀원
 > 새 설계 입력: [설계 v3](design/design-v3.html) · 이전 설계·과제 요구: [통합 원문](raws/robotics_startup_agentic_rag_notion_integrated.md)
 
@@ -11,7 +11,7 @@
 3. 모든 구현 담당자가 [공통 데이터 계약](implementation/contracts.md)을 먼저 읽는다.
 4. [작업 분담과 검증](implementation/delivery.md)의 M0 → M1 순서로 시작한다. 외부 API부터 각자 연결하기보다, 같은 fixture로 전체 흐름을 먼저 맞춘다.
 
-현재 main에는 `pyproject.toml`·`uv.lock`, 설치 가능한 Python 패키지, #5의 구조 DTO와 #7의 `InvestmentState`/`create_initial_state`, 관련 contract fixture·tests가 있다. 이는 정책 계산이 없는 DTO/state 범위이며 Graph/reducer wiring·CLI·실제 RAG·평가·점수·보고서는 구현되지 않았다. 설치·검증 명령은 [루트 README](../README.md), 조사한 main SHA와 미병합 PR snapshot은 [정합화 기록](implementation/design-v3-alignment.md)에 있다. 아래 함수·DTO·정책은 **구현 목표/제안**이지 제공되는 기능이 아니다. v3 HTML과 `raws/`는 수정하지 않는다.
+기준 main에는 `pyproject.toml`·`uv.lock`, 설치 가능한 Python 패키지, #5의 구조 DTO와 #7의 `InvestmentState`/`create_initial_state`, 관련 contract fixture·tests가 있다. #9의 draft catalog 로더·설정·계산 fixture도 병합됐지만 fixture 전용이며 v3 점수 구현이나 정책 승인과 다르다. Graph/reducer wiring·CLI·실제 RAG·평가·점수 계산·보고서는 구현되지 않았다. 설치·검증 명령은 [루트 README](../README.md), 조사한 main SHA와 미병합 PR snapshot은 [정합화 기록](implementation/design-v3-alignment.md)에 있다. 아래 함수·DTO·정책에서 이미 구현된 것으로 명시한 범위 외에는 **구현 목표/제안**이다. v3 HTML과 `raws/`는 수정하지 않는다.
 
 ## 문서를 읽는 순서
 

@@ -2,7 +2,7 @@
 
 [문서 홈](../README.md) · [공통 계약](contracts.md) · [결정 목록](decisions.md)
 
-근거: [v3](../design/design-v3.html) A-2, C-1–C-4. **23개 항목·비중, 1..5 anchor, N/A 제외 분모, 네 label, 핵심차원 보류는 v3 명시 목표**다. ID·DTO·적용성 검증·소수 경계·reason 우선순위는 D01–D06·D14의 승인 전 제안이다. 이전 원문 §3·§7의 상세 자료는 rubric 참고로 보존한다. 이 문서는 보편적 금융 투자 기준이나 구현 완료 주장이 아니다.
+근거: [v3](../design/design-v3.html) A-2, C-1–C-4. **23개 항목·비중, 1..5 anchor, N/A 제외 분모, 네 label, 핵심차원 보류는 v3 명시 목표**다. baseline D01–D06·D08의 승인 기록은 [결정 목록](decisions.md)에 보존한다. 아래 OPEN은 그 승인 취소가 아니라 v3 대체 세부에 대한 `v3-OPEN`을 뜻하며, D14 rubric은 별도 OPEN이다. ID·DTO·적용성 검증·소수 경계·reason 우선순위를 포함한 v3 실행 정책은 별도 승인을 받아야 한다. 이전 원문 §3·§7의 상세 자료는 rubric 참고로 보존한다. 이 문서는 보편적 금융 투자 기준이나 구현 완료 주장이 아니다.
 
 ## 1. 먼저 적격성부터 판단한다
 
@@ -52,7 +52,7 @@
 
 원문 `Ruld of 40`은 raw에 보존되어 있다. 구현 ID와 표시명에서는 `Rule of 40`으로 통일한다. 위 “최소 근거”는 공개 자료의 보유를 보장하지 않으며, 점수별 rubric을 대신하지 않는다.
 
-## 3. rating·적용성·가중점수
+## 3. rating·적용성·가중점수 — v3 replacement 제안
 
 각 criterion의 rating은 정수 `1..5` 또는 `null`이다. `0`을 missing 표현으로 사용하지 않는다.
 
@@ -124,7 +124,7 @@ dimension_score_pct(d) = Σ d의 observed p_i / Σ d의 observed/missing w_i × 
 
 ## 4. Coverage와 재조사
 
-**관측 인정 제안:** 해당 criterion을 직접 지원하는 근거가 있고, 필요한 단위·기간·주체가 확인되며, 중요한 상충이 해소되어야 한다. 근거 하나가 여러 criterion을 지원할 수 있지만 각 criterion의 충족 여부를 따로 판단한다. 동일 기사 재배포는 독립 근거가 아니다.
+**관측 인정 기준 — baseline D05에서 승인된 기준을 v3에도 유지하는 제안:** 해당 criterion을 직접 지원하는 근거가 있고, 필요한 단위·기간·주체가 확인되며, 중요한 상충이 해소되어야 한다. 근거 하나가 여러 criterion을 지원할 수 있지만 각 criterion의 충족 여부를 따로 판단한다. 동일 기사 재배포는 독립 근거가 아니다.
 
 - 사전 Coverage도 세 상태와 적용가능 분모를 기록한다. `weighted_missing_pct <30`을 research_ready로 삼는 안과 gap 우선순위는 D05 OPEN이다. 원배점 missing_weight를 %와 비교하지 않는다.
 - Coverage 부족이면 같은 Evidence Research가 부족 근거만 최대 2회 재조사한다(v3 D-2/D-3). 초기 조사 포함 여부와 오류 batch 회차 산정은 D08에서 명시한다.
@@ -136,7 +136,7 @@ dimension_score_pct(d) = Σ d의 observed p_i / Σ d의 observed/missing w_i × 
 
 **이전 원문 단위 충돌 — 런웨이:** §3 상세 표 L229는 정의에 `보유 현금 ÷ 월 번레이트`, 데이터 칸에는 `현금 ÷ 연간 영업현금유출`을 적고 있다. 월·연 결과를 같은 값으로 취급하지 않는다. D14 v3-OPEN rubric에서 현금소모 지표·기간·부호·단위 변환을 명시한다. 연간→월평균 환산은 원자료·식·평균화 가정을 `derivation`에 남기고 현재 월 번레이트의 직접 관측으로 표시하지 않는다. 분모 0 이하·기간 불일치에서는 유한 개월 수를 만들지 않는다. 지표 적용성 자체가 맞지 않는지(not_applicable), 적용되나 입력이 부족한지(missing)는 D14에서 정하며 non_positive_burn을 자동 N/A로 바꾸지 않는다.
 
-## 5. 판단 규칙과 최종 후보 선택
+## 5. 판단 규칙과 최종 후보 선택 — v3 replacement 제안
 
 적격이며 5개 branch의 여섯 차원 평가가 정상 생성되고 분모 guard가 해소된 후보에만 적용한다. 보류 예외는 총점보다 우선한다(v3 C-3/C-4). 모든 해당 reason을 보존한다. 여러 보류 사유 중 대표 grade를 정보 부족 우선으로 표시하는 안은 D02 OPEN이며 아래 행 순서 자체가 승인 우선순위는 아니다.
 

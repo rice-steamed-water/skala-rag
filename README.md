@@ -5,7 +5,7 @@ LangGraph Multi-Agent RAG 프로젝트다. 실제 투자 실행 시스템은 아
 
 현재는 설치 가능한 `src/skala_rag` 패키지와 네트워크 호출 없는 검증이 있으며, #5의 구조 DTO
 (`RunInput`·후보·Source/Chunk/Evidence·retrieval/coverage bundle)와 #7의 `InvestmentState`·
-`create_initial_state`가 포함된다. 이는 정책 계산이 없는 저장/검증 및 초기 state 범위다. Graph/reducer wiring, CLI, live RAG, 평가·점수 계산 및 보고서 출력은 구현되지 않았다. 새 구현 목표는 사용자 제공
+`create_initial_state`가 포함된다. 이는 정책 계산이 없는 저장/검증 및 초기 state 범위다. #9의 draft catalog 로더·설정·계산 fixture도 병합됐지만 fixture 전용이며 v3 점수 계산 구현이나 정책 승인을 뜻하지 않는다. Graph/reducer wiring, CLI, live RAG, 평가·점수 계산 및 보고서 출력은 구현되지 않았다. 새 구현 목표는 사용자 제공
 [설계 v3 보존본](docs/design/design-v3.html)이며, 이전 설계와의 차이 및
 main·미병합 PR 기준은 [v3 정합화 기록](docs/implementation/design-v3-alignment.md)에 있다.
 v3의 명시 목표와 팀의 구현 정책 승인은 별개다. #3에는 D01–D06·D08의 **기존 baseline** 승인 기록이 있으나 v3의 selector·N/A·Warning 대체 세부는 별도 `v3-OPEN`이다. [결정 목록](docs/implementation/decisions.md)은 이 경계를 추적하며, 미정 정책·최종 모델·provider를 실행 기본값으로 정하지 않는다.
@@ -30,7 +30,7 @@ tutorial의 과거 하한 버전이나 전체 의존성 목록은 복사하지 �
 | 직접 의존성 | 용도와 제한 |
 | --- | --- |
 | `langgraph` | 기존 Graph 패키지 import 검증; 실제 workflow는 미구현 |
-| `pydantic` | 기존 검증 도구 import; 프로젝트 DTO·정책은 미구현 |
+| `pydantic` | #5 구조 DTO 검증에 사용; 정책 계산·v3 평가 DTO 구현은 아님 |
 | `langchain-core` | 중립적인 Document·message·prompt 인터페이스; 가상 Document·HumanMessage와 ChatPromptTemplate의 변수 포맷팅·invoke 결과를 검증, 모델 client 없음 |
 | `langchain-text-splitters` | 문서 분할 유틸리티; 명시적 테스트 전용 크기·overlap은 운영 chunk 정책 선택이 아님 |
 | `httpx` | HTTP client; MockTransport만 검증하며 특정 API·provider를 선택하지 않음 |
@@ -54,8 +54,8 @@ FAISS·embedding·PyTorch는 모델·저장소 선택 전, Postgres·Redis는 ch
 
 ## Usage
 
-설치 후 아래 명령으로 패키지 골격을 검증한다. 설치 및 아래 명령은
-로컬에서 실제 실행해 확인했으며, 애플리케이션 실행 명령은 아직 없다.
+설치 후 아래 명령으로 패키지·구조 DTO·fixture를 검증한다. 초기 패키지 작업에서 확인한 명령이며,
+각 PR은 해당 head에서 실행한 명령·환경·결과를 별도로 기록한다. 애플리케이션 실행 명령은 아직 없다.
 
 ```bash
 uv run ruff check .
@@ -65,14 +65,16 @@ uv lock --check
 .venv/bin/python -I -m pytest
 ```
 
-로컬 검증 환경은 Python 3.11.9이며 `uv sync --python 3.11.9`도 확인했다.
+초기 패키지 작업(#4)의 검증 환경은 Python 3.11.9이며 당시 `uv sync --python 3.11.9`도 확인했다.
 호환성 테스트는 가상 문자열, `MockTransport`의 `fixture.invalid` 응답,
 가짜 dotenv `StringIO`, 빈 PDF `BytesIO`만 사용한다. 네트워크 연결·모델 다운로드·
 실제 기업 자료·비밀 설정 없이 설치된 공개 API를 검증하며 운영 RAG 성능 검증은 아니다.
 
 ## 구조와 문서
 
-- `src/skala_rag/contracts/`: #5 구조 DTO와 #7 state factory; 다른 `graph`, `agents`, `tools`, `rag`, `scoring`, `reporting`, `prompts`는 업무 흐름 미구현
+- `src/skala_rag/contracts/`: #5 구조 DTO와 #7 state factory
+- `src/skala_rag/scoring/catalog.py`, `configs/scoring.draft.json`: #9 fixture 전용 draft catalog 로더·설정; v3 집계·판정 구현 아님
+- `graph`, `agents`, `tools`, `rag`, `reporting`, `prompts`: 업무 흐름 미구현
 - `tests/contract/`, `tests/fixtures/contracts.json`: 구조 DTO/state 검증 fixture·tests; 테스트 총수는 실행 결과로만 보고
 - `tests/unit/`, `tests/integration/`: 각 작업의 별도 검증 범위
 - [구현 가이드](docs/README.md): 목표와 승인 전 설계

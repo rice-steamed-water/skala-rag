@@ -13,25 +13,33 @@
 | 이전 설계·교수 과제 원문 | [통합 원문](../raws/robotics_startup_agentic_rag_notion_integrated.md) 및 `docs/raws/` | 읽기 전용. 이전 제안의 이력과 v3에서 생략한 과제 요구를 보존 |
 | 파생 구현 가이드 | 이 폴더의 architecture/contracts/scoring/data-rag/delivery/decisions | v3 명시 목표와 승인 전 구현 제안을 구별. 원문을 조용히 수정하는 대체본이 아님 |
 
-우선순위는 **새 사용자 지정 설계의 명시 내용 → 모순을 기록한 구현 목표 → 승인받아야 할 세부 제안**이다. v3 내부 충돌은 임의 해소하지 않는다. v3가 과제 필수 요구를 생략했다고 폐기하지 않는다. 예컨대 README 필수 항목·개인별 수행 역할(PM/PL 제외)·제출 파일명·DAY 3 상대 일정은 통합 원문 §10에서 계속 추적한다. v3와 이전 설계가 다른 것은 팀 승인 기록의 `SUPERSEDED` 전환과 다르다. D01–D14는 여전히 OPEN이다.
+우선순위는 **새 사용자 지정 설계의 명시 내용 → 모순을 기록한 구현 목표 → 승인받아야 할 세부 제안**이다. v3 내부 충돌은 임의 해소하지 않는다. v3가 과제 필수 요구를 생략했다고 폐기하지 않는다. 예컨대 README 필수 항목·개인별 수행 역할(PM/PL 제외)·제출 파일명·DAY 3 상대 일정은 통합 원문 §10에서 계속 추적한다. v3와 이전 설계가 다른 것은 팀 승인 기록의 `SUPERSEDED` 전환과 다르다. baseline D01–D06·D08은 APPROVED로 남고, 그와 충돌하는 v3 replacement 세부만 `v3-OPEN`이다. D07·D09–D14는 OPEN이다.
 
 표지의 **울산 4반 2조 / 김근홍·정순욱·허지원·심혁·박태준·한유진**은 v3가 제공한 metadata다. 실제 역할·GitHub 계정 매핑·기여량 또는 달력상 제출일은 제공하지 않는다.
 
 ## 2. 현재 구현과 GitHub refresh
 
-**refresh cutoff: 2026-09-30 KST; local merge target `origin/main` = `25c7a1af22b651d880a929a62740c141a82c5a6a`.** 이 refresh는 read-only GitHub 조회와 현재 main checkout을 구분한다. 문서 정합화는 다른 PR의 구현·검증·병합을 대신하지 않는다.
+**확인 기준: 2026-09-30 11:04 KST; 통합한 main 커밋 `85fa0304b664f07ce54c9b0a1e8d9b95b144a6c8`.** 아래 GitHub 정보는 이 시점의 API 조회 snapshot이며 이후 상태를 뜻하지 않는다. 문서 정합화는 다른 PR의 구현·검증·병합을 대신하지 않는다.
 
 | 구분 | 현재 확인 | 경계 |
 | --- | --- | --- |
-| main 구현 | #5/PR #32와 #7/PR #39가 `25c7a1a`에 병합되어 `skala_rag.contracts` 구조 DTO, `InvestmentState`, `create_initial_state`, contract fixture/tests를 제공 | Coverage는 저장 DTO일 뿐 fixed100·N/A/weighted 계산을 구현하지 않는다. Graph/reducer wiring, CLI, live RAG, 평가·점수·보고서는 아직 이 사실만으로 구현됐다고 말할 수 없다 |
+| main 구현 | #5/PR #32, #7/PR #39, #9/PR #38 draft catalog, #3/PR #41 baseline 승인 기록이 pinned main `85fa030`에 병합됨 | #38은 draft catalog/config/fixture 범위일 뿐 `aggregate_scores`·`decide`·v3 replacement를 구현하지 않는다. Graph/reducer wiring, CLI, live RAG, 평가·점수·보고서는 이 사실만으로 구현됐다고 말할 수 없다 |
 | #3 승인 근거 | issue #3 comment [5902473875](https://github.com/rice-steamed-water/skala-rag/issues/3#issuecomment-5902473875), 2026-09-30T01:49:36Z, xxhigh | D01–D06·D08 **baseline**만 승인 기록. v3 replacement와 D07·D09–D14, live 총시간·LLM 호출·비용 상한은 자동 승인 아님 |
-| PR #41 | OPEN, non-Draft, head `7b9f6cee8f36a016d5f47191b41999430390e6ee` | 승인 기록의 문서 반영 PR이며 main 병합 전이다. PR 본문/머리는 v3 정책 승인을 대신하지 않는다 |
+| PR #41 | MERGED 2026-09-30T01:52:47Z, merged head `7b9f6cee8f36a016d5f47191b41999430390e6ee` | baseline 승인 기록만 main에 반영했다. v3 replacement 정책 승인을 대신하지 않는다 |
 | #35 / PR #36 | #35 assignee `luk0715`; PR #36 OPEN Draft, 이 작업 시작 head `790c8dc667d421e341f782803778f9a07dcaaae8` | source 보존/문서 정합화 작업. 이 문서의 이후 변경, review, gate, merge를 그 head에 소급해 주장하지 않는다 |
-| 열린 작업 | refresh 시 open issues 45개 | 아래 28개 영향표는 이전 historical snapshot이며 현재 assignment/count를 나타내지 않는다 |
+| 열린 작업 | supplied snapshot 기준 open issues 44개 | 아래 28개 영향표는 historical snapshot이며 현재 assignment/count를 나타내지 않는다 |
+
+### pinned PR 상태 요약
+
+| PR | 상태 / pinned head | 정합화 경계 |
+| --- | --- | --- |
+| #32, #38, #39, #41 | MERGED (`0eb1c9039268b47720f41e0b89261f21290d7422`, `552cd5b3d5d1f8513ebccaaf8127d9c9553b387f`, `28961c229c7bba069f7d4f79141cc74ede88bcae`, `7b9f6cee8f36a016d5f47191b41999430390e6ee`) | DTO/state, draft catalog fixture, baseline approval record; v3 replacement 미구현 |
+| #33, #34, #36, #37, #40, #42, #63, #64, #65 | OPEN (`ca91eda9c85a7a24cbd9f3eb8c7041d8c6fec503`, `813cf70cd3f0cc5616f5bd425dfdfb4b2130078b`, `790c8dc667d421e341f782803778f9a07dcaaae8`, `ed8f9967b51c6347f67eb819dc5a4446d3a1b50e`, `48c0aa90b8c70c690f5f5f365f23eca6867db502`, `4758c57627c36c2cee15197e00394295ec539211`, `14540847499fee7a03d541bbe3638969d46fd8ab`, `a9175103f97e416deb4440bcca75ab1deb801697`, `f5471db6f88783c5bb679f8320a7a6da457cd033`) | 각 제안/진행 작업은 v3 승인·구현 증거가 아님 |
+
 
 ### 현재 열린 PR 영향
 
-- #37/#6은 evaluation DTO Draft이며 #5 구조 타입을 기다린다는 body 상태다. #40/#10은 proposed core rubric Draft, #34/#11은 finance rubric Draft다. #38/#9 draft catalog는 merged이나 body가 v3 미반영임을 명시한다. 이 문서는 어느 PR의 코드를 복사하거나 완료 처리하지 않는다.
+- #37/#6, #40/#10, #34/#11, #42/#15, #63/#20, #64/#16, #65/#14는 OPEN pinned heads이며 v3 구현/승인을 뜻하지 않는다. #38/#9 draft catalog는 MERGED이나 runtime fixture-only이고 `aggregate_scores`는 #64 OPEN이다. 이 문서는 어느 PR의 코드를 복사하거나 완료 처리하지 않는다.
 - PR #41의 baseline 기록과 v3의 newer user-selected design input이 충돌한다. baseline을 지우지 않고, `v3-OPEN` 질문으로 별도 승인·supersession 범위를 요구한다.
 
 ## 3. v3 절별 추적과 이전 계약의 변경
@@ -99,9 +107,36 @@
 | #30 M1 E2E trace | 첫 추천 뒤 후속 후보, 우선추천 비교·순서 불변, N/A/부분핵심결측, 복합 branch 부분실패, Warning 소진을 시나리오에 반영 | delivery §3/§4; T03/T06–T09/T16/T22 |
 | #35 문서 정합화 / PR #36 | 원문 보존·정합화·영향표·OPEN 경계·검증을 완료 범위로 한정. 다른 이슈 승인·구현·병합 대행 없음 | 이 문서 및 관련 가이드; PR의 실제 gate/리뷰 기록 |
 
+### 현재 M2 이슈의 수용 조건 대조
+
+기준 snapshot의 #43–#62 본문은 이미 v3와 #35를 참조하고 미승인 정책의 live 연결을 차단한다. 따라서 전체를 구설계로 분류하지 않는다. 아래는 본문 확인 후 추가로 대조할 세부 항목이며, 다른 담당자의 이슈를 수정하거나 승인한 기록이 아니다. 역사 표에서 현재 닫힌 #3·#5·#7·#9를 제외한 24개와 아래 20개가 기준 시점의 열린 이슈 44개에 대응한다.
+
+| 현재 이슈 | 본문에 이미 반영된 범위 / 남은 대조 | 문서·결정 / 검증 |
+| --- | --- | --- |
+| #43 live 사전 승인 | 실험 승인과 최종 모델 선정 분리 유지; baseline D08과 v3 회계·Warning 대체 범위를 별도 기록 | decisions D07/D08/D12; data-rag §5 |
+| #44 corpus gate | 전체 200페이지·승인·불변 manifest·교체 검증 유지; 이번 정합화로 승인 상태 변경 없음 | data-rag §3; D13/T11 |
+| #45 adapter runtime | readiness·실패 분리·단일 retry 소유자·공유 호출 예산 유지; v3의 조사 회차와 transport retry 구별 | architecture §5; contracts §7; T10/T20 |
+| #46 safe fetch | URL/redirect/경로·크기 제한, Source snapshot·as_of 유지; 이번 정합화로 안전 경계 변경 없음 | data-rag §6; T18 |
+| #47 LLM adapter | wrapper/controller의 ID·schema 소유권과 실패 분리 유지; 확정될 5 branch-key/6 dimension payload를 소비 | contracts §4/§7; D04/T01/T22 |
+| #48 discovery | 승인 provider·범위·출처·Normalize 유지; 후보 상한의 baseline/v3 정책 버전을 명시 | architecture §3/§5; D08/T24 |
+| #49 extraction/chunking | 페이지·구조·표 맥락 보존 반영됨; document class/year·slide/patent metadata 확장 shape를 추가 대조 | contracts §1; data-rag §4; T12 |
+| #50 Evidence extraction | 실제 RAG 참조·core/provenance 병합·불신 입력 경계 유지; 출처 class를 Evidence에 임의 복제하지 않음 | contracts §3; T05/T13 |
+| #51 Company Research | unknown·TIPS·동명 기업 보호 반영됨; v3 최소 Evidence gate와 Coverage의 별도 책임을 추가 대조 | scoring §1; D05/D06/T04 |
+| #52 embedding/index | 승인 실험·model revision·index 격리 반영됨; 입력 길이/절단 설정도 실험 기록과 일치시킴 | data-rag §4/§5; D07 |
+| #53 finance Evidence | 실제 단위·기간·파생값·분모 검증 유지; Missing/N/A 적용성 승인을 임의로 대신하지 않음 | scoring §4; D14/T21 |
+| #54 retrieval | 기업·출처·as_of·cache 격리 반영됨; 승인될 doc_type/year filter와 반환 Chunk/cache 검증을 추가 대조 | contracts §1/§7; data-rag §4; T12 |
+| #55 Evidence Research | 초기/gap 단일 진입점·평가 후 loop 금지 반영됨; 승인될 회차 소비/Company Research 회계와 정합화 | architecture §5; D08/T07/T25 |
+| #56 embedding 비교 | 동일 corpus/query·Hit Rate@1/3/5·MRR·교차언어 실측 반영됨; 입력 길이/절단·통합/운영 복잡도도 비교표에 추가 | data-rag §5; D07 |
+| #57 Technology 평가 | snapshot-only·실제 RAG trace·Missing/N/A 반영됨; 새 wrapper envelope와 승인 rubric을 사용 | contracts §4; T01/T13/T22 |
+| #58 Founder 평가 | 인물 귀속·snapshot-only·실패 분리 반영됨; 비핵심 저점수를 전체 강제보류로 확대하지 않음 | scoring §3/§5; T01/T22 |
+| #59 Market 평가 | 시장 맥락·snapshot-only 반영됨; 평가에서 label을 만들지 않고 집계기의 적용가능 배점 40% 규칙과 구별 | scoring §3/§5; T01/T22 |
+| #60 Moat 평가 | 특허/비교 근거·snapshot-only 반영됨; 비핵심 저점수를 전체 강제보류로 확대하지 않음 | scoring §3/§5; T01/T22 |
+| #61 Business & Deal | 단일 branch·두 배점·직렬 Deal 제거 반영됨; 두 payload의 atomic success/실패와 N/A 근거 검증을 추가 대조 | contracts §4; D04/D05/T22 |
+| #62 M2 trace | 실제 검색→Evidence→Technology와 M3 보고서 검증 분리 반영됨; 갱신된 T12 metadata·실험 항목과 정책 버전 대조 | delivery §3/§4; T12/T13/T25 |
+
 ## 5. 전환 시 검증과 남은 차단
 
-1. 이 문서의 이전 제안은 활성 지시로 재사용하지 않는다. 특히 PR #33/#34 병합 조정 때 고정100·모든 영역 저점수·첫 추천 종료·직렬 Deal·N/A 미채택 문구가 돌아오지 않게 의미 diff를 검토한다.
+1. baseline 승인 기록은 보존하되 v3 목표 절에 고정100·모든 영역 저점수·첫 추천 종료·직렬 Deal·N/A 미채택을 섞지 않는다. 반대로 v3 목표를 baseline 대체 승인으로 읽지 않는다. 관련 PR 통합 시 적용 정책 버전과 대체 승인 범위를 대조한다.
 2. D02–D06·D08의 남은 질문을 정책/DTO fixture로 구체화하고, 승인되지 않은 선택을 실제 기본값으로 설치하지 않는다. D07/D09/D12/D13의 live·제출 gate도 보존한다.
 3. [delivery §4](delivery.md)의 T01–T25는 목표 테스트다. #35의 문서 수치 계산·링크/정합성 검사는 구현 테스트·실 API·RAG 벤치마크·PDF 측정이 아니다.
 4. source hash/바이트 일치, 원 catalog 비중, 설명용 산술을 확인했다. 최종 문서 diff·링크·잔존 옛 지시 검색과 프로젝트 gate·독립 리뷰는 PR 검증란에서 해당 head의 실제 결과를 추적한다.
