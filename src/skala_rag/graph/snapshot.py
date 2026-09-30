@@ -56,17 +56,19 @@ def _build_snapshot(
     industry = set(industry_evidence_ids)
     for key, payload in state.get("evidence", {}).items():
         # Unrelated companies/industry claims do not enter this candidate's boundary.
-        relevant = (
-            payload.get("scope") == "company"
-            and payload.get("candidate_id") == candidate_id
-        ) or (payload.get("scope") == "industry" and key in industry)
+        relevant = payload.get("candidate_id") == candidate_id or key in industry
         if not relevant:
             continue
         item = Evidence.model_validate(payload, context=context)
         _require(key == item.evidence_id, "Evidence map key mismatch")
         _require(
-            item.scope != "industry" or item.candidate_id is None,
-            "Industry evidence has company attribution",
+            (item.scope == "company" and item.candidate_id == candidate_id)
+            or (
+                item.scope == "industry"
+                and item.candidate_id is None
+                and key in industry
+            ),
+            "Evidence scope or company attribution mismatch",
         )
         _require(item.source_id in state.get("sources", {}), "Missing evidence Source")
         source = Source.model_validate(
@@ -130,7 +132,8 @@ def _build_snapshot(
         "Eligibility context mismatch or not eligible",
     )
     _require(
-        all(key in active for key in eligibility.evidence_ids),
+        bool(eligibility.evidence_ids)
+        and all(key in active for key in eligibility.evidence_ids),
         "Eligibility evidence invalidated or unavailable",
     )
 
@@ -173,6 +176,20 @@ def _build_snapshot(
                 and item.evidence_id in record.evidence_ids,
                 "RetrievalRecord attribution mismatch",
             )
+            _require(
+                record.started_at <= record.finished_at,
+                "RetrievalRecord time order mismatch",
+            )
+            for field, expected in (
+                ("corpus_version", run_input.corpus_version),
+                ("index_version", index_version),
+                ("as_of", run_input.as_of.isoformat()),
+            ):
+                arguments = record.arguments_without_secrets
+                _require(
+                    field not in arguments or arguments[field] == expected,
+                    "RetrievalRecord request context mismatch",
+                )
             if path.chunk_id is not None:
                 _require(
                     path.chunk_id in record.chunk_ids, "Chunk not returned by retrieval"
@@ -268,6 +285,7 @@ def freeze_snapshot(
         attempt = 1 + sum(
             error.get("node") == "freeze_snapshot"
             and error.get("candidate_id") == candidate_id
+            and error.get("run_id") == run_id
             for error in state.get("errors", [])
         )
         error = WorkflowError(

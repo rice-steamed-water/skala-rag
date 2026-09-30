@@ -231,3 +231,91 @@ def test_failure_after_success_keeps_previous_generation(setup):
     assert state["snapshots"] == previous
     assert state["evaluation_rounds"] == {"co-synthetic": first.evaluation_round}
     assert [error["attempt"] for error in state["errors"]] == [1, 2]
+
+
+def test_non_eligibility_future_and_unapproved_evidence_filtered(setup):
+    state, _, _ = setup
+    add_evidence(state, "future", event_date="2026-09-02")
+    excluded = add_evidence(state, "unapproved", source_id="unapproved-source")
+    source = deepcopy(state["sources"]["src-synthetic"])
+    source["source_id"] = excluded["source_id"]
+    state["sources"][source["source_id"]] = source
+    assert freeze(setup).evidence_ids == ["ev-synthetic"]
+
+
+def test_unknown_publication_date_uses_snapshot_date(setup):
+    state, _, _ = setup
+    state["sources"]["src-synthetic"]["retrieved_at"] = "2026-09-02T00:00:00Z"
+    with pytest.raises(SnapshotInvalid):
+        freeze(setup)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("corpus_version", "different-corpus"),
+        ("index_version", "different-index"),
+        ("as_of", "2026-09-02"),
+    ],
+)
+def test_retrieval_request_context_mismatch(setup, field, value):
+    state, _, _ = setup
+    state["retrieval_history"][0]["arguments_without_secrets"][field] = value
+    with pytest.raises(SnapshotInvalid, match="request context"):
+        freeze(setup)
+
+
+def test_empty_eligibility_ground_is_rejected(setup):
+    state, _, _ = setup
+    state["eligibility_results"]["co-synthetic"]["evidence_ids"] = []
+    with pytest.raises(SnapshotInvalid):
+        freeze(setup)
+
+
+def test_supersession_cycle_is_rejected(setup):
+    state, _, _ = setup
+    add_evidence(state, "correction", supersedes="ev-synthetic")
+    state["evidence"]["ev-synthetic"]["supersedes"] = "correction"
+    with pytest.raises(SnapshotInvalid, match="Cyclic supersession"):
+        freeze(setup)
+
+
+def test_filtered_support_invalidates_derived_chain(setup):
+    state, _, _ = setup
+    add_evidence(state, "future-input", event_date="2026-09-02")
+    add_evidence(
+        state,
+        "derived",
+        evidence_kind="derived",
+        supporting_evidence_ids=["future-input"],
+    )
+    add_evidence(
+        state,
+        "derived2",
+        evidence_kind="estimated",
+        supporting_evidence_ids=["derived"],
+    )
+    assert freeze(setup).evidence_ids == ["ev-synthetic"]
+
+
+def test_successful_support_closure_and_other_candidate_round(setup):
+    state, _, _ = setup
+    add_evidence(
+        state,
+        "derived",
+        evidence_kind="derived",
+        supporting_evidence_ids=["ev-synthetic"],
+    )
+    state["evaluation_rounds"]["other-candidate"] = 7
+    snapshot = freeze(setup)
+    assert set(snapshot.evidence) == {"ev-synthetic", "derived"}
+    assert state["evaluation_rounds"]["other-candidate"] == 7
+    assert snapshot.evidence["derived"].supporting_evidence_ids == ["ev-synthetic"]
+
+
+def test_fixture_locator_context_is_propagated(setup):
+    state, _, _ = setup
+    state["sources"]["src-synthetic"]["url"] = "fixture://source"
+    state["chunks"]["chunk-synthetic"]["locator"] = "fixture://source#p1"
+    state["evidence"]["ev-synthetic"]["locator"] = "fixture://source#p1"
+    assert freeze(setup).chunks["chunk-synthetic"].locator == "fixture://source#p1"
