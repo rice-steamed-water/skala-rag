@@ -1,0 +1,42 @@
+{
+  "src-4cdd7140c49610b1dbdd6731": {
+    "schema_version": "extraction-v1",
+    "source_id": "src-4cdd7140c49610b1dbdd6731",
+    "title": "π0: A Vision-Language-Action Flow Model for General Robot Control",
+    "publisher": "Physical Intelligence",
+    "author": null,
+    "source_kind": "paper",
+    "url": "https://arxiv.org/pdf/2410.24164v4",
+    "local_path": "data/local/issue49/2410.24164v4.pdf",
+    "published_at": "2026-01-08",
+    "retrieved_at": "2026-09-30T05:25:50.871965Z",
+    "content_hash": "sha256:fbdfba56258bdbd220207ba63410c6c943e43a73e97a7a5a47ca0bc74204f821",
+    "language": "en",
+    "access_notes": "2026-09-30 사용자 「전부 다 허용하고 진행해줘」에 따른 로컬 추출 검증 승인. arXiv 공개 원문이며 원문/추출 텍스트를 재배포하거나 커밋하지 않음. 별도 재배포 권한을 주장하지 않음.",
+    "bibliographic_metadata": {
+      "arxiv_version": "2410.24164v4",
+      "company_attribution": "Physical Intelligence; PDF 표지/저자 표시 확인",
+      "license_url": "https://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+    }
+  },
+  "src-8b9d0942c94fc60a1c8890d7": {
+    "schema_version": "extraction-v1",
+    "source_id": "src-8b9d0942c94fc60a1c8890d7",
+    "title": "π0.5: a Vision-Language-Action Model with Open-World Generalization",
+    "publisher": "Physical Intelligence",
+    "author": null,
+    "source_kind": "paper",
+    "url": "https://arxiv.org/pdf/2504.16054v1",
+    "local_path": "data/local/issue49/2504.16054v1.pdf",
+    "published_at": "2025-04-22",
+    "retrieved_at": "2026-09-30T05:25:50.871965Z",
+    "content_hash": "sha256:6a1029fd8ab6944b74cf22f5e5d30e60bc15699d964b2900af799b807a34b64c",
+    "language": "en",
+    "access_notes": "2026-09-30 사용자 「전부 다 허용하고 진행해줘」에 따른 로컬 추출 검증 승인. arXiv 공개 원문이며 원문/추출 텍스트를 재배포하거나 커밋하지 않음. 별도 재배포 권한을 주장하지 않음.",
+    "bibliographic_metadata": {
+      "arxiv_version": "2504.16054v1",
+      "company_attribution": "Physical Intelligence; PDF 표지/저자 표시 확인",
+      "license_url": "https://arxiv.org/licenses/nonexclusive-distrib/1.0/"
+    }
+  }
+}
