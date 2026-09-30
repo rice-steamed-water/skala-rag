@@ -1,22 +1,25 @@
 # 팀 구현 가이드 — Robotics Startup Agentic RAG
 
-> 상태: **구현 준비 초안 / M0 baseline 일부 승인** · 작성 기준일: 2026-09-29
+> 상태: **v3 전환 방향 승인 / baseline 이력 보존 / 세부 정책 OPEN** · 기준일: 2026-09-30 KST
 > 대상: 기능을 나누어 구현하고 통합할 팀원
-> 원문: [통합 설계 문서](raws/robotics_startup_agentic_rag_notion_integrated.md)
+> 새 설계 입력: [설계 v3](design/design-v3.html) · 이전 설계·과제 요구: [통합 원문](raws/robotics_startup_agentic_rag_notion_integrated.md)
 
 ## 먼저 할 일
 
 1. 이 문서에서 목표와 필수 요구사항을 확인한다.
-2. [결정 목록](implementation/decisions.md)의 차단 항목을 팀에서 합의한다. 특히 **점수 척도, 보류 후보의 다음 경로, 투자조건 평가 담당**부터 정한다.
+2. [v3 정합화·영향표](implementation/design-v3-alignment.md)와 [결정 목록](implementation/decisions.md)을 읽는다. 특히 **#82 운영 승인·사전 무작위 선정 승인과 남은 OPEN**을 구별한다.
 3. 모든 구현 담당자가 [공통 데이터 계약](implementation/contracts.md)을 먼저 읽는다.
 4. [작업 분담과 검증](implementation/delivery.md)의 M0 → M1 순서로 시작한다. 외부 API부터 각자 연결하기보다, 같은 fixture로 전체 흐름을 먼저 맞춘다.
 
-문서 작성 당시 저장소에는 원본 자료만 있으며 애플리케이션 코드, 설치 설정, 실행 명령, 테스트 결과는 없다. 아래 디렉터리·함수·설정은 **구현 목표**이지 이미 제공되는 기능이 아니다. 원본 파일은 수정하지 않는다.
+pinned 통합 기준 `906312a`에는 baseline DTO/State/reducer/catalog/점수·재무 helper·DTO adapter뿐 아니라 #17 발견/Normalize, #18 fixture 조사·Eligibility, #19 GuardedRetriever/EvidenceCollector, #22 dimension 평가 wrapper, #23 fixture 후보 Graph, #26 ReportContext, #27 baseline Structural Validator 및 #73/PR #74의 독립 `contracts.v3` 구조 DTO가 있다. #23은 baseline 첫 추천 인계이며 v3 전 후보 selector가 아니다. v3 구조 DTO는 계산·selector·0분모/Warning controller·State/Graph 연결을 실행하지 않는다. CLI·보고서 생성/Judge·실 PDF·live RAG는 여전히 목표다. 설치·검증 명령은 [루트 README](../README.md), pinned 통합과 historical snapshot은 [정합화 기록](implementation/design-v3-alignment.md)을 따른다.
 
 ## 문서를 읽는 순서
 
+후속 통합 기준 `1f23e09`에는 #6/PR #37의 평가·점수·보고서·manifest DTO·결정적 ID와 #68/PR #69의 baseline DTO adapter도 포함된다. [공통 계약](implementation/contracts.md)의 #6 구현 shape와 v3 확장 제안을 구별한다.
+
 | 필요한 내용 | 문서 | 우선 독자 |
 | --- | --- | --- |
+| v3 출처·절별 추적·현재 GitHub 작업 영향 | [v3 정합화 기록](implementation/design-v3-alignment.md) | 전원 |
 | 전체 흐름, 노드 책임, 반복과 종료 | [아키텍처](implementation/architecture.md) | Graph / Agent 담당 |
 | State, Evidence, 평가 결과, Tool 경계 | [공통 데이터 계약](implementation/contracts.md) | 전원 |
 | 평가 항목, 가중치, 결측, 판단 라벨 | [점수와 판단 정책](implementation/scoring.md) | 평가 / 지표 담당 |
@@ -34,11 +37,12 @@
 
 ```text
 투자 주제 + 실행 설정 + 승인된 문서 코퍼스
-→ 후보 발견 / 정규화 / 적격성 확인
+→ 후보 발견 / 정규화·dedup / 조사·평가 대상 집합 무작위 선정 / 적격성 확인
 → Web·API·RAG 근거 수집 / 부족자료 보강
-→ 영역별 평가 / 점수 계산 / 판단
+→ 후보별 5개 branch / 6개 점수 차원 평가·판단
+→ 모든 후보 처리 완료 / deterministic Best Candidate Selector
 → 보고서 생성 / 구조·의미·PDF 검증
-→ 보고서 + 근거 목록 + 실행 기록
+→ 검증된 보고서 또는 Warning 포함 현재 결과 + 근거·검증·실행 기록
 ```
 
 **성공의 기준:** 보고서가 나온 것만으로 충분하지 않다. 실제 RAG 검색 결과가 평가에 사용되고, 점수와 인용의 근거를 추적할 수 있으며, 모든 반복이 종료되고, 같은 설정으로 다시 실행할 수 있어야 한다.
@@ -48,39 +52,43 @@
 | 표기 | 의미 | 변경 방법 |
 | --- | --- | --- |
 | **과제 필수** | 원문에 실린 교수님 요구사항 | 팀 임의 완화 없이 담당 교수님 확인 |
-| **원문 팀안** | 원문 본문에 정리된 팀 설계 | 충돌은 결정 목록에서 해결 |
+| **v3 명시 목표** | 사용자가 전환 방향을 승인한 v3의 명시 내용 | 새 구현의 우선 방향; 세부 정책 승인·구현 완료와 구분 |
+| **이전 원문 팀안** | 통합 원문에 보존된 이전 설계 | v3와 충돌하면 과거 제안으로 추적; 과제 요구 누락은 폐기로 해석하지 않음 |
 | **구현 제안** | 원문을 실행 가능한 계약으로 보완한 초안 | 팀 승인 후 채택; 승인 전 확정안으로 표현하지 않음 |
 | **미결정** | 원문만으로 결론을 낼 수 없는 사항 | 담당자·결정·근거·승인일 기록 |
 
-각 상세 문서의 새 필드, 기본값, 예외 처리, 함수명은 별도 표시가 없어도 **구현 제안**이다. D01–D06·D08은 2026-09-30 xxhigh가 승인했으며, 해당 정책은 아래 제안 표기보다 우선한다([승인 기록](implementation/decisions.md#m0-승인-검토-기록--이슈-3)). D09의 목차·인용·구조 검증도 2026-09-30 xxhigh가 부분 승인했다([보고서 계약](implementation/reporting.md)). D09의 PDF 구현 선택, D07·D10–D12·D14와 기타 구현 세부는 승인 전 제안이다. D13(200페이지 산정)은 적용 제외다([D13 기록](implementation/decisions.md#d13--200페이지-산정-규칙-적용-제외-91)). 이 가이드는 원문을 몰래 대체하는 최종 설계가 아니다.
+**현재 구현 방향 — v3 전환 승인:** [사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)에 따라 새 작업은 기존 baseline의 계속 구현이 아니라 v3에 정합화한다. baseline 코드·승인 기록은 호환성과 이력으로 보존하며 새 구현의 우선 방향이 아니다. 방향 승인에 이어 #82 및 #35 comment 5903505208에서 N/A·0분모·최종 selector·재조사 회계·Warning 종료의 운영 규칙을 별도 승인했다. #35 comment 5903574761의 무작위 선정은 평가 전 조사·평가 대상 집합에만 적용하며 최종 selector는 무작위가 아니다. 승인과 구현 완료는 별개이며 rubric 상세·provider·corpus·시간/비용 예산 등 남은 세부 선택만 [결정 목록](implementation/decisions.md)의 OPEN gate를 따른다. 각 상세 문서의 새 필드·예외 처리·함수명은 별도 승인 기록이 없는 한 구현 제안이다. OPEN에 의존하는 선택은 주입된 가상 정책·인터페이스까지만 진행하고 해당 live 실행을 차단한다.
+
+D09의 baseline 목차(single_candidate/no_recommendation 각각 7개 섹션)·인용·서지 미상 표기·SV01–SV09 구조 검증의 2026-09-30 xxhigh 부분 승인은 이력으로 보존한다([보고서 계약](implementation/reporting.md)). 이후 사용자 승인으로 새 구현은 v3 E-1 다섯 목차·전 후보 selector·Warning 방향을 따른다. Warning completed·CLI2·final 금지는 #82 승인이다. mode별 섹션 예외·구조 검증 상세와 PDF 구현 선택은 OPEN이며 과거 승인이 그 세부를 자동 승인하지 않는다.
 
 ## 필수 요구사항과 검증 위치
 
-`원문 §`는 위 통합 설계 문서의 절 번호다. §12의 보관 원문에서 추가 충돌이 발견되면 결정 목록에 기록한다.
+아래 `§`는 통합 원문 절, `v3`는 새 설계의 절이다. 과제 필수 요구는 v3에서 생략되어도 보존한다. 원문 충돌은 결정 목록에서 추적한다.
 
 | ID | 요구사항 | 출처 | 구현 / 검증 |
 | --- | --- | --- | --- |
-| R01 | LangGraph 기반 Multi-Agent + Agentic RAG | §1.1 | 실제 Graph 실행 및 역할별 노드 trace |
+| R01 | LangGraph 기반 Multi-Agent + Agentic RAG | §1.1; v3 A-1 | 실제 Graph 실행 및 역할별 노드 trace |
 | R02 | 도메인 Physical AI / Robotics | §1.1, §2 | 입력 범위와 후보 도메인 검증 |
-| R03 | 비상장, Seed~Series C, Exit 미완료 | §2.2 | 적격 / 부적격 / 정보부족 fixture |
-| R04 | 지정된 RAG 적용 대상 중 최소 1개 Agent에 실제 RAG 적용 | §1.3, §12 교수님 노션 B | 기술 요약에 해당하는 Technology 평가 경로에서 검색→근거→평가 연결 |
-| R05 | RAG 문서 총 200페이지 한정 | §1.3 | **적용 제외** — [D13](implementation/decisions.md#d13--200페이지-산정-규칙-적용-제외-91) |
-| R06 | 오픈소스 임베딩 적용, 후보·선택 근거 문서화 | §1.3, §6.3 | 모델 카드·라이선스·동일 데이터 비교 기록 |
-| R07 | 가중치 평가, 결측 및 저점수 보류 | §3 | 정책 승인 후 경계값 단위 테스트 |
-| R08 | Graph의 Loop / Branch 및 State 구현 | §4, §8 | 재조사, 후보 이동, 병렬 합류, 유한 종료 테스트 |
-| R09 | 보고서 5장 이내; 첫 SUMMARY는 1/2페이지 이내 | §9.2 | 최종 PDF 페이지 수와 렌더링된 SUMMARY 높이 검증 |
-| R10 | 마지막 REFERENCE, 실제 사용 자료만 기재 | §9.2–9.3 | 인용 ID와 참조 목록의 양방향 일치 |
+| R03 | 비상장, Seed~Series C, Exit 미완료·최소 평가 가능성 | §2.2; v3 A-2 | 적격 / 부적격 / 정보부족 fixture; 최소 Evidence gate는 D05·D06 |
+| R04 | 지정된 RAG 적용 대상 중 최소 1개 Agent에 실제 RAG 적용 | §1.3, §12 교수님 노션 B; v3 B-2 | Primary RAG인 Evidence Research의 검색→근거→Technology 기술 요약/평가→인용 trace |
+| R05 | RAG 문서 총 200페이지 한정 | §1.3; v3 B-2 | **적용 제외** — [D13](implementation/decisions.md#d13--200페이지-산정-규칙-적용-제외-91) |
+| R06 | 오픈소스 임베딩 적용, 후보·선택 근거 문서화 | §1.3; v3 B-3 | BGE-M3 1차 선택, e5/KURE와 동일 데이터 비교·라이선스 확인 후 최종 선택 |
+| R07 | 가중치 평가, 결측 및 핵심차원 저점수 보류 | v3 C-1–C-4 | Missing/N/A, 정규화, 네 label, 경계값 검증 |
+| R08 | Graph의 Loop / Branch 및 State 구현 | §4, §8; v3 D-1–D-3 | Coverage 재조사, 전 후보 처리·selector, 5 branch 합류, Warning 유한 종료 |
+| R09 | 보고서 5장 이내; 첫 SUMMARY는 1/2페이지 이내 | §9.2; v3 E-1 | 최종 PDF 페이지 수와 렌더링된 SUMMARY 높이 검증 |
+| R10 | 마지막 REFERENCE, 실제 사용 자료만 기재 | §9.2–9.3; v3 E-2 | 인용 ID와 참조 목록의 양방향 일치 |
 | R11 | README 필수 항목과 개인별 실제 수행 역할 | §10.2–10.3 | 제출 체크리스트; PM/PL 역할 표기 제외 |
 | R12 | 설계 PDF, GitHub 코드·README, 재현 가능한 투자 보고서 PDF | §10 | 제출 파일·재현 로그 확인 |
 
 ## 첫 구현의 범위
 
-**구현 제안 — 포함**
+**v3 목표 및 이를 위한 구현 제안 — 포함**
 
-- 후보는 한 번에 하나씩 평가하고, 한 후보 내부의 5개 평가 노드는 병렬 실행한다.
+- 정규화·dedup 후 무작위 선정된 조사 대상 모든 후보를 순차 검증하고 적격 후보를 평가한 뒤 결정적 selector가 최종 보고서 대상을 정한다. 첫 추천에서 종료하지 않는다.
+- 한 후보 내부의 Founder / Market / Technology / Moat / Business & Deal 5개 branch는 병렬이며, 마지막 branch가 traction·deal_terms 두 차원을 함께 반환한다.
 - RAG 문서 수집·검색과 출처 추적, 외부 검색 adapter, 공통 Evidence 저장소를 만든다.
-- 재무와 투자조건을 포함한 여섯 영역을 모두 점수에 반영한다. D04 승인에 따라 다섯 병렬 평가 합류 뒤 투자조건을 직렬 평가한다.
-- 정상 추천, 보류, 비추천, 적격성 정보부족, 후보 없음, 도구 실패를 구별한다.
+- 여섯 점수 차원·23개 criterion을 보존한다. branch envelope는 D04 제안이며 부분 성공 집계는 금지한다.
+- 우선추천·추천·보류·비추천, 적격성 정보부족, 후보 없음, 기술 실패를 구별한다. Warning 반환과 검증된 final 발행도 구별한다.
 - CLI 중심으로 시작한다. 보고서 Markdown과 PDF, 실행 manifest를 남긴다.
 
 **이번 범위 밖 — 별도 합의 없이는 추가하지 않음**
