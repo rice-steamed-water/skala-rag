@@ -15,7 +15,7 @@ Physical AI / Robotics 스타트업의 투자 조사·평가를 위한 **LangGra
 - **결정적 계산:** 창업자 5 / 시장성 30 / 제품·기술력 25 / 경쟁 우위 20 / 실적 10 / 투자조건 10의 비중을 사용합니다. LLM은 항목별 판단과 근거를 생성하고, 점수·투자 판단·최종 선정은 코드가 계산합니다.
 - **결측·실패 구분:** Missing은 분모에 남기고 정당한 N/A만 제외합니다. 기술 실패를 투자 비추천이나 임의 점수로 바꾸지 않습니다.
 
-> 현재는 fixture 기반 v3 후보 처리·병렬 평가·점수·최종 selector와 개별 외부 adapter·PDF 원문 추출이 구현되어 있습니다. 실제 embedding index, v3 보고서 연결, Semantic Judge·최종 PDF 출력까지 포함한 **전체 live 실행은 미완료**입니다.
+> 단일 기업 **Physical Intelligence 로컬 라이브 데모(#180)**는 준비된 실제 자료 검색 → 모델 분석 → 보고서·PDF 생성 경로입니다. 아래 재현 가이드를 따르세요. 임의 기업 탐색·적격성·정량 점수·추천을 포함하는 **전체 live 실행은 미완료**이며, 이 데모로 그 완료를 주장하지 않습니다.
 
 ## Features
 
@@ -27,7 +27,7 @@ Physical AI / Robotics 스타트업의 투자 조사·평가를 위한 **LangGra
 | Coverage·불변 snapshot | 결측 검사·근거 참조 검증·평가 입력 고정 | [coverage_v3.py](src/skala_rag/scoring/coverage_v3.py), [snapshot.py](src/skala_rag/graph/snapshot.py) |
 | 병렬 평가·최종 선정 | v3 fixture controller와 결정적 점수·selector 구현 | [evaluation_v3.py](src/skala_rag/graph/evaluation_v3.py), [selector_v3.py](src/skala_rag/scoring/selector_v3.py) |
 | 외부 호출 제어 | readiness·예산·retry runtime과 structured-output adapter 구현 | [runtime.py](src/skala_rag/tools/runtime.py), [runtime_llm.py](src/skala_rag/tools/runtime_llm.py) |
-| 보고서 생성·검증 | baseline fixture 생성·구조 검증·수정 loop 구현; v3 연결·실제 Judge·출력 PDF는 후속 작업 | [reporting](src/skala_rag/reporting/), [report.py](src/skala_rag/graph/report.py) |
+| 보고서 생성·검증 | v3 Generator/Judge·한글 HTML/PDF 구현; #180 단일 기업 무점수 live 데모 검증, 전체 투자 평가 통합과 구분 | [reporting](src/skala_rag/reporting/), [로컬 데모](docs/implementation/local-demo.md) |
 
 ## Tech Stack
 
@@ -35,11 +35,11 @@ Physical AI / Robotics 스타트업의 투자 조사·평가를 위한 **LangGra
 | --- | --- |
 | Language / Package | Python 3.11+, uv |
 | Framework | LangGraph `StateGraph`, LangChain Core |
-| LLM / Generator | 승인된 추출·평가용 snapshot: OpenAI `gpt-4.1-mini-2025-04-14`. Structured-output adapter 구현. 보고서 Generator는 주입형 fixture 구현으로, 이 모델의 승인 범위가 전체 live 보고서 생성 완료를 뜻하지는 않습니다. |
-| LLM / Judge | Semantic Judge 인터페이스·fixture stub 제공. 실제 Judge 전용 모델 선정·live 연결은 미완료입니다. |
-| Retrieval / VectorDB | `GuardedRetriever`·fixture 검색 및 provenance 검증 구현. **운영 VectorDB 미선정, 실제 embedding index 미구축.** SQLite dense store는 과거 실험 제안이며 채택된 운영 저장소가 아닙니다. |
+| LLM / Generator | OpenAI `gpt-4.1-mini-2025-04-14` structured-output adapter. #180 무점수 데모에서 실제 보고서 생성 검증; 전체 투자 평가 완료를 뜻하지 않습니다. |
+| LLM / Judge | #180에서 별도 실제 Judge 호출 검증. fixture 테스트는 주입형 stub과 구분합니다. |
+| Retrieval / VectorDB | `GuardedRetriever`와 provenance 검증, #180 로컬 BGE 인덱스 준비·검색 사용. **운영 VectorDB 미선정.** |
 | Retrieval Metrics | **Hit Rate@K: 미실측 / MRR: 미실측.** fixture 결과를 검색 성능으로 표시하지 않습니다. |
-| Embedding | **`BAAI/bge-m3` 선정.** revision 고정·실제 embedding/index 구축·품질 검증은 별도 작업입니다. E5/KURE와의 3종 비교는 수행하지 않습니다. |
+| Embedding | **`BAAI/bge-m3` 선정.** #180은 revision 고정 로컬 인덱스를 사용합니다. 데모 성공을 검색 품질 벤치마크나 E5/KURE 비교 결과로 표시하지 않습니다. |
 | Data / Documents | Pydantic v2, pypdf, langchain-text-splitters |
 | HTTP / Quality | httpx, ruff, pytest |
 
@@ -128,6 +128,53 @@ uv run pytest
 ```
 
 기본 테스트는 fixture·mock 중심입니다. 실제 원문이나 API가 필요한 opt-in 테스트는 조건이 없으면 건너뜁니다. fixture 통과를 live 성능 검증으로 해석하지 않습니다.
+
+### 로컬 라이브 데모 재현 (#180)
+
+**지원 환경:** Python 3.11+, uv, POSIX(macOS/Linux), Chromium. Windows 네이티브는 미검증입니다.
+앱·자료·검색은 로컬이지만 모델 분석에는 OpenAI API와 인터넷이 필요합니다.
+최초 실행은 원문·BGE-M3 모델 다운로드가 필요하므로 시연 전에 준비합니다.
+
+1. 저장소 루트에서 설치·자료 준비:
+
+   ```bash
+   uv sync
+   uv run playwright install chromium
+   uv run python -c 'from pathlib import Path; from skala_rag.demo_prepare import prepare_demo; print(prepare_demo(root=Path.cwd()))'
+   ```
+
+   기존 manifest의 π0·π0.5 논문과 검토 텍스트 해시를 검증하고 검색 인덱스를 준비합니다.
+   원문/모델은 `data/local/`, 인덱스는 `outputs/issue180-local-bge/`에 저장합니다.
+   Linux에서 Chromium OS 의존성이 없으면 `uv run playwright install --with-deps chromium`이 필요합니다.
+
+2. `OPENAI_API_KEY`를 환경변수 또는 프로젝트 `.env`에 설정합니다. 키를 이슈·로그에 게시하지 않습니다.
+   **실행자의 명시적 비용 승인을 받은 뒤**, [승인 파일 작성과 재승인 절차](docs/implementation/local-demo.md#키와-승인)에 따라
+   `data/local/demo180-approval.json`을 준비합니다. 저장소에는 키·개인 승인 파일이 포함되지 않습니다.
+   한도는 누적 **US$3 / LLM 30회 / 20분**, 자동 재시도 없음입니다.
+
+3. 로컬 서버 실행:
+
+   ```bash
+   uv run python -c 'from skala_rag.demo_web import serve; serve()'
+   ```
+
+4. `http://127.0.0.1:8765` 접속 → **Physical Intelligence** 또는 **피지컬 인텔리전스** 입력 → 실행.
+   검색·다섯 역할 분석·Generator·Judge·PDF 진행 후 완료 상태를 확인합니다.
+5. 기업명과 보고서를 확인하고 근거별 발췌·페이지·원문 출처를 확인합니다.
+   **Evidence(근거)와 Source(원문)는 다릅니다.** 한 논문에서 여러 근거가 검색될 수 있으며,
+   검색된 모든 근거가 최종 보고서에서 인용되는 것은 아닙니다.
+6. **PDF 다운로드** → 해당 파일을 PDF 뷰어에서 열어 기업명·한글·근거 목록·참고문헌을 확인합니다.
+   생성 결과는 `outputs/demo180-<run-id>/`의 `report.html`, `report.md`, `report.pdf`와
+   `run-result.json`에 남습니다. 실패/Warning은 성공이 아니며 PDF 파일 존재만으로 검증하지 않습니다.
+
+재시작은 서버 프로세스를 종료한 뒤 같은 명령으로 실행합니다. 과거 실행 UI는 복원되지 않으며
+과거 산출물은 디스크에 유지됩니다. **재시작으로 승인 시간·예산은 초기화되지 않습니다.**
+실패/만료 시 자동 재실행하지 말고 영수증과 승인 상태를 확인합니다.
+오류별 조치·데이터 위치·검증 범위는 [상세 데모 안내](docs/implementation/local-demo.md)를 참조하세요.
+
+검증 기록: 2026-09-30 실제 웹/API 생성 7회 호출, 51.86초, 다운로드 PDF 2페이지 열람을 확인했습니다.
+이는 당시 실행의 기록이며 매번 같은 내용·시간을 보장하지 않습니다. 이후 표시 개선의 재렌더링 검증은
+새 모델 분석과 구분합니다. 테스트 mock 응답을 실제 API 성공으로 표시하지 않습니다.
 
 ### 구현된 실행 경로
 

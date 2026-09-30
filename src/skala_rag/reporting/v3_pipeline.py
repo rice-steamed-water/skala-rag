@@ -71,6 +71,11 @@ def _cell(value):
 def assessment_block(payload):
     """Exact core score observations; full DTO stays in immutable context."""
     if not payload["scores"]:
+        if payload.get("policy_version") == "unscored-research-only-1":
+            return (
+                "평가 미실시 — 자료 기반 연구이며 "
+                "정량 점수·투자 판정을 수행하지 않았다."
+            )
         return "성공 평가 후보 없음 — 점수·판정을 만들지 않는다."
     parts = []
     for cid in sorted(payload["scores"]):

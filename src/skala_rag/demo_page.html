@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Physical AI · 리서치 데스크</title>
+<!-- Local research-desk design contract: light navy/teal, no external assets.
+     Korean system sans >=14px, 8px spacing, 1px dividers; no motion.
+     Desktop: 320px control rail + report. <=768px: single column.
+     States: ready/running/completed/warning/failed; focus/disabled explicit.
+     This interface is a single-company research demo, not a scoring product. -->
+<style>
+:root{color-scheme:light;--ink:#172d43;--muted:#506478;--teal:#087a76;--line:#d5e0e7;--paper:#fff;--ground:#f3f6f8;--warn:#82510a;--error:#a33236}
+*{box-sizing:border-box}body{margin:0;background:var(--ground);color:var(--ink);font:16px/1.65 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;word-break:keep-all}button,input{font:inherit}a{color:var(--teal);text-underline-offset:4px}button,a,input,summary{outline-offset:5px}:focus-visible{outline:3px solid var(--teal)}[hidden]{display:none!important}
+header{background:var(--paper);border-bottom:1px solid var(--line);padding:20px max(24px,calc((100vw - 1320px)/2));display:flex;align-items:center;justify-content:space-between;gap:16px}.brand{font-size:18px;font-weight:750;letter-spacing:-.4px}.local{font-size:14px;color:var(--teal);display:flex;align-items:center;gap:8px}.local:before{content:"";width:7px;height:7px;border-radius:50%;background:var(--teal)}
+main{max-width:1368px;margin:auto;padding:40px 24px 64px}.intro{margin-bottom:32px}.intro h1{font-size:clamp(26px,3vw,38px);line-height:1.3;letter-spacing:-1px;margin:0 0 12px}.intro p{margin:0;color:var(--muted);max-width:760px}.desk{display:grid;grid-template-columns:320px minmax(0,1fr);gap:24px;align-items:start}.panel{background:var(--paper);border:1px solid var(--line);border-radius:10px;overflow:hidden}.rail{padding:24px}.section-label{color:var(--teal);font-size:14px;font-weight:700;margin:0 0 20px}.rail h2,.workspace h2{font-size:19px;margin:0 0 20px}.rail label{font-size:14px;font-weight:700;display:block;margin-bottom:8px}input{width:100%;min-height:48px;padding:10px 12px;border:1px solid #8294a4;border-radius:5px;color:var(--ink);background:white}small,.hint{font-size:14px;line-height:1.65;color:var(--muted)}.hint{margin:8px 0 20px}button{width:100%;border:0;border-radius:5px;background:var(--teal);color:white;font-weight:700;min-height:48px;padding:12px;cursor:pointer}button:hover:not(:disabled){background:#065f5c}button:active:not(:disabled){background:#064f4c}button:disabled{background:#e2e8ec;color:#566979;cursor:wait}.notice{border-top:1px solid var(--line);margin-top:24px;padding-top:20px;font-size:14px;color:var(--muted)}.notice strong{display:block;color:var(--ink);margin-bottom:8px}.status-box{margin-top:24px;border-left:3px solid var(--line);padding-left:14px}.status-box[data-state=running],.status-box[data-state=completed]{border-color:var(--teal)}.status-box[data-state=warning]{border-color:var(--warn)}.status-box[data-state=failed]{border-color:var(--error)}#status{font-weight:700;margin:0 0 6px}#stage{font-size:14px;color:var(--muted);margin:0;overflow-wrap:anywhere}.workspace{min-width:0}.workspace-head{padding:24px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}.workspace h2{margin:0}.tag{font-size:14px;color:var(--muted)}.empty{padding:88px 32px;text-align:center}.empty strong{display:block;font-size:23px;margin-bottom:12px}.empty p{max-width:470px;margin:0 auto;color:var(--muted)}.receipt{padding:20px 24px;background:#f7fafb;border-bottom:1px solid var(--line);font-size:14px;overflow-wrap:anywhere}.receipt p{margin:4px 0}.actions{display:flex;gap:20px;flex-wrap:wrap;margin-top:16px}iframe{display:block;width:100%;height:900px;border:0;background:white}.details{padding:24px;border-top:1px solid var(--line)}details{border-bottom:1px solid var(--line);padding:14px 0}summary{cursor:pointer;font-weight:700}pre{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;font:14px/1.7 ui-monospace,monospace;max-height:440px;overflow:auto;background:var(--ground);padding:16px;border-radius:5px}footer{margin-top:24px;color:var(--muted);font-size:14px}.inline-error{color:var(--error);padding:16px 24px}
+@media(max-width:768px){header{padding:16px 20px}main{padding:28px 16px 40px}.desk{grid-template-columns:1fr}.rail{padding:20px}.intro{margin-bottom:24px}.empty{padding:56px 24px}.workspace-head{padding:20px}iframe{height:650px}.local{font-size:14px}.brand{font-size:16px}}
+#report-heading{font-size:24px;overflow-wrap:anywhere}#evidence-summary{font-weight:700;color:var(--teal)}.details article{border:1px solid var(--line);border-radius:6px;padding:20px;margin:16px 0;overflow-wrap:anywhere;word-break:normal}.details h4{margin:0 0 8px;font-size:18px}.details article p{margin:12px 0}.details blockquote{margin:16px 0;padding:12px 16px;border-left:3px solid var(--teal);background:var(--ground);white-space:pre-line;line-height:1.8}.details article small{display:block}.details pre{overflow-wrap:anywhere;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<header><div class="brand">PHYSICAL AI / 리서치 데스크</div><span class="local">로컬 데모</span></header>
+<main>
+<section class="intro"><h1>근거에서 시작하는 기업 리서치</h1><p>기업의 기술과 시장을 조사하고, 보고서의 문장을 원문 근거까지 확인합니다. 실행할 때마다 새로운 보고서를 생성합니다.</p></section>
+<div class="desk">
+<aside class="panel rail" aria-label="리서치 실행">
+<p class="section-label">01 / 조사 대상</p><h2>기업 보고서 생성</h2>
+<form id="form"><label for="company">기업명</label><input id="company" name="company" value="Physical Intelligence" aria-describedby="company-help" required maxlength="80" autocomplete="off"><p id="company-help" class="hint">이 데모는 Physical Intelligence (피지컬 인텔리전스)만 지원합니다.</p><button id="run" type="submit">새 리서치 실행</button></form>
+<div class="status-box" id="status-box" data-state="ready" role="status" aria-live="polite" aria-atomic="true"><p id="status">실행 준비</p><p id="stage">버튼을 누르면 조사를 시작합니다.</p></div>
+<div class="notice"><strong>조사 데모 · 최종 평가 아님</strong>점수 산정 및 투자 추천을 제공하지 않습니다. 결과는 수업용 조사 자료이며 외부 발행이 허용되지 않습니다. 실행에는 시간이 걸릴 수 있습니다.</div>
+</aside>
+<section class="panel workspace" aria-labelledby="report-heading">
+<div class="workspace-head"><h2 id="report-heading">리서치 보고서</h2><span class="tag">02 / 결과 · 근거 확인</span></div>
+<div id="empty" class="empty"><strong>첫 리서치를 시작하세요</strong><p>생성이 끝나면 보고서를 이곳에서 읽고, 검증된 PDF와 근거·출처를 확인할 수 있습니다.</p></div>
+<div id="receipt" class="receipt" hidden><p id="receipt-status"></p><p id="run-id"></p><p id="elapsed"></p><p id="publication"></p><div class="actions" id="pdf-actions" hidden><a id="pdf-download" download="report.pdf">PDF 다운로드</a><a id="pdf-view" target="_blank" rel="noopener noreferrer">PDF 새 창에서 보기 ↗</a></div></div>
+<p id="artifact-error" class="inline-error" hidden></p>
+<iframe id="report" title="생성된 기업 리서치 보고서" sandbox="allow-same-origin" hidden></iframe>
+<div id="details" class="details" hidden>
+<h3>근거와 출처</h3><p id="evidence-summary" role="status"></p>
+<p class="hint">여러 페이지의 근거가 같은 문서에서 나올 수 있습니다. 근거 개수는 독립적인 출처 개수가 아닙니다. 아래 ‘검색 근거’ 번호는 전체 검색 목록의 순서로, 보고서·PDF의 ‘근거’ 인용 번호와 다릅니다. 같은 근거인지 확인할 때는 근거 ID를 대조하세요.</p>
+<div id="evidence-list" aria-label="근거 목록"></div>
+<h3>출처 목록</h3><div id="source-list" aria-label="출처 목록"></div>
+<details><summary>근거 데이터 / Evidence</summary><p class="hint">원시 JSON · 개발 및 추적용</p><pre id="evidence"></pre></details>
+<details><summary>출처 데이터 / Sources</summary><p class="hint">원시 JSON · 개발 및 추적용</p><pre id="sources"></pre></details>
+</div>
+</section>
+</div>
+<footer>127.0.0.1 전용 · 실행 중에는 한 번에 하나의 보고서만 생성합니다. 서버를 다시 시작하면 이전 실행 목록은 복원되지 않습니다.</footer>
+</main>
+<script>
+'use strict';
+const csrf = '__CSRF_TOKEN__';
+const $ = id => document.getElementById(id);
+const states = {ready:'실행 준비', running:'조사 진행 중', completed:'생성 완료', warning:'주의 · 검증 미완료', failed:'생성 실패'};
+const stages = {starting:'실행을 준비하고 있습니다.', research:'근거를 조사하고 있습니다.', completed:'검증된 결과를 확인하세요.', warning:'최종 검증이 완료되지 않아 PDF를 제공하지 않습니다.', failed:'실행을 완료하지 못했습니다. 로컬 실행 환경과 입력 자료를 확인하세요.'};
+let current = null;
+let polling = false;
+function state(name, detail) {
+  $('status-box').dataset.state = name;
+  $('status').textContent = states[name] || states.failed;
+  $('stage').textContent = detail || stages[name] || '';
+}
+function busy(value) {
+  $('run').disabled = value;
+  $('company').disabled = value;
+  $('run').textContent = value ? '리서치 진행 중…' : '새 리서치 실행';
+}
+function clearResult() {
+  for (const id of ['receipt','pdf-actions','report','details','artifact-error']) $(id).hidden = true;
+  $('report').removeAttribute('src');
+  $('pdf-download').removeAttribute('href');
+  $('pdf-view').removeAttribute('href');
+  $('evidence').textContent = '';
+  $('sources').textContent = '';
+  $('evidence-list').replaceChildren();
+  $('source-list').replaceChildren();
+  $('evidence-summary').textContent = '';
+  $('artifact-error').textContent = '';
+  $('report-heading').textContent = '리서치 보고서';
+  for (const detail of $('details').querySelectorAll('details')) detail.open = false;
+  $('empty').hidden = false;
+}
+async function getJSON(url) {
+  const response = await fetch(url, {cache:'no-store'});
+  if (!response.ok) throw new Error('request_failed');
+  return response.json();
+}
+function textNode(tag, text, parent) {
+  const node = document.createElement(tag);
+  node.textContent = text;
+  parent.append(node);
+  return node;
+}
+function sourceLink(parent, label, address) {
+  let url;
+  try { url = new URL(address); } catch { /* Non-URL locators remain text. */ }
+  if (url && ['http:', 'https:'].includes(url.protocol)) {
+    const link = textNode('a', label, parent);
+    link.href = url.href;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+  } else textNode('span', label, parent);
+}
+function renderEvidence(evidence, sources) {
+  const entries = Object.entries(evidence || {});
+  const sourceEntries = Object.entries(sources || {});
+  $('evidence-list').replaceChildren();
+  $('source-list').replaceChildren();
+  $('evidence-summary').textContent = (evidence ? '근거 ' + entries.length + '개' : '근거 확인 불가') + ' · ' + (sources ? '고유 출처 ' + sourceEntries.length + '개' : '고유 출처 확인 불가');
+  entries.forEach(([id, item], index) => {
+    const card = textNode('article', '', $('evidence-list'));
+    textNode('h4', '검색 근거 ' + (index + 1), card);
+    textNode('small', '근거 ID: ' + id, card);
+    const kinds = {reported:'저자 보고 (reported) · 독립 검증된 사실 아님', interpretation:'해석 (interpretation) · 원문 사실과 구분'};
+    textNode('p', kinds[item.evidence_kind] || '근거 유형: 확인되지 않음', card);
+    if (item.claim) textNode('p', item.claim, card);
+    textNode('blockquote', item.excerpt || item.text || '발췌문 없음', card);
+    const source = Object.hasOwn(sources || {}, item.source_id) ? sources[item.source_id] : null;
+    const sourceLine = textNode('p', '출처: ', card);
+    sourceLink(sourceLine, source?.title || item.source_id || '출처 미상', source?.url);
+    const locator = item.locator || '위치 미상';
+    const page = typeof locator === 'string' && locator.match(/[#&]page=(\d+)/);
+    const location = textNode('p', page ? '페이지 ' + page[1] + ' · ' : '위치: ', card);
+    sourceLink(location, locator, item.locator);
+    textNode('strong', '해석 및 이용 한계', card);
+    const limits = textNode('ul', '', card);
+    for (const limit of item.limitations?.length ? item.limitations : ['한계 정보 없음 · 별도 확인 필요']) textNode('li', limit, limits);
+  });
+  sourceEntries.forEach(([id, source], index) => {
+    const card = textNode('article', '', $('source-list'));
+    const heading = textNode('h4', '출처 ' + (index + 1) + ' · ', card);
+    sourceLink(heading, source.title || id, source.url);
+    textNode('small', '출처 ID: ' + id, card);
+    textNode('p', '발행 기관: ' + (source.publisher || '미상') + ' · 발행일: ' + (source.published_at || '미상'), card);
+    if (source.access_notes) textNode('p', '이용 한계: ' + source.access_notes, card);
+  });
+  if (!entries.length) textNode('p', '표시할 근거가 없습니다.', $('evidence-list'));
+  if (!sourceEntries.length) textNode('p', '표시할 출처가 없습니다.', $('source-list'));
+}
+async function showResult(job) {
+  const receipt = job.receipt;
+  if (!receipt) return;
+  $('empty').hidden = true;
+  $('receipt').hidden = false;
+  $('receipt-status').textContent = '실행 결과: ' + states[job.status];
+  $('run-id').textContent = '실행 ID: ' + receipt.run_id;
+  $('elapsed').textContent = '소요 시간: ' + receipt.elapsed_seconds + '초';
+  $('publication').textContent = receipt.publication_allowed === false ? '외부 발행: 허용되지 않음 · 점수 산정 및 투자 추천 아님' : '발행 상태를 확인할 수 없습니다.';
+  const base = '/api/runs/' + encodeURIComponent(job.id) + '/artifacts/';
+  const hashes = receipt.artifact_hashes || {};
+  if (job.status === 'completed' && hashes['report.pdf']) {
+    $('pdf-download').href = base + 'report.pdf';
+    $('pdf-view').href = base + 'report.pdf';
+    $('pdf-actions').hidden = false;
+  }
+  if (hashes['report.html'] && job.status !== 'failed') {
+    $('report').src = base + 'report.html';
+    $('report').hidden = false;
+  }
+  $('report-heading').textContent = (receipt.company || 'Physical Intelligence') + ' · 리서치 보고서';
+  const data = {};
+  for (const [id, name] of [['evidence','evidence.json'], ['sources','sources.json']]) {
+    if (!hashes[name]) continue;
+    $('details').hidden = false;
+    try {
+      data[id] = await getJSON(base + name);
+      $(id).textContent = JSON.stringify(data[id], null, 2);
+    } catch {
+      const message = name + ' · 무결성 검증 실패 또는 파일 없음: 데이터를 표시할 수 없습니다.';
+      $(id).textContent = message;
+      $('artifact-error').textContent += message + ' ';
+      $('artifact-error').hidden = false;
+    }
+  }
+  renderEvidence(data.evidence, data.sources);
+}
+async function poll() {
+  if (!current || polling) return;
+  polling = true;
+  try {
+    const job = await getJSON('/api/runs/' + encodeURIComponent(current));
+    state(job.status, stages[job.stage] || job.stage);
+    if (job.status === 'running') setTimeout(poll, 1000);
+    else {
+      await showResult(job);
+      current = null;
+      busy(false);
+    }
+  } catch {
+    state('warning', '서버 연결을 확인하고 있습니다. 실행을 중복 시작하지 않고 상태 조회를 다시 시도합니다.');
+    setTimeout(poll, 2000);
+  } finally { polling = false; }
+}
+$('form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (current || $('run').disabled) return;
+  const company = $('company').value;
+  if (!['Physical Intelligence','피지컬 인텔리전스'].includes(company)) {
+    state('failed', '지원하는 기업명을 정확히 입력하세요: Physical Intelligence 또는 피지컬 인텔리전스');
+    return;
+  }
+  busy(true);
+  clearResult();
+  state('running', stages.starting);
+  try {
+    const response = await fetch('/api/runs', {method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrf}, body:JSON.stringify({company})});
+    if (response.status === 409) {
+      const bootstrap = await getJSON('/api/bootstrap');
+      if (bootstrap.active_run_id) { current = bootstrap.active_run_id; poll(); return; }
+    }
+    if (!response.ok) throw new Error('start_failed');
+    current = (await response.json()).id;
+    poll();
+  } catch {
+    // A lost POST response may still have started a run. Never auto-regenerate.
+    try {
+      const bootstrap = await getJSON('/api/bootstrap');
+      if (bootstrap.active_run_id) { current = bootstrap.active_run_id; poll(); return; }
+    } catch { /* No automatic submission on reconnection. */ }
+    state('failed', '실행 응답을 확인하지 못했습니다. 서버 상태를 확인한 뒤 다시 시도하세요.');
+    busy(false);
+  }
+});
+(async () => {
+  busy(true);
+  try {
+    const bootstrap = await getJSON('/api/bootstrap');
+    if (bootstrap.active_run_id) { current = bootstrap.active_run_id; poll(); }
+    else busy(false);
+  } catch { state('failed', '로컬 서버에 연결할 수 없습니다. 페이지를 새로고침하세요.'); }
+})();
+</script>
+</body>
+</html>

@@ -52,6 +52,9 @@ a.cite { color: inherit; text-decoration: none; }
 .card { border: 1px solid #ccd4df; background: #f7fafc; padding: 4pt 6pt;
         margin: 0 0 6pt; }
 .card table { margin: 0; }
+.machine-citation { color: #596579; font-size: 7pt; line-height: 10pt; }
+.evidence-entry { margin: 0 0 10pt; break-inside: avoid; }
+.evidence-excerpt { border-left: 2pt solid #ccd4df; padding-left: 8pt; }
 """
 
 
@@ -95,6 +98,14 @@ class _Builder:
     def __init__(self, draft, data):
         self.draft = draft
         self.evidence = data["evidence"]
+        self.sources = data["sources"]
+        self.research = data.get("policy_version") == "unscored-research-only-1"
+        self.evidence_labels = {
+            eid: n for n, eid in enumerate(dict.fromkeys(draft.cited_evidence_ids), 1)
+        }
+        self.source_labels = {
+            sid: n for n, sid in enumerate(dict.fromkeys(draft.reference_source_ids), 1)
+        }
         self.refs = set()
 
     def inline(self, text, link=True):
@@ -109,13 +120,53 @@ class _Builder:
                 else self.evidence.get(ident, {}).get("source_id")
             )
             label = _e(m.group(0))
-            if link and source in self.refs:
+            if self.research and kind == "evidence" and ident in self.evidence_labels:
+                number = self.evidence_labels[ident]
+                out.append(
+                    f'<a class="cite" href="#evidence-{number}">[근거 {number}]</a>'
+                )
+            elif self.research and kind == "source" and ident in self.source_labels:
+                number = self.source_labels[ident]
+                readable = f"[자료 {number}]"
+                if link and source in self.refs:
+                    readable = (
+                        f'<a class="cite" href="#{_anchor(source)}">{readable}</a>'
+                    )
+                out.append(f'{readable} <span class="machine-citation">{label}</span>')
+            elif link and source in self.refs:
                 out.append(f'<a class="cite" href="#{_e(_anchor(source))}">{label}</a>')
             else:
                 out.append(label)
             pos = m.end()
         out.append(_e(text[pos:]))
         return "".join(out)
+
+    def cited_evidence(self):
+        """Several cited evidence records may share one bibliography source."""
+        parts = [
+            '<section id="cited-evidence"><h3>인용 근거 목록</h3>',
+            f"<p>인용 근거 {len(self.evidence_labels)}개 · "
+            f"고유 출처 {len(self.source_labels)}개</p>",
+            '<p class="meta">같은 출처의 서로 다른 발췌는 별도 근거이며, '
+            "독립된 출처를 뜻하지 않습니다.</p>",
+            '<p class="meta">발췌는 공백 정리 후 앞 480자까지 표시합니다. '
+            "전체 발췌·식별자는 report-context.json에서 확인할 수 있습니다.</p>",
+        ]
+        for eid, number in self.evidence_labels.items():
+            evidence = self.evidence.get(eid, {})
+            source = self.sources.get(evidence.get("source_id"), {})
+            excerpt = " ".join(_v(evidence.get("excerpt")).split())
+            excerpt = excerpt[:480] + (" … [이하 생략]" if len(excerpt) > 480 else "")
+            parts.append(
+                f'<div class="evidence-entry" id="evidence-{number}">'
+                f"<h3>근거 {number}</h3>"
+                f'<p class="meta">출처: {_e(_v(source.get("title")))}<br>'
+                f"URL: {_e(_v(source.get('url')))}<br>"
+                f"위치: {_e(_v(evidence.get('locator')))}</p>"
+                f'<p class="evidence-excerpt">{_e(excerpt)}</p>'
+                f'<p class="machine-citation">[@evidence:{_e(eid)}]</p></div>'
+            )
+        return "".join(parts) + "</section><h3>고유 출처 참고문헌</h3>"
 
     def table(self, rows):
         head, *body = rows
@@ -167,6 +218,8 @@ class _Builder:
 
 
 def _card(data):
+    if data.get("policy_version") == "unscored-research-only-1" and not data["scores"]:
+        return ""
     head = [
         "후보",
         "관측 점수",
@@ -230,6 +283,10 @@ def _extras(data):
 
 def render_report_html(draft: ReportDraft, context: ReportContextV3) -> str:
     data = context.snapshot()
+    title = "투자 검토 보고서"
+    if data.get("policy_version") == "unscored-research-only-1":
+        subject = data.get("research_subject") or "조사 대상 미상"
+        title = f"{subject} — 자료 기반 연구 보고서"
     builder = _Builder(draft, data)
     sections, current = [], None
     for line in draft.markdown.splitlines():
@@ -248,10 +305,14 @@ def render_report_html(draft: ReportDraft, context: ReportContextV3) -> str:
     body = []
     for name, lines in sections:
         extra = _extras(data) if name == "INVESTMENT ASSESSMENT & RISKS" else ""
+        evidence_list = (
+            builder.cited_evidence() if name == "REFERENCE" and builder.research else ""
+        )
         body.append(
             f'<section id="{_section_id(name)}" data-section="{_e(name)}">'
             f"<h2>{TITLES[name]}</h2>"
-            f"{builder.blocks(lines, name == 'REFERENCE')}{extra}</section>"
+            f"{evidence_list}{builder.blocks(lines, name == 'REFERENCE')}"
+            f"{extra}</section>"
         )
     banner = (
         f'<div class="banner">{BANNER}</div>'
@@ -265,8 +326,8 @@ def render_report_html(draft: ReportDraft, context: ReportContextV3) -> str:
     return (
         '<!DOCTYPE html>\n<html lang="ko"><head><meta charset="utf-8">'
         f'<meta http-equiv="Content-Security-Policy" content="{CSP}">'
-        "<title>투자 검토 보고서</title>"
+        f"<title>{_e(title)}</title>"
         f"<style>{_font_css()}{CSS}</style></head><body>"
-        f'<h1>투자 검토 보고서</h1><p class="meta">{meta}</p>{banner}'
+        f'<h1>{_e(title)}</h1><p class="meta">{meta}</p>{banner}'
         f"{_card(data)}{''.join(body)}</body></html>\n"
     )
