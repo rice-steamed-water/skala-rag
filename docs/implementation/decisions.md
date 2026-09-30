@@ -161,6 +161,19 @@ D09 중 렌더러·A4·폰트·여백·SUMMARY 측정 기준·인용 token 화�
 - Approval date: -
 - Supersedes: 없음.
 
+## D14 제안 기록 — traction·deal_terms (#11, OPEN)
+
+- Decision ID: D14 (traction·deal_terms 부분)
+- Status: OPEN — 제안 작성 완료, 팀 승인 대기
+- Decision: [rubric-finance.md](rubric-finance.md)와 `configs/rubrics/finance.yaml`(rubric_version finance-0.1.0)의 9개 criterion rating 1–5 기준·최소 근거·missing 코드, 재무 단위 규칙(런웨이 개월 통일, 연간→월 환산은 derived, 분모 0 이하·기간 불일치는 missing)을 baseline으로 채택. 승인된 D05에 따라 pre-revenue·영업현금흐름 흑자 등 적용조건 문제는 `missing + applicability_note`로 두고 비중을 제거하지 않는다.
+- Rationale and source: 원문 §3 실적/투자조건 상세 기준, scoring §2–§4, D02·D05(APPROVED), T21. SaaS 경험칙·투자 단계 순서는 자동 점수 규칙에서 제외.
+- Rejected alternatives: 미채택 — SaaS 기준 매출총이익률 구간(70–80%); 단계별 자동 가점; pre-revenue를 rating 1로 처리; 분모 0 이하일 때 런웨이 무한대/최대점 처리.
+- Affected documents / policy version / tests: scoring.md §3·§4, rubric-finance.md, configs/rubrics/finance.yaml, tests/unit/test_finance_rubric.py; #16 집계, #22 평가 wrapper.
+- Open sub-questions: rubric-finance.md §5 Q1–Q6 (작성자 의견 포함). Q4·Q6의 not_applicable 안은 v3(#35 / PR #36)가 D05를 대체하도록 승인될 때만 적용.
+- Owner and reviewers: XXXXXim / 지표 담당(heojiwon2) 검토 요청 대상.
+- Approval date: -
+- Supersedes: 없음.
+
 ## 조용히 바꾸면 안 되는 원문
 
 - 현재 팀 가중치를 교수님 예시 `30/25/15/10/10/10`으로 되돌리지 않는다.
