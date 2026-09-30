@@ -90,7 +90,6 @@ def run_discovery_smoke(
         or bridge.context.candidate_id is not None
         or request.schema_version != adapter.schema_version
         or budget.schema_version != adapter.schema_version
-        or (request.execution_mode == "live" and not adapter.allow_live)
     ):
         raise ValueError("inconsistent invocation context or live opt-in")
     directory = Path(output_directory)
