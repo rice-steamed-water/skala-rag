@@ -44,3 +44,23 @@ rubric은 반올림 전 구간·3배/2배 비교·작은 기저 limitations 및 
 재무 근거를 확인해야 한다. N/A 이유는 burn5 근거를 대체하지 않는다.
 승인된 숫자만으로 generic Evidence.value를 특정 metric으로 취급하지 않는다.
 live gate, draft scoring isolation, 두 차원 atomic 실패 의미는 유지한다.
+
+## Approved contract consumer integration
+
+The consumer also accepts `ApprovedScoringPolicy` in fixture mode, with matching
+snapshot policy and finance rubric/verifier versions. Legacy fixture behavior is
+unchanged. `financial_facts=tuple[ReviewedFinancialFact, ...]` supplies explicit
+caller-reviewed metric roles, accounting entity, typed period, funding round,
+pre/post basis, reviewer audit reference and exact frozen Evidence payload.
+Validation rejects stale/foreign/altered evidence, absent sources, nonreported
+facts, conflicts, unknown monetary units/currency and invalid accounting context.
+Roles are never inferred from prose. Review references are audit pointers, not
+authenticated approval. Decimal monetary checks reuse `scoring.finance`.
+
+Approved missing results need no receipt. The two approved N/A rules additionally
+require reviewed confirmed zero pre-revenue or typed-period/entity nonnegative
+OCF. Approved observed ratings remain fail-closed even with True callbacks:
+criterion-specific derivation and deterministic anchor correspondence are still
+unimplemented. Receipts alone do not prove rating correctness. All actual modes
+remain blocked before any call; a live policy cannot enter this fixture consumer.
+Tests are offline synthetic inputs, not provider or authenticated review evidence.

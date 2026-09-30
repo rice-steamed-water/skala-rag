@@ -195,3 +195,38 @@ def test_observed_financial_gate(case, fault):
     result = run(case, output, approve=fault != "finance")
     assert result.status == "failure"
     assert result.evaluations is None
+
+
+def test_approved_contract_fixture_consumer(case):
+    from tests.unit.test_approved_policy import approval_payload
+
+    from skala_rag.scoring.approved_policy import PolicyApprovals, load_approved_policy
+
+    snapshot, _, output, rubric = case
+    policy = load_approved_policy(
+        "configs/scoring.v3.json",
+        approvals=PolicyApprovals.model_validate(approval_payload()),
+        approval_verifier=lambda a, p: a.model_dump() == approval_payload()[a.scope],
+    )
+    snapshot = snapshot.model_copy(update={"policy_version": policy.policy_version})
+    rubric.update(status="approved", rubric_version="finance-0.1.0")
+    llm = FakeLLM([output])
+    result = evaluate_business_deal(
+        snapshot,
+        policy=policy,
+        rubric=rubric,
+        llm=llm,
+        verifiers=ApprovedVerifiers(
+            "finance-0.1.0",
+            "finance-0.1.0",
+            "finance-0.1.0",
+            lambda c, s: True,
+            lambda c, s: True,
+            lambda c, s: True,
+        ),
+        clock=FakeClock(datetime(2026, 9, 30, tzinfo=UTC)),
+        schema_version="test",
+    )
+    assert result.status == "success"
+    assert set(result.evaluations) == {"traction", "deal_terms"}
+    assert len(llm.calls) == 1
