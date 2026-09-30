@@ -1,0 +1,14 @@
+{
+  "schema_version": "synthetic-common-1",
+  "investment_theme": "Physical AI robotics",
+  "countries": [
+    "KR"
+  ],
+  "languages": [
+    "ko"
+  ],
+  "as_of": "2026-09-30",
+  "policy_version": "v3-operational-1.0.0",
+  "corpus_version": "corpus-fixture-v1",
+  "execution_mode": "fixture"
+}

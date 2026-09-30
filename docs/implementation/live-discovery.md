@@ -157,6 +157,86 @@ sleep or retry loop. Explicit opt-in Live Discovery inherits runtime gates:
 approvals, deadline, bounded ledger and
 priced allowance. Missing prices/readiness are not supplied by fixtures.
 
+## Minimal opt-in receipt runner
+
+`discovery_smoke.run_discovery_smoke` is a small callable, not a CLI, Graph
+controller, provider selector, extractor or complete M2 trace. It reuses
+`search_with_receipt` and the actual `TavilyDiscovery` / `TavilyRuntimeBridge` /
+`AdapterRuntime`, rejecting callback lookalikes and inconsistent run/schema/tool/
+node/mode context. Live still requires explicit `adapter.allow_live=True`; shared
+runtime approval, readiness, deadline, priced allowance and campaign ledger gates
+remain unchanged. An admitted live mode is not evidence that an HTTP call occurred.
+
+Caller supplies the complete explicit `RunInput`, `ToolBudget`, configured adapter
+(including approved public theme, bounds, extractor, IDs, clock, readiness,
+transport, credential, allowance and shared campaign ledger), and an **existing,
+approved, dedicated empty output directory**. No environment, `.env`, default
+output path, prices, candidates, provider fallback or semantic extractor is read
+or created. Use a fresh adapter/retrieval ID per invocation and exclusive
+synchronous use of its HTTP client; the runner temporarily attaches a request
+observation hook and removes it in `finally`, preserving caller hooks.
+
+```python
+from skala_rag.tools.discovery_smoke import run_discovery_smoke
+
+# All four objects below are explicitly prepared/approved by the caller.
+receipt_path = run_discovery_smoke(
+    adapter=configured_adapter,
+    request=approved_request,
+    budget=approved_budget,
+    output_directory=approved_empty_directory,
+)
+```
+
+`receipt.json` preserves the exact detached ToolResult (successful, empty or failed),
+all physical and normalization records, terminal redacted errors, referenced
+runtime attempt errors (including recovered retries), and exact observed Source
+snippet snapshots even after extractor failure. It records the supplied request/
+budget and versions, plus observed transport-bound method/URL/allowlisted JSON
+request parameters, **never headers, credentials or adapter/runtime configuration**.
+The public query therefore appears in this caller-approved receipt, unlike the
+redacted retrieval logs. Unknown costs remain null in the actual records, not zero
+or the allowance ceiling. Provider request IDs and runtime implementation version
+are null because the existing bridge/runtime do not expose them; bridge version
+and runtime policy schema version are recorded. There is no invented provider
+response, HTTP success, company fact, fetched article, Chunk or Evidence.
+
+The output directory rejects symlinks, existing contents and reuse across runs.
+An exclusive `.discovery-smoke` reservation prevents competing invocations;
+the receipt is fsynced and atomically published with a no-replacement hard link
+(the existing writers' exclusive-create convention is preserved). Receipt files
+are mode 0600; the reservation is mode 0700. The reservation stays after failures,
+so do not retry into the same directory. On filesystem publication failure,
+`SmokePersistenceError.receipt` retains the detached observation for caller recovery;
+the exception message does not expose filesystem/transport exception text.
+
+A safety gate rejects the configured credential, recognizable credential/token
+patterns and credential-bearing URLs anywhere in the output before writing bytes.
+Unexpected outgoing JSON fields fail closed. Unsafe observed content is **not
+silently altered or discarded**: `UnsafeSmokeReceipt.receipt` retains the detached
+observation in memory and no receipt bytes are written. The caller must handle
+that object securely, not log its repr. This is a bounded safety check, not a claim
+to detect arbitrary secrets inside public text; authorizing truly public inputs
+and reviewing permitted output remain caller responsibilities.
+
+Offline regression uses the real shared runtime with `httpx.MockTransport`,
+synthetic snippets and explicitly injected fixture-only extractor observations.
+Successful candidate, empty search, post-extractor and transport failures, retry
+error preservation, unsafe-output rejection, publication failure recovery, client
+hook cleanup and output/context guards are covered. No real API call, credential
+lookup or model download is part of this regression.
+
+```sh
+uv run --offline pytest tests/unit/test_discovery_smoke.py tests/unit/test_live_discovery.py tests/unit/test_discovery_runtime.py -q
+uv run --offline ruff check src/skala_rag/tools/discovery_smoke.py tests/unit/test_discovery_smoke.py
+uv run --offline ruff format --check src/skala_rag/tools/discovery_smoke.py tests/unit/test_discovery_smoke.py
+```
+
+Prepared runner code and fixture receipts do not close #48. Actual price/readiness
+observations, verified production extractor, approved public input/output location
+and real provider smoke remain caller/parent gates. This receipt is not full M2
+execution, discovery Graph persistence, or proof of recall/accuracy/cost.
+
 ## Verification and outstanding gates
 
 Tests contain original inline synthetic fixtures (not recorded provider responses
