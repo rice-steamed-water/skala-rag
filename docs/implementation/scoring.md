@@ -50,7 +50,7 @@
 | deal_terms / 10 | deal_terms.valuation | Valuation | 5 | 금액·통화·날짜·pre/post 구분·해당 라운드 |
 | deal_terms / 10 | deal_terms.ownership | 지분율 | 3 | 동일 거래의 지분율 직접 공개 또는 정확한 산정 조건 |
 
-원문 `Ruld of 40`은 raw에 보존되어 있다. 구현 ID와 표시명에서는 `Rule of 40`으로 통일한다. 위 “최소 근거”는 공개 자료의 보유를 보장하지 않으며, 점수별 rubric을 대신하지 않는다.
+founder·market·technology·moat 14개 criterion의 rubric 제안은 [핵심 영역 rubric](rubric-core.md)(`configs/rubrics/core.yaml`)에 있다. 원문 `Ruld of 40`은 raw에 보존되어 있다. 구현 ID와 표시명에서는 `Rule of 40`으로 통일한다. 위 “최소 근거”는 공개 자료의 보유를 보장하지 않으며, 점수별 rubric을 대신하지 않는다.
 
 ## 3. rating과 가중점수 — D02 제안
 

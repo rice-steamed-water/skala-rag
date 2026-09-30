@@ -20,6 +20,7 @@
 | 전체 흐름, 노드 책임, 반복과 종료 | [아키텍처](implementation/architecture.md) | Graph / Agent 담당 |
 | State, Evidence, 평가 결과, Tool 경계 | [공통 데이터 계약](implementation/contracts.md) | 전원 |
 | 평가 항목, 가중치, 결측, 판단 라벨 | [점수와 판단 정책](implementation/scoring.md) | 평가 / 지표 담당 |
+| 창업자·시장·기술·경쟁 우위 rubric, missing 조건 | [핵심 영역 rubric](implementation/rubric-core.md) | 평가 / 지표 담당 |
 | 자료 수집, 페이지 예산, 검색, 임베딩 비교 | [데이터와 RAG](implementation/data-rag.md) | 데이터 / RAG 담당 |
 | 작업 패키지, 통합 순서, 테스트, 제출 | [작업 분담과 검증](implementation/delivery.md) | 전원 |
 | 원문 충돌, 새 제안, 승인 기록 | [결정 목록](implementation/decisions.md) | 전원, 정책 결정 담당 |
