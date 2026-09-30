@@ -226,8 +226,31 @@ def test_real_mode_blocked_until_approved(case):
     snapshot, _ = case
     llm = FakeLLM([])
     with pytest.raises(ValueError, match="real run requires"):
-        _run(snapshot, llm, execution_mode="real")
+        _run(
+            snapshot,
+            llm,
+            execution_mode="real",
+            rubric={**RUBRIC, "status": "proposed"},
+        )
     assert llm.calls == []
+
+
+@pytest.mark.parametrize("status", ["proposed", "approved"])
+def test_fixture_accepts_proposed_or_approved_rubric(case, status):
+    snapshot, output = case
+    out = _run(snapshot, FakeLLM([output]), rubric={**RUBRIC, "status": status})
+    assert out.result.status == "success"
+
+
+def test_real_mode_runs_with_approved_rubric(case):
+    snapshot, output = case
+    out = _run(
+        snapshot,
+        FakeLLM([output]),
+        execution_mode="real",
+        rubric={**RUBRIC, "status": "approved"},
+    )
+    assert out.result.status == "success"
 
 
 def test_openai_adapter_boundary_with_mock_transport(case):
