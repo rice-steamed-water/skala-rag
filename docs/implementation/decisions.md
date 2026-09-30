@@ -2,7 +2,7 @@
 
 [문서 홈](../README.md) · 근거: [통합 원문](../raws/robotics_startup_agentic_rag_notion_integrated.md)
 
-이 문서는 원문에서 서로 다른 상태로 남아 있는 내용과 새 구현 제안을 분리한다. **D01–D06·D08은 APPROVED**, D09의 목차·인용·구조 검증은 부분 APPROVED이며 PDF 선택은 OPEN이다. D07·D10–D14는 OPEN이다. 표의 승인 역할은 검토 대상이며, D01–D06·D08의 실제 문서 담당자는 아래 이슈 #3 기록에 명시한다.
+이 문서는 원문에서 서로 다른 상태로 남아 있는 내용과 새 구현 제안을 분리한다. **D01–D06·D08은 APPROVED**, D09의 목차·인용·구조 검증은 부분 APPROVED이며 PDF 선택은 OPEN이다. D07·D10–D12·D14는 OPEN이다. D13은 REJECTED(200페이지 한도 적용 제외)다. 표의 승인 역할은 검토 대상이며, D01–D06·D08의 실제 문서 담당자는 아래 이슈 #3 기록에 명시한다.
 
 ## 구현 전에 합의할 항목
 
@@ -20,7 +20,7 @@
 | D10 | 팀원 명단과 원본 역할 표기가 불일치                                           | §11, §12 마지막 원본 L2904, L2924–2926, L2988 | 실제 수행 역할은 이슈 assignee와 PR 작성자 기록으로 확인. 원문의 별명/이름을 자동 매칭하지 않음                                                  | 전원 / Contributors                     |
 | D11 | DAY 3 마감의 실제 날짜·캠퍼스·반 미상                                         | §10 제출 원문                                 | DAY 3 10:00 / 15:00를 상대 일정으로 보존. 실제 날짜·시간대·제출 채널 확인                                                                        | 전원 / 제출 일정                        |
 | D12 | 국내 중심 API와 국내외 탐색 목표의 범위 차이                                  | §1.1, §5                                      | 계약에는 국가를 포함. 한국 fixture부터 연결하되 해외 미지원은 명시적으로 표시. 국내만으로 최종 범위를 줄이려면 승인                              | Discovery / 후보 범위                   |
-| D13 | HTML·PPT·추출 PDF의 200페이지 산정 규칙 미정                                  | §1.3, §6.2                                    | manifest에 원본·허용 페이지 구간 기록. HTML은 고정 PDF snapshot, PPT는 슬라이드 수. 승인 전 페이지 미상 자료는 인덱싱 보류                       | RAG + 과제 확인 담당 / 코퍼스           |
+| D13 | HTML·PPT·추출 PDF의 200페이지 산정 규칙 — **REJECTED** (한도 적용 제외)      | §1.3, §6.2                                    | manifest에 원본·허용 페이지 구간 기록. HTML은 고정 PDF snapshot, PPT는 슬라이드 수. 승인 전 페이지 미상 자료는 인덱싱 보류                       | RAG + 과제 확인 담당 / 코퍼스           |
 | D14 | 세부항목별 1~5점 rubric과 재무 지표 적용 조건 미정                            | §3 상세 기준                                  | [scoring](scoring.md)의 공통 척도를 바탕으로 각 항목의 근거·점수 예시 작성. SaaS 경험칙과 투자 단계 순서를 자동 점수 규칙으로 쓰지 않음          | 지표 / 실제 평가·추천                   |
 
 ## 승인 방법
@@ -172,6 +172,19 @@ D09 중 렌더러·A4·폰트·여백·SUMMARY 측정 기준·인용 token 화�
 - Open sub-questions: rubric-finance.md §5 Q1–Q6 (작성자 의견 포함). Q4·Q6의 not_applicable 안은 v3(#35 / PR #36)가 D05를 대체하도록 승인될 때만 적용.
 - Owner and reviewers: XXXXXim / 지표 담당(heojiwon2) 검토 요청 대상.
 - Approval date: -
+- Supersedes: 없음.
+
+## D13 — 200페이지 산정 규칙 적용 제외 (#91)
+
+- Decision ID: D13
+- Status: REJECTED
+- Decision: 이 프로젝트는 원문 §1.3의 RAG 코퍼스 200페이지 한도(R05)를 적용하지 않는다. 따라서 페이지 산정 규칙(HTML·PPT·부분 PDF)을 정하지 않으며, corpus manifest gate는 문서 승인·추출 상태·버전 고정·인덱스 입력 대조만 검사한다.
+- Rationale and source: 팀 결정 — 이 프로젝트에서 200페이지 제한 규칙이 필요 없다고 판단했다(heojiwon2, 2026-09-30 작업 대화).
+- Rejected alternatives: 미채택 — 전체 코퍼스 200페이지 합계 gate; 형식별 페이지 산정 규칙 승인 후 적용.
+- Affected documents / policy version / tests: data-rag.md §3, delivery.md §3·T11, docs/README.md R05, README.md; #44 / PR #88 `rag/corpus.py`·`tests/unit/test_corpus_gate.py`; #13·#62의 200페이지 관련 할 일.
+- Owner and reviewers: heojiwon2 / RAG 담당·팀 전원 검토 요청 대상.
+- Approval date: 2026-09-30 (Asia/Seoul), 결정자 heojiwon2.
+- 과제 담당자 확인 근거: **미기록.** 과제 필수 조건 완화에 해당하므로 위 승인 방법에 따라 확인 근거 링크를 추가해야 한다.
 - Supersedes: 없음.
 
 ## 조용히 바꾸면 안 되는 원문

@@ -22,7 +22,7 @@
 | 평가 항목, 가중치, 결측, 판단 라벨 | [점수와 판단 정책](implementation/scoring.md) | 평가 / 지표 담당 |
 | 창업자·시장·기술·경쟁 우위 rubric, missing 조건 | [핵심 영역 rubric](implementation/rubric-core.md) | 평가 / 지표 담당 |
 | 실적·투자조건 rubric, 재무 단위 규칙 | [재무 rubric](implementation/rubric-finance.md) | 평가 / 지표 담당 |
-| 자료 수집, 페이지 예산, 검색, 임베딩 비교 | [데이터와 RAG](implementation/data-rag.md) | 데이터 / RAG 담당 |
+| 자료 수집, 코퍼스 manifest, 검색, 임베딩 비교 | [데이터와 RAG](implementation/data-rag.md) | 데이터 / RAG 담당 |
 | mode별 보고서 목차, 인용, 구조 검증 | [보고서 계약](implementation/reporting.md) | 보고서 / 검증 담당 |
 | 작업 패키지, 통합 순서, 테스트, 제출 | [작업 분담과 검증](implementation/delivery.md) | 전원 |
 | 원문 충돌, 새 제안, 승인 기록 | [결정 목록](implementation/decisions.md) | 전원, 정책 결정 담당 |
@@ -52,7 +52,7 @@
 | **구현 제안** | 원문을 실행 가능한 계약으로 보완한 초안 | 팀 승인 후 채택; 승인 전 확정안으로 표현하지 않음 |
 | **미결정** | 원문만으로 결론을 낼 수 없는 사항 | 담당자·결정·근거·승인일 기록 |
 
-각 상세 문서의 새 필드, 기본값, 예외 처리, 함수명은 별도 표시가 없어도 **구현 제안**이다. D01–D06·D08은 2026-09-30 xxhigh가 승인했으며, 해당 정책은 아래 제안 표기보다 우선한다([승인 기록](implementation/decisions.md#m0-승인-검토-기록--이슈-3)). D09의 목차·인용·구조 검증도 2026-09-30 xxhigh가 부분 승인했다([보고서 계약](implementation/reporting.md)). D09의 PDF 구현 선택, D07·D10–D14와 기타 구현 세부는 승인 전 제안이다. 이 가이드는 원문을 몰래 대체하는 최종 설계가 아니다.
+각 상세 문서의 새 필드, 기본값, 예외 처리, 함수명은 별도 표시가 없어도 **구현 제안**이다. D01–D06·D08은 2026-09-30 xxhigh가 승인했으며, 해당 정책은 아래 제안 표기보다 우선한다([승인 기록](implementation/decisions.md#m0-승인-검토-기록--이슈-3)). D09의 목차·인용·구조 검증도 2026-09-30 xxhigh가 부분 승인했다([보고서 계약](implementation/reporting.md)). D09의 PDF 구현 선택, D07·D10–D12·D14와 기타 구현 세부는 승인 전 제안이다. D13(200페이지 산정)은 적용 제외다([D13 기록](implementation/decisions.md#d13--200페이지-산정-규칙-적용-제외-91)). 이 가이드는 원문을 몰래 대체하는 최종 설계가 아니다.
 
 ## 필수 요구사항과 검증 위치
 
@@ -64,7 +64,7 @@
 | R02 | 도메인 Physical AI / Robotics | §1.1, §2 | 입력 범위와 후보 도메인 검증 |
 | R03 | 비상장, Seed~Series C, Exit 미완료 | §2.2 | 적격 / 부적격 / 정보부족 fixture |
 | R04 | 지정된 RAG 적용 대상 중 최소 1개 Agent에 실제 RAG 적용 | §1.3, §12 교수님 노션 B | 기술 요약에 해당하는 Technology 평가 경로에서 검색→근거→평가 연결 |
-| R05 | RAG 문서 총 200페이지 한정 | §1.3 | 전체 코퍼스 manifest의 페이지 합 검증 |
+| R05 | RAG 문서 총 200페이지 한정 | §1.3 | **적용 제외** — [D13](implementation/decisions.md#d13--200페이지-산정-규칙-적용-제외-91) |
 | R06 | 오픈소스 임베딩 적용, 후보·선택 근거 문서화 | §1.3, §6.3 | 모델 카드·라이선스·동일 데이터 비교 기록 |
 | R07 | 가중치 평가, 결측 및 저점수 보류 | §3 | 정책 승인 후 경계값 단위 테스트 |
 | R08 | Graph의 Loop / Branch 및 State 구현 | §4, §8 | 재조사, 후보 이동, 병렬 합류, 유한 종료 테스트 |

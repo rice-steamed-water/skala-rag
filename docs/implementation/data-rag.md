@@ -40,27 +40,23 @@
 
 모든 adapter는 [ToolResult 계약](contracts.md)을 따르고, timeout·예산·오류·retrieval record를 공통으로 남긴다. **페이지/도구 응답에서 받은 텍스트를 실행 명령으로 취급하지 않는다.**
 
-## 3. 200페이지 코퍼스 관리 — 과제 필수, 산정은 D13
+## 3. 코퍼스 manifest 관리
 
-전체 프로젝트의 승인된 RAG 문서 집합을 `corpus_manifest`로 관리한다. 기업별·Agent별로 각각 200페이지가 아니다. 페이지 구간 제외로 제한을 우회하지 않도록 원본과 실제 사용 구간을 모두 기록한다.
+전체 프로젝트의 승인된 RAG 문서 집합을 `corpus_manifest`로 관리한다. 이 프로젝트는 원문 §1.3의 코퍼스 200페이지 한도(R05)를 적용하지 않는다([D13 기록](decisions.md#d13--200페이지-산정-규칙-적용-제외-91)). 페이지 수 산정·합계 검사는 하지 않는다.
 
 | Manifest 필드 | 의미 |
 | --- | --- |
 | corpus_version, document_id | 승인된 코퍼스와 문서의 식별자 |
 | source_id, origin_url/local_path, content_hash | 원문 snapshot 및 무결성 |
 | title, publisher, publication_date, language | 출처와 시점 |
-| original_page_count, included_page_ranges, counted_pages | 전체와 사용 구간, 실제 예산 반영량 |
 | permission_note | 팀이 해당 자료를 사용하는 근거/제한 |
 | candidate_ids, scope | 회사 귀속 또는 산업 공통 |
 | extraction_status, reviewer, approved | 추출 품질과 포함 승인 |
 
-**제안 산정:** PDF는 문서 페이지, Pitch Deck은 슬라이드, HTML/Markdown은 고정 템플릿 PDF snapshot의 실제 페이지를 센다. 페이지 없는 원문을 임의로 1페이지로 계산하지 않는다. 일부 페이지만 쓰는 경우 해당 구간을 추출한 산출물과 provenance를 남기고 과제상 산정 허용 여부를 확인한다.
-
-- 중복 파일/반복 embedding이 원문 페이지 수를 늘리지는 않는다. content hash와 원본 페이지 ID로 중복을 식별한다.
-- 문서 추가 전에 전체 합이 200 이하인지 검사한다. 초과/미상/미승인 문서는 인덱싱을 거절한다.
-- 재조사에서 찾은 새 문서를 RAG에 추가해도 같은 한도를 적용한다. 실행 중 코퍼스 자동 확장 대신 승인된 새 corpus_version을 만든다.
+- 미승인·추출 미완료 문서는 인덱싱을 거절한다.
+- 재조사에서 찾은 새 문서를 RAG에 추가할 때는 실행 중 코퍼스 자동 확장 대신 승인된 새 corpus_version을 만든다.
 - 교체한 이전 문서는 active index에서 검색되지 않게 한다. 실행 manifest는 당시 사용 코퍼스를 고정한다.
-- RAG에 넣지 않은 live Web/API Evidence는 수집 이력으로 분리한다. 이를 대량 문서 RAG 제한을 우회하는 숨은 코퍼스로 사용하지 않는다.
+- RAG에 넣지 않은 live Web/API Evidence는 수집 이력으로 분리한다.
 - 원문 IR/PDF를 Git에 올리는 것은 별도 문제다. 공개 저장소에는 허용된 fixture·manifest만 넣고 재배포 가능성을 확인한다.
 
 ## 4. 추출·chunk·검색
