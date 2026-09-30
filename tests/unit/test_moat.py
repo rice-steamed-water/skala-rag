@@ -8,12 +8,33 @@ import yaml
 from tests.fixtures.loader import load_common_fixtures
 
 from skala_rag.agents.evaluation import output_from_evaluation
+from skala_rag.agents.moat_verification import (
+    CoreArtifactApproval,
+    ReviewedMoatAnchor,
+    core_artifact_digest,
+    frozen_snapshot_digest,
+)
 from skala_rag.fakes import FakeClock, FakeLLM
 from skala_rag.scoring.catalog import load_policy
 
 ROOT = Path(__file__).resolve().parents[2]
 POLICY = load_policy(ROOT / "configs/scoring.draft.json", execution_mode="fixture")
 RUBRIC = yaml.safe_load((ROOT / "configs/rubrics/core.yaml").read_text())
+
+
+def _artifact(reference="fixture-reviewed-core"):
+    return CoreArtifactApproval(reference, "core-0.1.0", core_artifact_digest(RUBRIC))
+
+
+def _review(snapshot, criterion):
+    return ReviewedMoatAnchor(
+        "fixture-semantic-review",
+        core_artifact_digest(RUBRIC),
+        frozen_snapshot_digest(snapshot),
+        criterion.criterion_id,
+        criterion.rating,
+        tuple(criterion.evidence_ids),
+    )
 
 
 def _closed_snapshot(snapshot):
@@ -169,7 +190,11 @@ def _approved_case(
 
     def verify(criterion, evidence):
         calls.append((criterion.criterion_id, criterion.rating, set(evidence)))
-        return True if verifier is None else verifier(criterion, evidence)
+        return (
+            _review(snapshot, criterion)
+            if verifier is None
+            else verifier(criterion, evidence)
+        )
 
     result = evaluate_moat(
         snapshot,
@@ -179,6 +204,8 @@ def _approved_case(
         clock=FakeClock(datetime(2026, 9, 30, tzinfo=UTC)),
         schema_version="fixture-1",
         verify_observation=verify,
+        artifact_approval=_artifact(),
+        artifact_verifier=lambda approval: True,
         verified_patents={},
         independent_comparisons={},
     )
@@ -239,7 +266,7 @@ def test_approved_core_requires_semantic_verifier_for_negative_and_independent_e
 
 
 def test_approved_core_unknown_version_is_not_implicitly_approved():
-    with pytest.raises(ValueError, match="offline fixture only"):
+    with pytest.raises(ValueError, match="identity"):
         _approved_case(rubric_version="core-future")
 
 
@@ -318,7 +345,9 @@ def test_loaded_approved_fixture_consumer(admission):
         llm=object() if admission == "plain" else llm,
         clock=FakeClock(datetime(2026, 9, 30, tzinfo=UTC)),
         schema_version="fixture-1",
-        verify_observation=lambda c, e: True,
+        verify_observation=lambda c, e: _review(snapshot, c),
+        artifact_approval=_artifact(approval_payload()["core"]["reference"]),
+        artifact_verifier=lambda approval: True,
         actual_runtime=admission == "actual",
     )
     if admission == "mismatch":

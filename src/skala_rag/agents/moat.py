@@ -5,6 +5,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from skala_rag.agents.evaluation import EvaluationValidationError, evaluate_dimension
+from skala_rag.agents.moat_verification import (
+    CoreArtifactApproval,
+    ReviewedMoatAnchor,
+    validate_core_artifact,
+    validate_reviewed_anchor,
+)
 from skala_rag.contracts.evaluation import EvaluationSnapshot
 from skala_rag.contracts.evidence import Evidence
 from skala_rag.contracts.interfaces import Clock, StructuredLLM
@@ -47,7 +53,9 @@ def _evaluate_moat(
     llm: StructuredLLM,
     clock: Clock,
     schema_version: str,
-    verify_observation: Callable[[object, Mapping[str, Evidence]], bool],
+    verify_observation: Callable[
+        [object, Mapping[str, Evidence]], bool | ReviewedMoatAnchor
+    ],
     verified_patents: Mapping[str, VerifiedPatent],
     independent_comparisons: Mapping[str, IndependentComparison],
 ) -> EvaluationBranchResult:
@@ -55,10 +63,11 @@ def _evaluate_moat(
 
     #22 supports observed/missing only. This explicit bridge rejects N/A rather
     than silently converting it; approved applicability integration remains open.
-    Verifier must check anchors and minimum evidence, not trust provider prose.
+    Verifier must return a snapshot-bound reviewed anchor for approved Core,
+    checking minimum evidence and semantics rather than trusting provider prose.
     Approved core-0.1.0 anchors allow absent rights/applications and company
     comparisons. Their semantics (including negative facts and independent
-    cross-checks for rating 5) belong to the injected verifier. Legacy proposed
+    cross-checks for rating 5) belong to the trusted injected reviewer. Legacy proposed
     fixtures retain the active-patent/independent-comparison checks.
     """
     approved_core = (
@@ -97,7 +106,13 @@ def _evaluate_moat(
             continue
         if not MOAT_CRITERIA.intersection(evidence.criterion_ids):
             continue
-        if evidence.source_id not in snapshot.sources or not evidence.provenance:
+        if (
+            eid not in snapshot.evidence_ids
+            or evidence.evidence_id != eid
+            or evidence.source_id not in snapshot.sources
+            or snapshot.sources[evidence.source_id].source_id != evidence.source_id
+            or not evidence.provenance
+        ):
             raise ValueError("Invalid frozen evidence source/provenance")
         for path in evidence.provenance:
             record = snapshot.retrieval_records.get(path.retrieval_id)
@@ -169,10 +184,20 @@ def _evaluate_moat(
                         or not set(comparison.evidence_ids) <= cited
                     ):
                         raise EvaluationValidationError(["MOAT_COMPARISON_UNVERIFIED"])
-                if (
-                    verify_observation(criterion, {eid: allowed[eid] for eid in cited})
-                    is not True
-                ):
+                review = verify_observation(
+                    criterion, {eid: allowed[eid] for eid in cited}
+                )
+                if approved_core:
+                    verified = validate_reviewed_anchor(
+                        review,
+                        rubric=rubric,
+                        snapshot=snapshot,
+                        criterion=criterion,
+                        verifier=lambda receipt: receipt is review,
+                    )
+                else:
+                    verified = review is True
+                if not verified:
                     raise EvaluationValidationError(["MOAT_RUBRIC_UNVERIFIED"])
             return output
 
@@ -205,13 +230,21 @@ def evaluate_moat(
     llm: StructuredLLM,
     clock: Clock,
     schema_version: str,
-    verify_observation: Callable[[object, Mapping[str, Evidence]], bool],
+    verify_observation: Callable[
+        [object, Mapping[str, Evidence]], bool | ReviewedMoatAnchor
+    ],
     verified_patents: Mapping[str, VerifiedPatent],
     independent_comparisons: Mapping[str, IndependentComparison],
+    artifact_approval: CoreArtifactApproval | None = None,
+    artifact_verifier: Callable[[CoreArtifactApproval], bool] | None = None,
 ) -> EvaluationBranchResult:
     """Legacy fixture entry; constructed approved contracts are not receipts."""
     if isinstance(policy, ApprovedScoringPolicy):
         raise ValueError("#168: approved contract has no trusted-loading receipt")
+    if rubric.get("status") == "approved":
+        if artifact_approval is None or artifact_verifier is None:
+            raise ValueError("Explicit authoritative Core artifact approval required")
+        validate_core_artifact(rubric, artifact_approval, artifact_verifier)
     return _evaluate_moat(
         snapshot,
         rubric=rubric,
@@ -235,7 +268,11 @@ def evaluate_moat_approved_fixture(
     llm: StructuredLLM,
     clock: Clock,
     schema_version: str,
-    verify_observation: Callable[[object, Mapping[str, Evidence]], bool],
+    verify_observation: Callable[
+        [object, Mapping[str, Evidence]], bool | ReviewedMoatAnchor
+    ],
+    artifact_approval: CoreArtifactApproval,
+    artifact_verifier: Callable[[CoreArtifactApproval], bool],
     actual_runtime: bool = False,
 ) -> EvaluationBranchResult:
     """Load and consume approvals in this call, never infer a loading receipt.
@@ -252,6 +289,9 @@ def evaluate_moat_approved_fixture(
 
     if not isinstance(llm, FakeLLM):
         raise ValueError("Approved fixture requires FakeLLM; actual runtime is blocked")
+    validate_core_artifact(rubric, artifact_approval, artifact_verifier)
+    if artifact_approval.reference != approvals.core.reference:
+        raise ValueError("Core artifact and policy approval reference mismatch")
     policy = load_approved_policy(
         policy_path,
         approvals=approvals,
