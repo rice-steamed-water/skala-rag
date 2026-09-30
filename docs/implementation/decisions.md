@@ -148,6 +148,19 @@ Supersedes:
 
 D09 중 렌더러·A4·폰트·여백·SUMMARY 측정 기준·인용 token 화면 변환은 M3까지 OPEN이다. 이 기록만 부분 APPROVED이며 PDF 선택과 D09 전체 완료 여부를 구별한다.
 
+## D14 제안 기록 — founder·market·technology·moat (#10, OPEN)
+
+- Decision ID: D14 (founder·market·technology·moat 부분)
+- Status: OPEN — 제안 작성 완료, 팀 승인 대기
+- Decision: [rubric-core.md](rubric-core.md)와 `configs/rubrics/core.yaml`(rubric_version core-0.1.0)의 14개 criterion rating 1–5 기준·최소 근거·missing 코드를 baseline으로 채택. 승인된 D05에 따라 적용조건 미확정은 `missing + applicability_note`이며 이 14개에는 not_applicable을 쓰지 않는다. 근거 없는 rating·다른 기업 근거·미해결 상충은 missing, 회사 자기주장만이면 최대 4.
+- Rationale and source: 원문 §3 상세 기준, scoring §2–§4, D02·D05(APPROVED). 설계 산출물 v3 C-2·C-3(#35 / PR #36, 미병합)은 병합 시 재검토.
+- Rejected alternatives: 미채택 — 근거 부족을 rating 1–2로 처리; 시장성·기술력 N/A 허용(저점수 조건 우회); 전체 로봇 시장 수치로 세부 시장 평가; 특허 검색 0건을 곧바로 "특허 없음"으로 처리.
+- Affected documents / policy version / tests: scoring.md §2, rubric-core.md, configs/rubrics/core.yaml, tests/unit/test_core_rubric.py; #22 평가 wrapper, #16 집계.
+- Open sub-questions: rubric-core.md §6 Q1–Q5
+- Owner and reviewers: XXXXXim / 지표·평가 담당 검토 요청 대상.
+- Approval date: -
+- Supersedes: 없음.
+
 ## 조용히 바꾸면 안 되는 원문
 
 - 현재 팀 가중치를 교수님 예시 `30/25/15/10/10/10`으로 되돌리지 않는다.
