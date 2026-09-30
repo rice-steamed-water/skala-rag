@@ -1,8 +1,8 @@
-# M2 live 사전 승인 요청안 — #43
+# M2 live 사전 승인 기록·잔여 요청안 — #43
 
 [문서 홈](../README.md) · [결정 목록](decisions.md) · [데이터와 RAG](data-rag.md) · [공통 계약](contracts.md)
 
-> 작성·공식 자료 조회일: 2026-09-30 (Asia/Seoul). **OPEN / 승인 요청안**이며 실행 설정이나 승인 기록이 아니다. 작성 담당: luk0715. 승인자·승인 시각·승인 근거: **pending**. 실제 provider API 호출, 모델 다운로드, index 생성, 비교 실험은 실행하지 않았다.
+> 작성·공식 자료 조회일: 2026-09-30 (Asia/Seoul). **부분 승인: A·B APPROVED, C DEFERRED.** 사용자 확인 UI 응답을 [#43 승인 기록](https://github.com/rice-steamed-water/skala-rag/issues/43#issuecomment-5903724740)에 보존했다. 기록 담당: luk0715, 기록 시각: 2026-09-30T12:53:38+09:00(응답의 정확한 발생 시각을 주장하지 않음). 실행 설정/credential/readiness 또는 실측 증거가 아니다. 실제 provider API 호출, 모델 다운로드, index 생성, 비교 실험은 실행하지 않았다.
 
 ## 1. 승인 경계와 관측
 
@@ -13,9 +13,9 @@
 - 공식 문서의 기능 설명은 관측했으나 계정 접근 성공은 관측하지 않았다. 실제 `.env`·credential 파일·secret store를 읽지 않았으며 **credential 존재 boolean도 미확인**이다. key/model/index readiness, 계정별 quota, 실제 사용량·과금·성능은 모두 미확인이다. mock/fixture 성공을 live 성공으로 표시하지 않는다.
 - Hermes의 OpenAI Codex 로그인과 앱의 OpenAI API 인증·billing은 별개다. 이 세션의 모델/provider를 앱 기본값으로 전용하지 않는다. 비밀값은 문서·이슈·로그에 기록하지 않는다.
 
-## 2. 경로·지원 범위 shortlist (전부 OPEN)
+## 2. 경로·지원 범위 (A 승인, 대안 OPEN, RAG 실험 C 보류)
 
-**승인 요청안 A:** 첫 M2 연결은 한국(KR)·미국(US), 한국어(ko)·영어(en) 자료/질의로 제한한 *pilot*이다. 국내외 최종 과제 범위를 국내만으로 축소하는 승인이 아니다. 다른 국가·언어는 `unsupported` 사유를 남기고 자동 번역/자동 확대하지 않는다. 검색 엔진의 국가 옵션은 법인 소재국 판정이 아니다. 후보의 법인 식별·Seed~C·비상장·Exit 여부는 별도 직접 근거를 요구하며 0건으로 확정하지 않는다.
+**승인된 A:** 첫 M2 연결은 한국(KR)·미국(US), 한국어(ko)·영어(en) 자료/질의로 제한한 *pilot*이다. 국내외 최종 과제 범위를 국내만으로 축소하는 승인이 아니다. 다른 국가·언어는 `unsupported` 사유를 남기고 자동 번역/자동 확대하지 않는다. 검색 엔진의 국가 옵션은 법인 소재국 판정이 아니다. 후보의 법인 식별·Seed~C·비상장·Exit 여부는 별도 직접 근거를 요구하며 0건으로 확정하지 않는다.
 
 | 경로 | 우선 승인 요청안 / 대안 | pilot의 required/optional | 접근 조건·환경변수 이름 제안 | 미준비·자료 부재 처리 |
 | --- | --- | --- | --- | --- |
@@ -40,13 +40,13 @@
 | --- | --- | --- |
 | 기존 후보·추가조사·보고서 수정 | 이 문서에서 변경하지 않음 | baseline D08의 후보 5 기록은 보존. v3 추가조사/보고서 수정은 #82의 명시 승인 규칙(최초 제외 각각 2회, 소모·종료 의미 포함)을 소비하며 live 실행 허가는 별도 |
 | 도구 batch / transport | 기존 승인 범위 이하 | baseline batch당 8회(재시도 포함), 추가 재시도 최대 2회, 시도별 timeout 30초(D08) |
-| M2 외부 smoke 전체 | 실행 한 번 10분, 외부 요청 총 20회, 외부 동시성 1 | pending |
-| smoke provider별 최대 실제 요청 | Tavily 6, Naver 2, 공공 경로 합계 4, LLM 8; 모두 전체 20회 안에서 공유. optional 생략분 자동 증액 금지 | pending |
-| LLM 시도 timeout / tokens | 시도 30초; 요청당 입력 최대 8,000 token, 출력 최대 2,000 token; 전체 입력 64,000/출력 16,000 token 이내 | pending; 기존 도구 timeout을 LLM 승인으로 확대하지 않음 |
+| M2 외부 smoke 전체 | 실행 한 번 10분, 외부 요청 총 20회, 외부 동시성 1 | APPROVED (B), readiness 충족 후 M2 smoke만 |
+| smoke provider별 최대 실제 요청 | Tavily 6, Naver 2, 공공 경로 합계 4, LLM 8; 모두 전체 20회 안에서 공유. optional 생략분 자동 증액 금지 | APPROVED (B) |
+| LLM 시도 timeout / tokens | timeout 30초는 제안; 요청당 입력 최대 8,000 token, 출력 최대 2,000 token; 전체 입력 64,000/출력 16,000 token 이내 | token 한도 APPROVED (B). LLM 전용 timeout 값은 질문에 명시하지 않아 OPEN; 기존 도구 timeout 승인을 확대하지 않음 |
 | transport 재시도 구체 운용 | 401/403 재시도 0; timeout/429/일시적 5xx만 추가 최대 2, backoff 1초/2초; Retry-After가 남은 시간보다 길면 중단 | pending; 기존 최대 2 범위 내 운용안 |
-| LLM schema 보정 | #22가 추가 최대 1회; transport와 schema 보정 모두 실제 요청 8회·전체 20회·시간·token·비용 공유 | pending; adapter 별도 retry loop 금지 |
-| 외부 비용 상한 | smoke 한 번 USD 1.00, 승인 campaign 누적 USD 3.00; 신규 유료 구독/credit 구매 금지 | pending; 한도는 요금이나 예상 실측 비용이 아님 |
-| 비용 미확인 호출 | 계정 요금/잔여 credit와 다음 요청 보수적 최대 비용을 확인하지 못하면 새 과금 가능 호출 거절. 사용량과 비용은 별도 기록 | pending; **actual_cost=None**, 사용량·과금 미확인. 0으로 채우지 않음 |
+| LLM schema 보정 | #22 wrapper의 보정 범위 유지; transport와 schema 보정 모두 실제 요청 8회·전체 20회·시간·token·비용 공유 | 공유 한도 소비 APPROVED (B); adapter 별도 retry loop 금지 |
+| 외부 비용 상한 | smoke 한 번 USD 1.00, 승인 campaign 누적 USD 3.00; 신규 유료 구독/credit 구매 금지 | APPROVED (B); 한도는 요금이나 예상 실측 비용이 아님 |
+| 비용 미확인 호출 | 계정 요금/잔여 credit와 다음 요청 보수적 최대 비용을 확인하지 못하면 새 과금 가능 호출 거절. 사용량과 비용은 별도 기록 | 호출 거절 APPROVED (B); **actual_cost=None**, 사용량·과금 미확인. 0으로 채우지 않음 |
 | embedding 실험 시간 | 3종 campaign 총 120분, 모델당 최대 35분, 준비·정리 포함 전체 한도 우선; 1회 campaign만 | pending; 다운로드 시간도 전체 시간에 포함 |
 | 로컬 자원 | embedding 프로세스 1개, batch 1, CPU float32 기준안, 프로세스 peak memory 6 GiB 중단선, 로컬 모델/index 공간 총 10 GiB 중단선 | pending; 실제 여유 메모리/디스크는 미측정. 다른 병렬 작업 보호를 위해 추가 가용성 확인 필요 |
 
@@ -54,7 +54,9 @@ provider가 제공하는 default retry/auto 옵션은 명시적으로 끄거나 
 
 현재 provider별 요금표/계정 tier·부가세·환율·free credit 잔액을 확정하지 않았다. 따라서 견적 합계도 **None**이다. [S9]에 가격 정보가 있더라도 계정 과금 관측을 대신하지 않는다. 승인 후 실행 직전에 dated 공식 요금/계정 조건과 최대 청구량 계산을 확보하고 그 상한을 enforcement할 수 있을 때만 과금 요청을 한다. 무료로 보이는 공공 API도 무조건 0 비용이라고 기록하지 않는다.
 
-## 4. D07 실험 승인안과 최종 선정 분리
+## 4. D07 실험 승인안과 최종 선정 분리 (C DEFERRED)
+
+사용자 응답은 **다운로드·실험은 보류, 코드/fixture만 진행**이다. 아래 시간·자원·저장소·질의셋·품질 기준은 제안으로 남는다. 실제 weights/tokenizer 다운로드, 실제 embedding/index/benchmark 실행은 허용되지 않았다. A/B 외부 API smoke 승인으로 C를 우회하거나 fixture 성공으로 필수 실측을 대체하지 않는다.
 
 ### 4.1 모델 source cards — 공식 제공자 설명, 실측 아님
 
@@ -94,13 +96,13 @@ provider가 제공하는 default retry/auto 옵션은 명시적으로 끄거나 
 2. **외부 실행 B:** §3의 10분·20요청·LLM 8요청/token 상한·단일 동시성·retry/미준비 처리·USD 1/run 및 USD 3/campaign 한도·신규 구독/credit 구매 금지·요금 미확인 호출 거절을 승인합니까? 이는 prerequisite/readiness/요금 확인 이후 M2 smoke만 허용하며 M3 전체 실행은 제외합니다.
 3. **로컬 실험 C:** §4의 BGE-M3 1차 및 E5/KURE 3종 순차 비교, SQLite 실험 store, CPU float32/batch 1·자원/120분 상한, 40질의 split·dense top5·사전 품질 기준을 승인합니까? 이는 revision/LICENSE/library lock·#13 corpus·#49/#54 준비 확인 후 모델 다운로드·index/benchmark **한 campaign을 허용하는 승인**이며 product 최종 선택은 측정 후 별도 승인입니다.
 
-승인 기록 양식(현재 모든 행 OPEN):
+사용자 응답 기록 (승인·보류는 실행/readiness와 별개):
 
 | 묶음 / 결정 | 상태 | 승인자·시각·근거 | 거절/보류 대안 |
 | --- | --- | --- | --- |
-| A / D12·provider·LLM snapshot | OPEN | pending | Anthropic 모델 미고정·모든 API 동시 연결·한국만 최종 범위 축소: 보류 제안, 팀 거절 확정 아님 |
-| B / D08 미정 live 예산 | OPEN | pending | 무제한·자동 유료 fallback·요금 미상 강행: 채택하지 않는 제안 |
-| C / D07 실험·실험 store | OPEN | pending | 3종 동시 상주·cloud DB·hybrid·사전 최종 모델 확정: 보류 제안 |
+| A / D12·provider·LLM snapshot | APPROVED | 사용자 UI「제안한 pilot 경로·범위 승인」; 기록 시각/근거는 서두 | 대안 모델·자동 유료 fallback·모든 API 필수화는 승인하지 않음 |
+| B / D08 미정 live 예산 | APPROVED (질문에 명시된 범위) | 사용자 UI「제안한 smoke 예산 승인」; 기록 시각/근거는 서두 | 신규 backoff/LLM timeout 세부안 미확정; 무제한·요금 미상 강행·M3 전체 실행 금지 |
+| C / D07 실험·실험 store | DEFERRED / 코드·fixture만 | 사용자 UI「다운로드·실험은 보류, 코드/fixture만 진행」; 기록 시각/근거는 서두 | 실제 모델/tokenizer 다운로드·embedding/index/benchmark campaign 실행 금지 |
 | D07 최종 모델/revision/product store | OPEN / 실측 후 요청 | pending | 측정 후 기록 |
 
 승인 후 담당자가 응답의 정확한 범위를 이슈 근거와 timezone-aware 시각으로 남기고 관련 결정 문서·policy fixture를 별도 소유 범위에서 반영한다. 이 문서가 기존 승인 문서나 configs를 자동 변경하지 않는다. 과제 조건 완화가 생기면 과제 담당자 확인도 필요하다.
@@ -114,7 +116,7 @@ provider가 제공하는 default retry/auto 옵션은 명시적으로 끄거나 
 | #52 실제 index | #13·#35·#43·#49 준비, C 실험/store 승인, 정확한 revision/라이선스/환경·corpus 승인 확인 | index fake embedding은 real model indexing 아님; 최종 모델 승인을 기다릴 필요는 없음 |
 | #56 benchmark | #13·#35·#43·#54 준비, C 기준·동일 corpus/Chunk/검수 정답셋·3종 revision/environment 확인 | skip/비교 코드만으로 완료 아님. 실제 비교와 최종 선택 팀 승인은 별도 |
 
-#43 승인 요청 문서 준비와 #43 완료는 다르다. #13/#35 선행과 A/B/C 구체 승인이 남아 있어 **#43 blocked / PR #75 OPEN Draft를 유지**한다. 이 작업은 기존 담당자·PR을 변경하지 않으며 commit/push/merge/GitHub 상태 갱신을 수행하지 않는다. 코드·config·의존성·기존 docs는 수정하지 않는다. 승인 이후에도 readiness 불충족이면 live는 계속 막힌다.
+#43 부분 승인 기록과 #43 완료는 다르다. #13/#35 선행이 남고 C가 보류되어 **#43 blocked / PR #75 OPEN Draft를 유지**한다. 이 작업은 기존 담당자·PR을 변경하지 않으며 commit/push/merge/GitHub 상태 갱신을 수행하지 않는다. 코드·config·의존성·기존 docs는 수정하지 않는다. 승인 이후에도 readiness 불충족이면 live는 계속 막힌다.
 
 ## 7. 공식 근거 목록과 retrieval gaps
 
