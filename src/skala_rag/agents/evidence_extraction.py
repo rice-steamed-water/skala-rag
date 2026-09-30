@@ -13,7 +13,8 @@
    원문과 대조한다. 발췌가 원문에 그대로 없음, 발췌에 없는 수치, 단위·금액 맥락 누락,
    다른 기업 귀속(기업 근거는 발췌에 대상 기업명·별칭이 있어야 함), 기준일 이후
    날짜, 원문 속 지시문은 Evidence로 만들지 않고
-   ``RejectedClaim``으로 남긴다(원문·모델 출력 문자열은 담지 않는다).
+   ``RejectedClaim``으로 남긴다(원문·모델 출력 문자열은 담지 않는다). 발췌가 원문과
+   공백만 다르면 ``locate_excerpt``로 원문 구간을 찾아 그 구간으로 검증·저장한다(#161).
 3. Evidence ID는 ``contracts.ids.evidence_id``(식별 core, 경로 제외)로 만든다. 같은
    구간의 같은 주장을 Web·RAG로 다시 얻으면 같은 ID가 되고 #15 reducer
    (``merge_evidence``)가 provenance만 합친다.
@@ -253,6 +254,26 @@ def _name_key(name: str) -> str:
     return "".join(unicodedata.normalize("NFKC", name).casefold().split())
 
 
+def locate_excerpt(excerpt: str, text: str) -> str | None:
+    """발췌에 대응하는 원문 구간. 공백(띄어쓰기·줄바꿈)만 다를 때까지 허용한다.
+
+    PDF 추출 텍스트는 공백이 여러 칸이거나 줄이 바뀌어 있어 모델이 정리한 발췌와
+    글자 그대로 맞지 않는다(#161). 공백을 뺀 문자열로 첫 위치를 찾고, **원문에 그대로
+    있는 구간**을 돌려준다. 공백 외 문자가 하나라도 다르면 None이다.
+    """
+    needle = "".join(excerpt.split())
+    if not needle:
+        return None
+    if excerpt in text:
+        return excerpt
+    positions = [i for i, ch in enumerate(text) if not ch.isspace()]
+    compact = "".join(text[i] for i in positions)
+    start = compact.find(needle)
+    if start < 0:
+        return None
+    return text[positions[start] : positions[start + len(needle) - 1] + 1]
+
+
 def _check_claim(
     draft: ClaimDraft,
     segment: SourceSegment,
@@ -367,6 +388,10 @@ def extract_evidence(
     evidence: dict = {}
     rejected: list[RejectedClaim] = []
     for index, draft in enumerate(output.claims):
+        span = locate_excerpt(draft.excerpt, segment.text)
+        if span is not None:
+            # 저장·검증은 모델 출력이 아니라 원문 구간으로 한다.
+            draft = draft.model_copy(update={"excerpt": span})
         reason = _check_claim(draft, segment, candidate, as_of)
         if reason is not None:
             rejected.append(RejectedClaim(index, reason))

@@ -1,4 +1,14 @@
 # 결정 목록 — v3 방향·운영 승인과 남은 세부 정책
+## #158 현재 실행 provider 제외 승인 범위
+
+사용자의 이번 실행 지시로 KIPRIS·KRX·중기부·Tavily를 제외하고 각각
+#154/#155/#156/#157 후속 작업으로 보류한다. Tavily 실패는 사용자 보고이며
+이 구현에서 재현한 관측이 아니다. 기존 승인·adapter·fixture는 이력/호환성으로
+보존한다. 기존 승인 RAG/공식 출처는 원래 승인·readiness·예산 gate 아래 계속한다.
+새 Naver 도입·유료 fallback·예산 확대·M3 실행은 승인하지 않았다.
+Evidence 부족은 missing이며 rubric/evaluator semantic gate를 완화하지 않는다.
+범위 축소를 M2 전체 성공이나 #48/#55 완료로 표시하지 않는다.
+[caller 주입 경계와 미연결 owner 파일](provider-scope.md)을 따른다.
 
 [문서 홈](../README.md) · [v3 원문](../design/design-v3.html) · [이전 통합 원문](../raws/robotics_startup_agentic_rag_notion_integrated.md) · [정합화·영향표](design-v3-alignment.md)
 

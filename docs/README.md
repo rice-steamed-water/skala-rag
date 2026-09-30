@@ -20,7 +20,7 @@ pinned 통합 기준 `906312a`에는 baseline DTO/State/reducer/catalog/점수·
 | 필요한 내용 | 문서 | 우선 독자 |
 | --- | --- | --- |
 | v3 출처·절별 추적·현재 GitHub 작업 영향 | [v3 정합화 기록](implementation/design-v3-alignment.md) | 전원 |
-| 전체 흐름, 노드 책임, 반복과 종료 | [아키텍처](implementation/architecture.md) | Graph / Agent 담당 |
+| 전체 흐름, 노드 책임, 반복과 종료 | [아키텍처](implementation/architecture.md) · [v3 실행 그래프 (Archify HTML)](../.archify/architecture-v3-agent-20260930-172142/v3-agent.html) · [소스·검증 안내](../.archify/architecture-v3-agent-20260930-172142/README.md) | Graph / Agent 담당 |
 | State, Evidence, 평가 결과, Tool 경계 | [공통 데이터 계약](implementation/contracts.md) | 전원 |
 | 평가 항목, 가중치, 결측, 판단 라벨 | [점수와 판단 정책](implementation/scoring.md) | 평가 / 지표 담당 |
 | 창업자·시장·기술·경쟁 우위 rubric, missing 조건 | [핵심 영역 rubric](implementation/rubric-core.md) | 평가 / 지표 담당 |
