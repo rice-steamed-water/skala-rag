@@ -1,0 +1,435 @@
+{
+  "execution_mode": "fixture",
+  "locator": "fixture://scoring/main-draft-0.1.0",
+  "policy_version": "main-draft-0.1.0",
+  "description": "가상 계산·직접 입력 경계값. 실제 기업 평가나 실측 결과가 아님.",
+  "calculations": [
+    {
+      "case_id": "all_five",
+      "ratings": {
+        "founder.expertise": 5,
+        "founder.industry": 5,
+        "founder.execution": 5,
+        "market.size": 5,
+        "market.growth": 5,
+        "market.demand": 5,
+        "technology.maturity": 5,
+        "technology.reliability": 5,
+        "technology.integration": 5,
+        "technology.commercialization": 5,
+        "moat.differentiation": 5,
+        "moat.ip": 5,
+        "moat.data": 5,
+        "moat.lock_in": 5,
+        "traction.revenue_growth": 5,
+        "traction.gross_margin": 5,
+        "traction.burn": 5,
+        "traction.runway": 5,
+        "traction.concentration": 5,
+        "traction.rule_of_40": 5,
+        "deal_terms.stage": 5,
+        "deal_terms.valuation": 5,
+        "deal_terms.ownership": 5
+      },
+      "expected": {
+        "observed_score": "100",
+        "missing_weight": "0",
+        "coverage_pct": "100",
+        "label": "RECOMMEND",
+        "report_grade": "투자 우선 검토"
+      }
+    },
+    {
+      "case_id": "all_four",
+      "ratings": {
+        "founder.expertise": 4,
+        "founder.industry": 4,
+        "founder.execution": 4,
+        "market.size": 4,
+        "market.growth": 4,
+        "market.demand": 4,
+        "technology.maturity": 4,
+        "technology.reliability": 4,
+        "technology.integration": 4,
+        "technology.commercialization": 4,
+        "moat.differentiation": 4,
+        "moat.ip": 4,
+        "moat.data": 4,
+        "moat.lock_in": 4,
+        "traction.revenue_growth": 4,
+        "traction.gross_margin": 4,
+        "traction.burn": 4,
+        "traction.runway": 4,
+        "traction.concentration": 4,
+        "traction.rule_of_40": 4,
+        "deal_terms.stage": 4,
+        "deal_terms.valuation": 4,
+        "deal_terms.ownership": 4
+      },
+      "expected": {
+        "observed_score": "80",
+        "missing_weight": "0",
+        "coverage_pct": "100",
+        "label": "RECOMMEND",
+        "report_grade": "투자 우선 검토"
+      }
+    },
+    {
+      "case_id": "all_three",
+      "ratings": {
+        "founder.expertise": 3,
+        "founder.industry": 3,
+        "founder.execution": 3,
+        "market.size": 3,
+        "market.growth": 3,
+        "market.demand": 3,
+        "technology.maturity": 3,
+        "technology.reliability": 3,
+        "technology.integration": 3,
+        "technology.commercialization": 3,
+        "moat.differentiation": 3,
+        "moat.ip": 3,
+        "moat.data": 3,
+        "moat.lock_in": 3,
+        "traction.revenue_growth": 3,
+        "traction.gross_margin": 3,
+        "traction.burn": 3,
+        "traction.runway": 3,
+        "traction.concentration": 3,
+        "traction.rule_of_40": 3,
+        "deal_terms.stage": 3,
+        "deal_terms.valuation": 3,
+        "deal_terms.ownership": 3
+      },
+      "expected": {
+        "observed_score": "60",
+        "missing_weight": "0",
+        "coverage_pct": "100",
+        "label": "WATCHLIST",
+        "report_grade": "보류"
+      }
+    },
+    {
+      "case_id": "all_two",
+      "ratings": {
+        "founder.expertise": 2,
+        "founder.industry": 2,
+        "founder.execution": 2,
+        "market.size": 2,
+        "market.growth": 2,
+        "market.demand": 2,
+        "technology.maturity": 2,
+        "technology.reliability": 2,
+        "technology.integration": 2,
+        "technology.commercialization": 2,
+        "moat.differentiation": 2,
+        "moat.ip": 2,
+        "moat.data": 2,
+        "moat.lock_in": 2,
+        "traction.revenue_growth": 2,
+        "traction.gross_margin": 2,
+        "traction.burn": 2,
+        "traction.runway": 2,
+        "traction.concentration": 2,
+        "traction.rule_of_40": 2,
+        "deal_terms.stage": 2,
+        "deal_terms.valuation": 2,
+        "deal_terms.ownership": 2
+      },
+      "expected": {
+        "observed_score": "40",
+        "missing_weight": "0",
+        "coverage_pct": "100",
+        "label": "WATCHLIST",
+        "report_grade": "보류 (저점수)"
+      }
+    },
+    {
+      "case_id": "market_missing",
+      "ratings": {
+        "founder.expertise": 5,
+        "founder.industry": 5,
+        "founder.execution": 5,
+        "market.size": null,
+        "market.growth": null,
+        "market.demand": null,
+        "technology.maturity": 5,
+        "technology.reliability": 5,
+        "technology.integration": 5,
+        "technology.commercialization": 5,
+        "moat.differentiation": 5,
+        "moat.ip": 5,
+        "moat.data": 5,
+        "moat.lock_in": 5,
+        "traction.revenue_growth": 5,
+        "traction.gross_margin": 5,
+        "traction.burn": 5,
+        "traction.runway": 5,
+        "traction.concentration": 5,
+        "traction.rule_of_40": 5,
+        "deal_terms.stage": 5,
+        "deal_terms.valuation": 5,
+        "deal_terms.ownership": 5
+      },
+      "expected": {
+        "observed_score": "70",
+        "missing_weight": "30",
+        "coverage_pct": "70",
+        "label": "WATCHLIST",
+        "report_grade": "보류 (정보 부족)"
+      }
+    },
+    {
+      "case_id": "founder_one",
+      "ratings": {
+        "founder.expertise": 1,
+        "founder.industry": 1,
+        "founder.execution": 1,
+        "market.size": 5,
+        "market.growth": 5,
+        "market.demand": 5,
+        "technology.maturity": 5,
+        "technology.reliability": 5,
+        "technology.integration": 5,
+        "technology.commercialization": 5,
+        "moat.differentiation": 5,
+        "moat.ip": 5,
+        "moat.data": 5,
+        "moat.lock_in": 5,
+        "traction.revenue_growth": 5,
+        "traction.gross_margin": 5,
+        "traction.burn": 5,
+        "traction.runway": 5,
+        "traction.concentration": 5,
+        "traction.rule_of_40": 5,
+        "deal_terms.stage": 5,
+        "deal_terms.valuation": 5,
+        "deal_terms.ownership": 5
+      },
+      "expected": {
+        "observed_score": "96",
+        "missing_weight": "0",
+        "coverage_pct": "100",
+        "label": "WATCHLIST",
+        "report_grade": "보류 (저점수)"
+      }
+    },
+    {
+      "case_id": "all_missing",
+      "ratings": {
+        "founder.expertise": null,
+        "founder.industry": null,
+        "founder.execution": null,
+        "market.size": null,
+        "market.growth": null,
+        "market.demand": null,
+        "technology.maturity": null,
+        "technology.reliability": null,
+        "technology.integration": null,
+        "technology.commercialization": null,
+        "moat.differentiation": null,
+        "moat.ip": null,
+        "moat.data": null,
+        "moat.lock_in": null,
+        "traction.revenue_growth": null,
+        "traction.gross_margin": null,
+        "traction.burn": null,
+        "traction.runway": null,
+        "traction.concentration": null,
+        "traction.rule_of_40": null,
+        "deal_terms.stage": null,
+        "deal_terms.valuation": null,
+        "deal_terms.ownership": null
+      },
+      "expected": {
+        "observed_score": "0",
+        "missing_weight": "100",
+        "coverage_pct": "0",
+        "label": "WATCHLIST",
+        "report_grade": "보류 (정보 부족)"
+      }
+    }
+  ],
+  "boundaries": [
+    {
+      "case_id": "score_59.99",
+      "observed_score": "59.99",
+      "missing_weight": "0",
+      "dimension_ratings": {
+        "founder": "3",
+        "market": "3",
+        "technology": "3",
+        "moat": "3",
+        "traction": "3",
+        "deal_terms": "3"
+      },
+      "label": "PASS",
+      "report_grade": "투자비추천"
+    },
+    {
+      "case_id": "score_60",
+      "observed_score": "60",
+      "missing_weight": "0",
+      "dimension_ratings": {
+        "founder": "3",
+        "market": "3",
+        "technology": "3",
+        "moat": "3",
+        "traction": "3",
+        "deal_terms": "3"
+      },
+      "label": "WATCHLIST",
+      "report_grade": "보류"
+    },
+    {
+      "case_id": "score_69.99",
+      "observed_score": "69.99",
+      "missing_weight": "0",
+      "dimension_ratings": {
+        "founder": "3",
+        "market": "3",
+        "technology": "3",
+        "moat": "3",
+        "traction": "3",
+        "deal_terms": "3"
+      },
+      "label": "WATCHLIST",
+      "report_grade": "보류"
+    },
+    {
+      "case_id": "score_70",
+      "observed_score": "70",
+      "missing_weight": "0",
+      "dimension_ratings": {
+        "founder": "3",
+        "market": "3",
+        "technology": "3",
+        "moat": "3",
+        "traction": "3",
+        "deal_terms": "3"
+      },
+      "label": "RECOMMEND",
+      "report_grade": "투자 검토"
+    },
+    {
+      "case_id": "score_79.99",
+      "observed_score": "79.99",
+      "missing_weight": "0",
+      "dimension_ratings": {
+        "founder": "3",
+        "market": "3",
+        "technology": "3",
+        "moat": "3",
+        "traction": "3",
+        "deal_terms": "3"
+      },
+      "label": "RECOMMEND",
+      "report_grade": "투자 검토"
+    },
+    {
+      "case_id": "score_80",
+      "observed_score": "80",
+      "missing_weight": "0",
+      "dimension_ratings": {
+        "founder": "3",
+        "market": "3",
+        "technology": "3",
+        "moat": "3",
+        "traction": "3",
+        "deal_terms": "3"
+      },
+      "label": "RECOMMEND",
+      "report_grade": "투자 우선 검토"
+    },
+    {
+      "case_id": "missing_29",
+      "observed_score": "80",
+      "missing_weight": "29",
+      "dimension_ratings": {
+        "founder": "3",
+        "market": "3",
+        "technology": "3",
+        "moat": "3",
+        "traction": "3",
+        "deal_terms": "3"
+      },
+      "label": "RECOMMEND",
+      "report_grade": "투자 우선 검토"
+    },
+    {
+      "case_id": "missing_30",
+      "observed_score": "80",
+      "missing_weight": "30",
+      "dimension_ratings": {
+        "founder": "3",
+        "market": "3",
+        "technology": "3",
+        "moat": "3",
+        "traction": "3",
+        "deal_terms": "3"
+      },
+      "label": "WATCHLIST",
+      "report_grade": "보류 (정보 부족)"
+    },
+    {
+      "case_id": "missing_31",
+      "observed_score": "80",
+      "missing_weight": "31",
+      "dimension_ratings": {
+        "founder": "3",
+        "market": "3",
+        "technology": "3",
+        "moat": "3",
+        "traction": "3",
+        "deal_terms": "3"
+      },
+      "label": "WATCHLIST",
+      "report_grade": "보류 (정보 부족)"
+    },
+    {
+      "case_id": "dimension_2",
+      "observed_score": "80",
+      "missing_weight": "0",
+      "dimension_ratings": {
+        "founder": "2",
+        "market": "5",
+        "technology": "5",
+        "moat": "5",
+        "traction": "5",
+        "deal_terms": "5"
+      },
+      "label": "WATCHLIST",
+      "report_grade": "보류 (저점수)"
+    },
+    {
+      "case_id": "dimension_2.01",
+      "observed_score": "80",
+      "missing_weight": "0",
+      "dimension_ratings": {
+        "founder": "2.01",
+        "market": "5",
+        "technology": "5",
+        "moat": "5",
+        "traction": "5",
+        "deal_terms": "5"
+      },
+      "label": "RECOMMEND",
+      "report_grade": "투자 우선 검토"
+    },
+    {
+      "case_id": "both_overrides",
+      "observed_score": "96",
+      "missing_weight": "30",
+      "dimension_ratings": {
+        "founder": "1",
+        "market": null,
+        "technology": "5",
+        "moat": "5",
+        "traction": "5",
+        "deal_terms": "5"
+      },
+      "label": "WATCHLIST",
+      "report_grade": "보류 (정보 부족)"
+    }
+  ]
+}
