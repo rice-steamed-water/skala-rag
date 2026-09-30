@@ -63,7 +63,21 @@ class HFEmbeddingEncoder:
         self._client = client
         self._timeout = timeout_seconds
 
-    def embed_texts(self, texts: tuple[str, ...], *, settings: IndexSettings):
+    def embed_texts(
+        self,
+        texts: tuple[str, ...],
+        *,
+        settings: IndexSettings,
+        timeout_seconds: float | None = None,
+        runtime_errors: bool = False,
+    ):
+        timeout = (
+            self._timeout
+            if timeout_seconds is None
+            else min(self._timeout, timeout_seconds)
+        )
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("positive finite timeout required")
         snapshot = settings.snapshot()
         deployment = self.deployment
         if (
@@ -91,12 +105,16 @@ class HFEmbeddingEncoder:
                 deployment.endpoint,
                 headers={"Authorization": f"Bearer {self._token}"},
                 json={"inputs": list(texts), "normalize": True, "truncate": False},
-                timeout=self._timeout,
+                timeout=timeout,
                 follow_redirects=False,
             )
             response.raise_for_status()
             payload = response.json()
-        except (httpx.HTTPError, ValueError):
+        except httpx.HTTPError:
+            if runtime_errors:
+                raise
+            raise ValueError("HF embedding request failed") from None
+        except ValueError:
             raise ValueError("HF embedding request failed") from None
         if not isinstance(payload, list) or len(payload) != len(texts):
             raise ValueError("HF embedding count mismatch")

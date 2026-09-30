@@ -33,7 +33,11 @@ search_settings={"metric": "cosine"}, execution_mode=...)`은 #52 `IndexPlan`의
 Source/Chunk snapshot과 settings로 `build_index_plan`을 재실행한다. 현재 manifest
 hash·승인 gate·설정·index version·Chunk ID 전체를 대조하고, store에서 읽어온
 metadata가 plan과 정확히 같은지 확인한 뒤 `IndexSnapshot`을 만든다. partial
-manifest, 변경된 plan/metadata는 거절한다. 이 함수는 원문 바이트를 읽거나 실제
+manifest는 별도 text-only 승인이 없는 경우 거절한다. 승인된 partial에는
+`extraction_results`와 승인 주석을 붙이기 전 원래 `source_inputs`를 함께 주입해
+원문·페이지·텍스트·설정·누락 범위를 다시 검증한다. 전체 문서 partial과 Source의
+text-only 제한을 반환에서도 보존한다. 변경된 plan/metadata는 거절한다.
+이 함수는 원문 바이트를 읽거나 실제
 store transaction/reopen이 일어났음을 증명하지 않는다.
 
 `DenseVectorSearch(snapshot=..., vectors=..., encoder=..., execution_mode=...)`는
@@ -67,6 +71,24 @@ query encoder는 hidden retry·모델 자동 다운로드 없이 whole-attempt t
 한다. 문서 후보가 없거나 top_k=0인 요청은 로컬 empty 이력을 남기며 encoder 호출이나
 물리 요청 예산 차감이 없다. 그 외 miss는 runtime의 한 번의 시도에 한 번 인코딩한다.
 
+### HF HTTP 및 SQLite 연결
+
+`rag.query_hf.HFQueryEncoder`는 #52 `HFEmbeddingEncoder`를 재사용해 query 1개를
+한 번만 HTTP embedding한다. 명시적 deployment/token/client를 공급하며 timeout은
+encoder 설정과 runtime의 남은 timeout 중 작은 값이다. HTTP 인증·429·5xx·timeout은
+runtime이 분류하고 raw body/URL/token을 이력에 넣지 않는다. 응답 schema·모델 설정
+오류는 TOOL_RESPONSE_INVALID다. 기존 문서 embedding 호출의 오류 계약은 유지하고
+query 경로에서만 transport 예외 전달을 opt-in한다. HTTPX interval timeout의 한계와
+전체 시간 초과 후 결과 거절은 #45 runtime의 기존 책임 구분을 따른다.
+
+`rag.sqlite_retrieve.SQLiteDenseSearch`는 명시적으로 선택된 SQLiteIndexStore를
+새로 열어 읽은 metadata와 snapshot에 연결한다. 매 호출(cache hit 포함) 전에 로컬
+read-back을 검사해 index 부재/교체/손상에서 query HTTP 및 예산 차감 없이 거절한다.
+store의 현재 API에는 필터가 없으므로 **전체 순위**를 읽고 허용 Chunk를 제한한 뒤
+request.top_k를 적용한다. 전역 Top-K 일부만 가져와 필터링하지 않는다. 대규모
+index의 최적화/새 product store 선택은 포함하지 않으며 similarity는 평가에 전달하지
+않는다. SQLite 구현 연결이나 mock HTTP 성공은 실제 저장소 사용/유료 호출 승인이 아니다.
+
 ## 반환 및 cache 격리
 
 기업 Chunk는 request의 candidate에 귀속돼야 한다. industry의 관련성은 승인된
@@ -94,9 +116,11 @@ collector는 기존처럼 반환 Chunk를 저장하고 Evidence provenance를 �
 
 ## 남은 완료 조건
 
-#52의 offline index 계약은 PR #112로 병합됐지만 실제 index는 여전히 blocked이다.
-#49의 실제 π0/π0.5 자료는 `partial`이므로 현 index
-gate가 거절하며, 본 adapter가 이를 승인/ok로 승격하지 않는다. 실제 승인 corpus,
+#52는 PR #146까지 병합됐고 text-only 승인 gate·HF API·SQLite 인터페이스가 가용하다.
+#49 실제 π0/π0.5 자료의 full-document `partial`을 유지하며 승인된 텍스트 범위에만
+별도 gate를 적용한다. 실제 HF embedding/index/reopen/search 성공 검증은 사용자
+승인으로 #145에 분리됐다. endpoint·deployment revision·자격증명·예산·저장소 선택이
+미설정이므로 #54는 실제 성공 검증을 계속 기다린다. 실제 승인 corpus,
 BGE-M3 revision/LICENSE·query encoder·store·read-back·readiness·실행 승인 이후
 실제 index의 검색 Chunk/Source/page trace와 검색 품질을 확인해야 #54를 완료할 수 있다.
 doc_type/year schema 확장·fallback 우선순위 등 OPEN 정책은 이번 구현에 넣지 않았다.

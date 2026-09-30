@@ -2,7 +2,7 @@
 
 import json
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -11,6 +11,7 @@ from skala_rag.contracts.common import JSONMap
 from skala_rag.contracts.error_codes import ErrorCode
 from skala_rag.rag.adapter import IndexSnapshot, index_identity
 from skala_rag.rag.corpus import CorpusManifest
+from skala_rag.rag.extraction import ExtractionResult
 from skala_rag.rag.index_v3 import (
     EmbeddingVector,
     IndexMetadata,
@@ -29,6 +30,8 @@ def snapshot_from_plan(
     reopened_metadata: IndexMetadata,
     search_settings: JSONMap,
     execution_mode: str,
+    extraction_results: Mapping[str, ExtractionResult] | None = None,
+    source_inputs: Mapping[str, Source] | None = None,
 ) -> IndexSnapshot:
     """Revalidate #52 plan, manifest and store read-back before constructing #54 input.
 
@@ -50,9 +53,12 @@ def snapshot_from_plan(
     reconstructed = build_index_plan(
         manifest=manifest,
         expected_corpus_hash=plan.metadata.corpus_hash,
-        sources={s.source_id: s for s in sources},
+        sources=source_inputs
+        if source_inputs is not None
+        else {s.source_id: s for s in sources},
         chunks=chunks,
         settings=settings,
+        extraction_results=extraction_results,
     )
     if reconstructed != plan or reopened_metadata != plan.metadata:
         raise ValueError("index plan or read-back identity mismatch")

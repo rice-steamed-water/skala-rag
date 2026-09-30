@@ -13,7 +13,7 @@ from skala_rag.contracts import (
     ToolResult,
 )
 from skala_rag.contracts.common import Contract, JSONMap, Text
-from skala_rag.contracts.error_codes import ErrorCode
+from skala_rag.contracts.error_codes import ERROR_SPECS, ErrorCode
 from skala_rag.contracts.errors import WorkflowError
 from skala_rag.rag.retrieval import bundle_violations, retrieval_cache_key, source_date
 from skala_rag.tools.runtime import (
@@ -152,26 +152,36 @@ class IndexedRetriever:
             request.index_version == self._snapshot.index_version
             and request.corpus_version == self._snapshot.corpus_version
         )
+        preflight_code = None
         if (
             not version_matches
             or getattr(self._backend, "retry_owner", None) != "runtime"
         ):
+            preflight_code = ErrorCode.TOOL_RESPONSE_INVALID
+        elif callable(getattr(self._backend, "preflight", None)):
+            try:
+                self._backend.preflight()
+            except TransportFailure as exc:
+                preflight_code = exc.code
+            except Exception:
+                preflight_code = ErrorCode.TOOL_FAILED
+        if preflight_code is not None:
             error = WorkflowError(
                 schema_version=self._schema_version,
                 error_id=f"index-error-{uuid4().hex}",
                 run_id=self._run_id,
                 candidate_id=request.candidate_id,
                 node=self._tool_name,
-                error_code=ErrorCode.TOOL_RESPONSE_INVALID,
-                message_redacted="index identity or retry ownership mismatch",
-                retryable=False,
+                error_code=preflight_code,
+                message_redacted=f"index preflight rejected: {preflight_code.value}",
+                retryable=ERROR_SPECS[preflight_code].retryable,
                 attempt=0,
                 timestamp=runtime.clock.now(),
             )
             runtime.error_history[error.error_id] = error
             return ToolResult(
                 schema_version=self._schema_version,
-                status="failed",
+                status=ERROR_SPECS[preflight_code].tool_status,
                 data=None,
                 retrieval_records=[],
                 errors=[error],
