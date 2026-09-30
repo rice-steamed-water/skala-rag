@@ -285,3 +285,13 @@ SQLite는 선택 가능한 offline 구현이며 운영 기본값을 정하지 �
 
 앞선 D09 PDF OPEN 표현은 당시 기록이다. 위 PDF 선택/측정/회계만 승인되었으며
 mode별 예외·실제 Generator/Judge·M3 live 완료를 함께 승인하거나 완료로 표시하지 않는다.
+
+## #94 D09 mode 형식·Generator/Judge 사용 범위 승인 — 2026-09-30
+
+xxhigh가 [제안한 형식·모델 범위를 승인](https://github.com/rice-steamed-water/skala-rag/issues/94#issuecomment-5906219758)했다.
+기존 OpenAI gpt-4.1-mini-2025-04-14 adapter를 Generator/Judge에 주입하고
+single_candidate/no_recommendation 모두 E-1 다섯 섹션을 유지한다.
+무선택 SUMMARY에는 selector의 이유와 후보 비교를 보존하며 upstream 점수·판정·N/A·
+인용을 바꾸지 않는다. 실제 API 성공 검증은 #96 최종 live 실행에서 확인한다.
+이 승인은 미확인 credential/요금/예산의 호출, 새 모델 비교·다운로드 승인이나
+M3 품질 완료가 아니다. [구현·검증 경계](reporting-v3-pipeline.md)를 따른다.

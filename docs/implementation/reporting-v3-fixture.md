@@ -34,3 +34,10 @@ nullable 수치와 실제 0, 네 label, 정확한 Decimal 왕복, 참조 일치,
 D09의 표시 반올림·대표 reason·mode별 목차 예외·PDF 선택은 이 API로 결정하지
 않는다. 이 payload는 후속 renderer의 손실 없는 입력일 뿐 승인된 보고서 양식이나
 #94 전체 완료를 뜻하지 않는다. #47/#89 연결과 남은 D09 결정은 별도 후속 범위다.
+
+## 후속 구현·승인
+
+위 독립 fixture API의 역사적 범위는 유지한다. 2026-09-30 사용자 승인 후
+#94의 실제 주입 경계·v3 context·다섯 섹션·공유 수정 controller가
+[reporting-v3-pipeline](reporting-v3-pipeline.md)에 추가되었다.
+이 후속 구현은 별도 모듈이며 이 formatter의 반환값/테스트를 바꾸지 않는다.

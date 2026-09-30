@@ -147,3 +147,10 @@ REFERENCE 바깥 본문에서 추출한 인용 ID 집합을 C라 한다. ReportD
 구조 검증 → 같은 context의 Semantic Judge → PDF 렌더링 → 페이지/레이아웃 측정 → 사람 시각 검토 순서를 따른다. 수정하면 해당 draft의 구조·의미·PDF 검증을 다시 수행한다(D08의 공유 수정 예산).
 PDF 전체 5페이지와 SUMMARY 반 페이지 제한은 유지한다. A4·폰트·여백·렌더러·SUMMARY 측정 기준·인용 token 화면 변환은 M3에서 별도 승인한다. 이번 문서로 렌더러를 선택하거나 페이지 준수를 인증하지 않는다.
 D09는 목차/인용/구조 검증과 PDF 구현 선택을 나눠 기록한다. 목차·인용·구조 검증은 승인되었으며 PDF 선택의 OPEN 상태는 남는다.
+
+## #94 후속 v3 보고서 경로
+
+2026-09-30 사용자 승인의 두 mode 다섯 섹션·Generator/Judge 모델 주입과
+v3 결과/context·구조/의미/PDF 공유 수정 경로는
+[reporting-v3-pipeline](reporting-v3-pipeline.md)을 따른다.
+위 baseline 7개 섹션과 baseline ReportContext는 호환성 이력이며 새 경로를 규정하지 않는다.
