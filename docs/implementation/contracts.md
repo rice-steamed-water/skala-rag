@@ -157,6 +157,7 @@ JSON 설명 예제는 명시적 fixture validation context로 검증한다.
 `ReportInput`, `ReportContext`, `ReportDraft`, `ValidationResult`, `ReportJudgement`,
 `WorkflowError`, `RunManifest`를 import할 수 있다. 보조 payload인
 `ValidationErrorDetail`, `ReportFinding`, `ArtifactMetadata`도 같은 public API로 제공한다.
+후속 #68/PR #69의 `scoring.summary.build_score_summary`·`build_investment_decision`은 #16 baseline 계산과 이 DTO를 연결한다. 전자는 여섯 dimension 성공 결과를 받고 후자는 summary·policy로 판정을 계산하며, v3 N/A/복합 branch/네 label 전환을 구현하지 않는다.
 모든 중첩 DTO는 #5의 `Contract`를 사용하여 schema_version을 명시하고, strict
 nonblank 문자열·유한 수치·aware timestamp·ISO date·미지 필드 거절·instance
 재검증·명시적 fixture context 규칙을 공유한다. 앞뒤 공백은 보존한다.

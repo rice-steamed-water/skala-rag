@@ -15,6 +15,8 @@
 
 ## 문서를 읽는 순서
 
+후속 통합 기준 `1f23e09`에는 #6/PR #37의 평가·점수·보고서·manifest DTO·결정적 ID와 #68/PR #69의 baseline DTO adapter도 포함된다. [공통 계약](implementation/contracts.md)의 #6 구현 shape와 v3 확장 제안을 구별한다.
+
 | 필요한 내용 | 문서 | 우선 독자 |
 | --- | --- | --- |
 | v3 출처·절별 추적·현재 GitHub 작업 영향 | [v3 정합화 기록](implementation/design-v3-alignment.md) | 전원 |

@@ -10,6 +10,8 @@ D09의 baseline 목차·인용·구조 검증도 부분 승인되었으며 v3 �
 
 ## 설치
 
+후속 통합 기준 `1f23e09`에는 #6/PR #37의 평가·점수·보고서·manifest DTO와 결정적 ID 함수, #68/PR #69의 `build_score_summary`·`build_investment_decision` adapter도 포함된다. 모두 기존 baseline 경계이며 v3 복합 branch·N/A·네 label 구현과 구별한다.
+
 Python 3.11 이상과 [uv](https://docs.astral.sh/uv/getting-started/installation/)가
 필요하다. 저장소 루트에서 실행한다.
 
@@ -28,7 +30,7 @@ tutorial의 과거 하한 버전이나 전체 의존성 목록은 복사하지 �
 | 직접 의존성 | 용도와 제한 |
 | --- | --- |
 | `langgraph` | 패키지 및 State reducer 통합 테스트; 실제 업무 workflow는 미구현 |
-| `pydantic` | #5 구조 DTO 검증에 사용; 정책 계산·v3 평가 DTO 구현은 아님 |
+| `pydantic` | #5·#6 구조 DTO 검증에 사용; 정책 계산·v3 확장 DTO 구현은 아님 |
 | `langchain-core` | 중립적인 Document·message·prompt 인터페이스; 가상 Document·HumanMessage와 ChatPromptTemplate의 변수 포맷팅·invoke 결과를 검증, 모델 client 없음 |
 | `langchain-text-splitters` | 문서 분할 유틸리티; 명시적 테스트 전용 크기·overlap은 운영 chunk 정책 선택이 아님 |
 | `httpx` | HTTP client; MockTransport만 검증하며 특정 API·provider를 선택하지 않음 |
@@ -70,10 +72,11 @@ uv lock --check
 
 ## 구조와 문서
 
-- `src/skala_rag/contracts/`: #5 구조 DTO와 #7 state factory
+- `src/skala_rag/contracts/`: #5·#6 구조 DTO·결정적 ID와 #7 state factory
 - `src/skala_rag/scoring/catalog.py`, `configs/scoring.draft.json`: #9 fixture 전용 draft catalog 로더·설정; v3 집계·판정 구현 아님
 - `src/skala_rag/graph/reducers.py`: ID 병합·충돌 검증 및 State 연결; 업무 Graph wiring은 미구현
 - `src/skala_rag/scoring/aggregate.py`, `decide.py`: baseline 집계·판정 순수 함수; v3 계약과 다름
+- `src/skala_rag/scoring/summary.py`: baseline 계산값을 #6 ScoreSummary·InvestmentDecision으로 연결하는 adapter
 - `src/skala_rag/scoring/finance.py`: 재무 파생값·검증 helper; rating/rubric 승인과 별개
 - `agents`, `tools`, `rag`, `reporting`, `prompts`: 업무 흐름 미구현
 - `tests/contract/`, `tests/fixtures/contracts.json`: 구조 DTO/state 검증 fixture·tests; 테스트 총수는 실행 결과로만 보고

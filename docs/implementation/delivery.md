@@ -25,6 +25,8 @@
 
 #9/PR #38의 `scoring.catalog.load_policy`, `configs/scoring.draft.json`과 계산 fixture도 기준 main에 있다. fixture 전용 draft이며 v3 `aggregate_scores`·`decide` 구현이나 정책 승인으로 보지 않는다.
 
+후속 `1f23e09` 통합에는 #6의 평가·보고서·manifest DTO/결정적 ID, #68의 baseline `build_score_summary`·`build_investment_decision` adapter가 추가된다. 구조 DTO·계산 adapter와 live 업무 Graph·v3 확장 정책은 별개다.
+
 Vector store, LLM provider/model, 최종 embedding, PDF renderer는 미정이다. BGE-M3의 v3 1차 선택이 모델 설치·벤치마크·D07 최종 승인을 뜻하지 않는다. WP1의 fixture 실행 명령은 실제 구현·검증 후 Usage에 추가한다.
 
 ## 3. 구현 순서와 병렬화
