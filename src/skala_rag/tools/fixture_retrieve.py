@@ -1,8 +1,9 @@
 """fixture 검색 backend — #19. embedding·index 없이 주어진 가상 Chunk만 고른다.
 
 실제 검색(M2)과 같은 요청 필터를 적용한다: corpus_version, 허용 출처, 기업 귀속
-(company Chunk), 기준일(Source 발행일, 없으면 확보일). 순위는 similarity가 아니라
-chunk_id 순서다. 결과는 ``GuardedRetriever``가 다시 검증·cache·기록한다.
+(company Chunk), 기준일(Source 발행일과 snapshot 확보일 모두).
+순위는 similarity가 아니라 chunk_id 순서다.
+결과는 ``GuardedRetriever``가 다시 검증·cache·기록한다.
 """
 
 from collections.abc import Mapping

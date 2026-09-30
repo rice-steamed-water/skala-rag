@@ -55,9 +55,18 @@ def retrieval_cache_key(request: RetrievalRequest) -> str:
 
 
 def source_date(source: Source) -> date:
-    """published_at이 없으면 확보 시각(retrieved_at)으로 이용 가능 시점을 본다."""
-    value = source.published_at or source.retrieved_at
-    return value.date() if isinstance(value, datetime) else value
+    """발행일과 확보일 모두 지난 뒤에만 source snapshot을 허용한다.
+
+    기존 date 계약대로 timestamp 자체의 UTC offset에서 calendar date를 취한다.
+    UTC/실행기 timezone으로 변환하지 않으며 기준일 당일은 포함한다.
+    발행일 미상일 때는 필수 retrieved_at의 확보일만 사용한다.
+    """
+    acquired = source.retrieved_at.date()
+    published = source.published_at
+    if published is None:
+        return acquired
+    published_date = published.date() if isinstance(published, datetime) else published
+    return max(published_date, acquired)
 
 
 def bundle_violations(request: RetrievalRequest, bundle: RetrievalBundle) -> list[str]:
