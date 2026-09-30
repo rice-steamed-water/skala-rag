@@ -9,8 +9,13 @@ description = "Physical AI / Robotics startup research and evaluation project sk
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "httpx>=0.28.1",
+    "langchain-core>=1.6.6",
+    "langchain-text-splitters>=1.1.2",
     "langgraph>=1.2.12",
     "pydantic>=2.13.5",
+    "pypdf>=6.19.0",
+    "python-dotenv>=1.2.3",
 ]
 
 [tool.hatch.build.targets.wheel]
