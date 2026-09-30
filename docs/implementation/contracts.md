@@ -128,6 +128,66 @@ nonblank 문자열이며 알려지지 않은 저자/기관은 생성하지 않�
 실제 수집·hash 계산·모델 선택·정책 승인 또는 실측 결과가 아니다. 아래 §3의
 JSON 설명 예제는 명시적 fixture validation context로 검증한다.
 
+### #6 평가 이후 DTO 구현 범위 — 구조 계약
+
+`skala_rag.contracts`에서 `CriterionAssessment`, `EvaluationSnapshot`, `Evaluation`,
+`EvaluationResult`, `ScoreSummary`, `InvestmentDecision`, `CandidateOutcome`,
+`ReportInput`, `ReportContext`, `ReportDraft`, `ValidationResult`, `ReportJudgement`,
+`WorkflowError`, `RunManifest`를 import할 수 있다. 보조 payload인
+`ValidationErrorDetail`, `ReportFinding`, `ArtifactMetadata`도 같은 public API로 제공한다.
+모든 중첩 DTO는 #5의 `Contract`를 사용하여 schema_version을 명시하고, strict
+nonblank 문자열·유한 수치·aware timestamp·ISO date·미지 필드 거절·instance
+재검증·명시적 fixture context 규칙을 공유한다. 앞뒤 공백은 보존한다.
+
+이 구조 검증은 정책 승인, 실제 근거 유효성 또는 snapshot 동결의 증명이 아니다.
+criterion catalog 완전성·중복/영역 귀속·근거 존재/품질은 #22 wrapper,
+Source/Chunk/검색 provenance 폐쇄성·as_of·정정 처리·불변 freeze는 #21,
+최종 세대·판정·점수 참조를 검증하는 context 조립은 #26의 책임이다.
+DTO는 변경 가능한 경계 객체이므로 controller가 검증된 복사본을 고정하여
+운영해야 한다. DTO 자체는 정책·점수·보류 threshold·비용 예산을 생성하지 않는다.
+
+| 필드 묶음 | #6 구현 shape / 구조 검증 |
+| --- | --- |
+| Evaluation.dimension, ScoreSummary dimension map/list | `founder/market/technology/moat/traction/deal_terms` |
+| evaluation_round, evidence_revision, revision, attempt | 0 이상 strict 정수; 실행 세대·재시도 증가는 controller 담당 |
+| EvaluationSnapshot payload maps | `dict[ID, 실제 DTO]`; map key와 payload ID 일치, evidence_ids는 중복 없이 evidence key 집합과 일치 |
+| Evaluation.criteria, research_gaps | `list[CriterionAssessment]`, `list[ResearchGap]`; catalog 완전성이나 조사 우선순위는 계산하지 않음 |
+| EvaluationResult | success는 evaluation 필수·errors 빈 list, failure는 evaluation=null·errors 하나 이상; run/candidate/dimension/round/snapshot/revision/policy가 중첩 Evaluation과 일치; 오류의 run 및 알려진 candidate 일치 |
+| ScoreSummary.criterion_points | `dict[criterion_id, 유한 비음수 수치 또는 null]`; missing 기여를 0으로 바꾸지 않음 |
+| ScoreSummary.dimension_ratings | `dict[dimension, 유한 1..5 수치 또는 null]`; 영역 평균은 소수 허용 |
+| observed_score, missing_weight, coverage_pct | 앞의 두 값은 유한 비음수 수치, coverage는 0..100; 합산·분모·반올림·label은 별도 정책 계산 |
+| InvestmentDecision.report_grade, ReportFinding.severity | nonblank 문자열; 승인되지 않은 grade/severity taxonomy를 기본값으로 선택하지 않음 |
+| CandidateOutcome.status | 종료 상태 `ineligible/eligibility_unknown/recommend/watchlist/pass/failed/not_evaluated`; optional 결과 ID와 failure_ids의 해소는 controller 담당 |
+| ReportInput.candidate_outcomes | `list[CandidateOutcome]`, candidate_id 중복 거절; single_candidate는 해당 outcome의 selected ID 필수, no_recommendation은 selected=null |
+| ReportContext | 실제 DTO map; 각각 payload ID와 key 일치, evaluations key는 공통 evaluation_key와 일치, permitted_evidence_ids와 evidence key 집합 일치; 내용 조립/세대 참조는 #26 |
+| ValidationResult | checks는 JSON map, errors는 `list[ValidationErrorDetail]`; valid=true는 errors 빈 list, false는 오류 하나 이상 |
+| ReportJudgement | findings는 `list[ReportFinding]`, revision_instructions는 nonblank 문자열 list; verdict는 pass/revise/fail. 의미·severity에 따른 verdict 판단은 Judge 담당 |
+
+**RunManifest의 구체적 필드:** 필수 `run_id`, `run_input: RunInput`,
+`uncommitted: strict bool`, `policy_version`, `corpus_version`, `prompt_versions`,
+`model_versions`, `corpus_hash`, `tool_status`, `budgets`, `usage`, `artifacts`,
+`validation_results`, `workflow_status`를 가진다. `code_revision`과 `run_outcome`은
+optional이며 미상 값은 null이다. policy/corpus version은 run_input과 일치해야
+한다. code_revision이 없으면 uncommitted=true가 필요하다. running은
+run_outcome=null, completed/failed는 명시적 RunOutcome을 요구한다.
+workflow_status/RunOutcome 값은 #7 State enum을 재사용한다.
+
+- prompt_versions/model_versions는 `dict[nonblank 이름, nonblank 버전]`이다.
+  실행에 사용하지 않은 모델/prompt는 빈 map으로 명시할 수 있다.
+- tool_status/budgets/usage는 JSON map이다. 도구 상태·예산 단위·실측 값은
+  runner가 공급하며 DTO가 readiness나 예산 준수를 판단하지 않는다.
+- artifacts는 `dict[산출물 이름, ArtifactMetadata]`이고 payload 필드는
+  schema_version·artifact_path·artifact_hash다. 파일 읽기나 실제 hash 계산은
+  runner의 책임이다. synthetic fixture의 hash는 실제 측정 hash가 아니다.
+- validation_results는 `dict[검증 이름, ValidationResult | ReportJudgement]`다.
+  같은 context/실제 artifact hash인지의 대조는 보고서 controller 담당이다.
+- WorkflowError.message_redacted는 호출자가 비밀을 제거한 nonblank 문자열이다.
+  DTO schema 검증은 자동 redaction이나 비밀 탐지가 아니다.
+
+`tests/fixtures/evaluation_contracts.json`은 모두 가상 구조 예제다. 정상·거절·
+공통 회귀·JSON 왕복은 `tests/contract/`에서 검증한다. ID 인코딩은 아래 §4의
+규칙과 `contracts.ids`를 사용한다. DTO는 ID를 자동 생성하거나 재계산하지 않는다.
+
 ## 2. 입력과 후보
 
 | DTO | 필드 계약 | 검증 |

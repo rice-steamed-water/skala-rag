@@ -4,11 +4,16 @@ import json
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 import skala_rag.contracts as contracts
 
-NAMES = tuple(contracts.__all__)
+NAMES = tuple(
+    name
+    for name in contracts.__all__
+    if isinstance(getattr(contracts, name), type)
+    and issubclass(getattr(contracts, name), BaseModel)
+)
 
 
 @pytest.mark.parametrize("section", ["field_table", "identity_core"])

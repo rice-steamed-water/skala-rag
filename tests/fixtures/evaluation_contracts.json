@@ -1,0 +1,59 @@
+{
+  "label": "Wholly synthetic evaluation/report metadata; not measured results or approved policy",
+  "CriterionAssessment": {
+    "schema_version": "synthetic-1", "criterion_id": "technology.integration", "status": "observed", "rating": 3, "evidence_ids": ["ev-synthetic"], "rationale": "Synthetic unmeasured assessment"
+  },
+  "Evaluation": {
+    "schema_version": "synthetic-1", "run_id": "run-synthetic", "candidate_id": "co-synthetic", "dimension": "technology", "evaluation_round": 1, "snapshot_id": "snapshot-synthetic", "evidence_revision": 0, "policy_version": "unapproved-fixture", "rubric_version": "unapproved-rubric", "criteria": [], "research_gaps": [], "caveats": ["Synthetic only"]
+  },
+  "EvaluationSnapshot": {
+    "schema_version": "synthetic-1", "snapshot_id": "snapshot-synthetic", "run_id": "run-synthetic", "candidate_id": "co-synthetic", "evaluation_round": 1, "evidence_revision": 0, "policy_version": "unapproved-fixture", "corpus_version": "synthetic-corpus", "index_version": "synthetic-index", "as_of": "2026-09-01", "evidence_ids": [], "evidence": {}, "sources": {}, "chunks": {}, "retrieval_records": {}
+  },
+  "EvaluationResult": {
+    "schema_version": "synthetic-1", "run_id": "run-synthetic", "candidate_id": "co-synthetic", "dimension": "technology", "evaluation_round": 1, "snapshot_id": "snapshot-synthetic", "evidence_revision": 0, "policy_version": "unapproved-fixture", "status": "failure", "evaluation": null,
+    "errors": [{"schema_version": "synthetic-1", "error_id": "error-synthetic", "run_id": "run-synthetic", "candidate_id": "co-synthetic", "node": "technology_evaluation", "error_code": "SYNTHETIC_TIMEOUT", "message_redacted": "Synthetic timeout without credentials", "retryable": false, "attempt": 1, "timestamp": "2026-09-01T12:00:00+09:00"}]
+  },
+  "WorkflowError": {
+    "schema_version": "synthetic-1", "error_id": "error-synthetic", "run_id": "run-synthetic", "candidate_id": "co-synthetic", "node": "technology_evaluation", "error_code": "SYNTHETIC_TIMEOUT", "message_redacted": "Synthetic timeout without credentials", "retryable": false, "attempt": 1, "timestamp": "2026-09-01T12:00:00+09:00"
+  },
+  "ScoreSummary": {
+    "schema_version": "synthetic-1", "score_summary_id": "score-synthetic", "run_id": "run-synthetic", "candidate_id": "co-synthetic", "evaluation_round": 1, "snapshot_id": "snapshot-synthetic", "evidence_revision": 0, "policy_version": "unapproved-fixture", "criterion_points": {"technology.integration": null}, "dimension_ratings": {"founder": null, "market": null, "technology": null, "moat": null, "traction": null, "deal_terms": null}, "observed_score": 0, "missing_weight": 100, "coverage_pct": 0, "low_score_dimensions": [], "hold_reasons": ["Synthetic missing data"]
+  },
+  "InvestmentDecision": {
+    "schema_version": "synthetic-1", "decision_id": "decision-synthetic", "run_id": "run-synthetic", "candidate_id": "co-synthetic", "label": "WATCHLIST", "report_grade": "Synthetic grade, not approved policy", "score_summary_id": "score-synthetic", "reason_codes": ["synthetic-only"], "evidence_ids": [], "rationale": "Synthetic explanation", "risks": [], "limitations": ["Synthetic only"]
+  },
+  "CandidateOutcome": {
+    "schema_version": "synthetic-1", "candidate_id": "co-synthetic", "status": "watchlist", "eligibility_result_id": "elig-synthetic", "decision_id": "decision-synthetic", "failure_ids": [], "summary_reason": "Synthetic only"
+  },
+  "ReportInput": {
+    "schema_version": "synthetic-1", "run_id": "run-synthetic", "mode": "no_recommendation", "selected_candidate_id": null, "candidate_outcomes": [], "permitted_evidence_ids": [], "as_of": "2026-09-01", "corpus_version": "synthetic-corpus", "policy_version": "unapproved-fixture"
+  },
+  "ReportContext": {
+    "schema_version": "synthetic-1", "context_id": "context-synthetic",
+    "input": {"schema_version": "synthetic-1", "run_id": "run-synthetic", "mode": "no_recommendation", "selected_candidate_id": null, "candidate_outcomes": [], "permitted_evidence_ids": [], "as_of": "2026-09-01", "corpus_version": "synthetic-corpus", "policy_version": "unapproved-fixture"},
+    "snapshots": {}, "eligibility_results": {}, "evaluations": {}, "score_summaries": {}, "decisions": {}, "evidence": {}, "sources": {}, "chunks": {}, "retrieval_records": {}, "errors": {}
+  },
+  "ReportDraft": {
+    "schema_version": "synthetic-1", "report_id": "report-synthetic", "context_id": "context-synthetic", "revision": 0, "markdown": "# Synthetic report\n\nNot an actual investment report.", "cited_evidence_ids": [], "reference_source_ids": [], "limitations": ["Synthetic only"]
+  },
+  "ValidationErrorDetail": {
+    "schema_version": "synthetic-1", "code": "SYNTHETIC_ERROR", "location": "SUMMARY", "message": "Synthetic failure"
+  },
+  "ValidationResult": {
+    "schema_version": "synthetic-1", "valid": true, "context_id": "context-synthetic", "checks": {"synthetic": true}, "errors": [], "artifact_hash": "synthetic-placeholder-not-a-measured-hash"
+  },
+  "ReportFinding": {
+    "schema_version": "synthetic-1", "severity": "synthetic-severity", "claim_location": "SUMMARY", "evidence_ids": [], "reason": "Synthetic finding"
+  },
+  "ReportJudgement": {
+    "schema_version": "synthetic-1", "verdict": "pass", "context_id": "context-synthetic", "findings": [], "revision_instructions": [], "judged_artifact_hash": "synthetic-placeholder-not-a-measured-hash"
+  },
+  "RunManifest": {
+    "schema_version": "synthetic-1", "run_id": "run-synthetic",
+    "run_input": {"schema_version": "synthetic-1", "investment_theme": "Synthetic Robotics", "countries": ["KR"], "languages": ["ko"], "as_of": "2026-09-01", "policy_version": "unapproved-fixture", "corpus_version": "synthetic-corpus", "execution_mode": "fixture"},
+    "code_revision": null, "uncommitted": true, "policy_version": "unapproved-fixture", "corpus_version": "synthetic-corpus", "prompt_versions": {}, "model_versions": {}, "corpus_hash": "synthetic-placeholder-not-measured", "tool_status": {}, "budgets": {}, "usage": {}, "artifacts": {}, "validation_results": {}, "workflow_status": "running", "run_outcome": null
+  },
+  "ArtifactMetadata": {
+    "schema_version": "synthetic-1", "artifact_path": "outputs/synthetic/report.md", "artifact_hash": "synthetic-placeholder-not-a-measured-hash"
+  }
+}

@@ -1,19 +1,17 @@
-"""Assessment structure, independent of pending evidence DTOs (#5)."""
+"""Assessment structure; evidence membership is checked by the wrapper."""
 
 from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import Field, model_validator
 
-Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+from .common import Contract, Text
+
 Rating = Annotated[int, Field(strict=True, ge=1, le=5)]
 
 
-class CriterionAssessment(BaseModel):
+class CriterionAssessment(Contract):
     """Validate shape only; snapshot membership is checked by the wrapper."""
 
-    model_config = ConfigDict(extra="forbid")
-
-    schema_version: Text
     criterion_id: Text
     status: Literal["observed", "missing"]
     rating: Rating | None

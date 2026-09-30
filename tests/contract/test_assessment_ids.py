@@ -1,6 +1,3 @@
-import hashlib
-import json
-
 import pytest
 from pydantic import ValidationError
 
@@ -64,12 +61,10 @@ def test_assessment_roundtrip():
 
 
 def test_id_encoding_and_generation():
-    payload = json.dumps(
-        ["skala-rag-id-v1", "snapshot", "run", "회사", 1, 0, "p1"],
-        ensure_ascii=False,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    expected = "snapshot-v1-" + hashlib.sha256(payload).hexdigest()
+    # Fixed UTF-8 interoperability vector, independently checked with shasum.
+    expected = (
+        "snapshot-v1-cdf0ac0d6dda28d8a76c631f601ad204d3959a554dfff107475ac10f9f8a74bb"
+    )
     assert snapshot_id("run", "회사", 1, 0, "p1") == expected
     assert snapshot_id("run", "회사", 2, 0, "p1") != expected
     assert snapshot_id("run", "회사", 1, 1, "p1") != expected
@@ -96,3 +91,38 @@ def test_invalid_key_and_id_text():
         evaluation_key("co:1", 1, "technology")
     with pytest.raises(ValueError):
         decision_id(" ")
+
+
+@pytest.mark.parametrize(
+    "function,arguments",
+    [
+        (snapshot_id, ("run", "co", 1, 0, "p")),
+        (eligibility_result_id, ("run", "co", 0, "p")),
+        (score_summary_id, ("run", "co", 1, "p")),
+        (decision_id, ("score",)),
+        (evaluation_key, ("co", 1, "technology")),
+    ],
+)
+def test_every_id_component_affects_identity(function, arguments):
+    original = function(*arguments)
+    assert function(*arguments) == original
+    for index, value in enumerate(arguments):
+        updated = list(arguments)
+        updated[index] = value + 1 if type(value) is int else value + "-other"
+        assert function(*updated) != original
+
+
+@pytest.mark.parametrize(
+    "function,arguments",
+    [
+        (snapshot_id, (None, "co", 1, 0, "p")),
+        (snapshot_id, ("run", "co", 1, True, "p")),
+        (eligibility_result_id, ("run", "co", -1, "p")),
+        (score_summary_id, ("run", "co", 1, " ")),
+        (decision_id, (123,)),
+        (evaluation_key, ("co", 1, "tech:nology")),
+    ],
+)
+def test_invalid_id_components(function, arguments):
+    with pytest.raises(ValueError):
+        function(*arguments)
