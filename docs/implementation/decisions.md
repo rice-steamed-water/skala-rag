@@ -23,30 +23,6 @@
 | D13 | HTML·PPT·추출 PDF의 200페이지 산정 규칙 미정                                  | §1.3, §6.2                                    | manifest에 원본·허용 페이지 구간 기록. HTML은 고정 PDF snapshot, PPT는 슬라이드 수. 승인 전 페이지 미상 자료는 인덱싱 보류                       | RAG + 과제 확인 담당 / 코퍼스           |
 | D14 | 세부항목별 1~5점 rubric과 재무 지표 적용 조건 미정                            | §3 상세 기준                                  | [scoring](scoring.md)의 공통 척도를 바탕으로 각 항목의 근거·점수 예시 작성. SaaS 경험칙과 투자 단계 순서를 자동 점수 규칙으로 쓰지 않음          | 지표 / 실제 평가·추천                   |
 
-## 결정 기록
-
-### D14 — traction·deal_terms 영역 (#11)
-
-```text
-Decision ID: D14 (traction·deal_terms 부분)
-Status: OPEN — 제안 작성 완료, 팀 승인 대기
-Decision: rubric-finance.md와 configs/rubrics/finance.yaml(rubric_version finance-0.1.0)의
-  9개 criterion rating 1–5 기준·최소 근거·missing 코드, 재무 단위 규칙(런웨이 개월 통일,
-  연간→월 환산은 derived, 분모 0 이하·기간 불일치는 missing)을 baseline으로 채택
-Rationale and source: 원문 §3 실적/투자조건 상세 기준, scoring §2–§4, T21.
-  SaaS 경험칙·투자 단계 순서는 자동 점수 규칙에서 제외
-Rejected alternatives: SaaS 기준 매출총이익률 구간(70–80%) 사용; 단계별 자동 가점;
-  pre-revenue를 rating 1로 처리; 분모 0 이하일 때 런웨이 무한대/최대점 처리
-Affected documents / policy version / tests: scoring.md §3·§4, rubric-finance.md,
-  configs/rubrics/finance.yaml, tests/unit/test_finance_rubric.py; #9 policy fixture, #16, #22
-Open sub-questions: rubric-finance.md §5 Q1–Q6 (작성자 의견 포함)
-Owner and reviewers: XXXXXim / 팀 리뷰 필요
-Approval date: -
-Supersedes: -
-```
-
-Founder·Market·Technology·Moat 부분은 #10에서 기록한다.
-
 ## 승인 방법
 
 M0에서 결정할 수 없는 항목은 `OPEN`으로 남기고, 해당 기능은 fixture/인터페이스까지만 구현한다. `OPEN`을 기본값으로 감추거나 LLM이 실행 때 임의 결정하게 하지 않는다.
@@ -157,6 +133,19 @@ Supersedes:
 ### 승인 반영 범위
 
 7개 항목의 승인자·승인일·승인 근거를 기록하고 scoring.md·architecture.md·contracts.md와 문서 홈에 승인 상태를 반영했다. 다른 결정(D07·D09–D14)의 OPEN 상태는 유지한다. 코드·정책 파일은 이 이슈에서 작성하지 않는다. PR 병합은 별도 요청 후 수행한다.
+
+## D14 제안 기록 — traction·deal_terms (#11, OPEN)
+
+- Decision ID: D14 (traction·deal_terms 부분)
+- Status: OPEN — 제안 작성 완료, 팀 승인 대기
+- Decision: [rubric-finance.md](rubric-finance.md)와 `configs/rubrics/finance.yaml`(rubric_version finance-0.1.0)의 9개 criterion rating 1–5 기준·최소 근거·missing 코드, 재무 단위 규칙(런웨이 개월 통일, 연간→월 환산은 derived, 분모 0 이하·기간 불일치는 missing)을 baseline으로 채택. 승인된 D05에 따라 pre-revenue·영업현금흐름 흑자 등 적용조건 문제는 `missing + applicability_note`로 두고 비중을 제거하지 않는다.
+- Rationale and source: 원문 §3 실적/투자조건 상세 기준, scoring §2–§4, D02·D05(APPROVED), T21. SaaS 경험칙·투자 단계 순서는 자동 점수 규칙에서 제외.
+- Rejected alternatives: 미채택 — SaaS 기준 매출총이익률 구간(70–80%); 단계별 자동 가점; pre-revenue를 rating 1로 처리; 분모 0 이하일 때 런웨이 무한대/최대점 처리.
+- Affected documents / policy version / tests: scoring.md §3·§4, rubric-finance.md, configs/rubrics/finance.yaml, tests/unit/test_finance_rubric.py; #16 집계, #22 평가 wrapper.
+- Open sub-questions: rubric-finance.md §5 Q1–Q6 (작성자 의견 포함). Q4·Q6의 not_applicable 안은 v3(#35 / PR #36)가 D05를 대체하도록 승인될 때만 적용.
+- Owner and reviewers: XXXXXim / 지표 담당(heojiwon2) 검토 요청 대상.
+- Approval date: -
+- Supersedes: 없음.
 
 ## 조용히 바꾸면 안 되는 원문
 
