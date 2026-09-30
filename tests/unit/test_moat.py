@@ -280,3 +280,64 @@ def test_approved_core_rating_five_requires_positive_verifier_receipt():
     result, calls, _ = _approved_case(mutate=mutate)
     assert result.status == "success"
     assert len(calls) == 4
+
+
+@pytest.mark.parametrize(
+    "admission", ["accepted", "rejected", "actual", "plain", "mismatch"]
+)
+def test_loaded_approved_fixture_consumer(admission):
+    from copy import deepcopy
+
+    from tests.unit.test_approved_policy import approval_payload
+
+    from skala_rag.agents.moat import evaluate_moat_approved_fixture
+    from skala_rag.scoring.approved_policy import PolicyApprovals
+
+    fixtures = load_common_fixtures(POLICY)
+    snapshot = _closed_snapshot(next(iter(fixtures.snapshots.values())))
+    snapshot = snapshot.model_copy(update={"policy_version": "v3-operational-1.0.0"})
+    output = output_from_evaluation(
+        fixtures.evaluations[
+            f"{snapshot.candidate_id}:{snapshot.evaluation_round}:moat"
+        ]
+    )
+    rubric = deepcopy(RUBRIC)
+    rubric.update(status="approved", rubric_version="core-0.1.0")
+    llm = FakeLLM([output])
+    seen = []
+
+    def verify(evidence, operational):
+        seen.append(evidence.scope)
+        return admission != "rejected"
+
+    kwargs = dict(
+        policy_path=ROOT / "configs/scoring.v3.json",
+        approvals=PolicyApprovals.model_validate(approval_payload()),
+        approval_verifier=verify,
+        rubric=rubric,
+        llm=object() if admission == "plain" else llm,
+        clock=FakeClock(datetime(2026, 9, 30, tzinfo=UTC)),
+        schema_version="fixture-1",
+        verify_observation=lambda c, e: True,
+        actual_runtime=admission == "actual",
+    )
+    if admission == "mismatch":
+        snapshot = snapshot.model_copy(update={"policy_version": "wrong"})
+    if admission != "accepted":
+        with pytest.raises(ValueError):
+            evaluate_moat_approved_fixture(snapshot, **kwargs)
+        assert llm.calls == []
+        return
+    result = evaluate_moat_approved_fixture(snapshot, **kwargs)
+    assert result.status == "success"
+    assert result.policy_version == "v3-operational-1.0.0"
+    assert seen == ["operational", "core", "finance"]
+    assert len(llm.calls) == 1
+
+
+def test_constructed_approved_contract_is_not_loading_proof():
+    from skala_rag.scoring.approved_policy import ApprovedScoringPolicy
+
+    constructed = ApprovedScoringPolicy.model_construct(execution_mode="fixture")
+    with pytest.raises(ValueError, match="no trusted-loading receipt"):
+        _approved_case(policy=constructed)

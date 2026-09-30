@@ -14,6 +14,7 @@ import json
 from collections.abc import Mapping
 
 from skala_rag.contracts.evaluation import EvaluationSnapshot
+from skala_rag.scoring.approved_policy import ApprovedScoringPolicy
 from skala_rag.scoring.catalog import ScoringPolicy
 
 PROMPT_VERSION = "moat-evaluation-v2"
@@ -47,14 +48,14 @@ SYSTEM_PROMPT = (
 )
 
 
-def _criteria(policy: ScoringPolicy) -> list[str]:
+def _criteria(policy: ScoringPolicy | ApprovedScoringPolicy) -> list[str]:
     return sorted(c.criterion_id for c in policy.criteria if c.dimension == DIMENSION)
 
 
 def build_user_prompt(
     snapshot: EvaluationSnapshot,
     rubric: Mapping[str, object],
-    policy: ScoringPolicy,
+    policy: ScoringPolicy | ApprovedScoringPolicy,
 ) -> str:
     """결정적 JSON payload. 근거 원문은 ``untrusted_source_text``로만 들어간다."""
     dims = rubric.get("dimensions")
