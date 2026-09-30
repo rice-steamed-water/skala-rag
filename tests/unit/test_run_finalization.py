@@ -111,3 +111,31 @@ def test_judge_cannot_bypass_structural_failure():
     semantic = completion(revisions=2, verdict="revise").semantic
     terminal = finalize_fixture(replace(report, semantic=semantic))
     assert terminal.reason == "INVALID_REPORT_STAGE_ORDER"
+
+
+def test_pdf_revision_exhaustion_and_stale_proof_rejected():
+    from skala_rag.contracts import ValidationErrorDetail
+
+    report = completion(revisions=2)
+    pdf = ValidationResult(
+        schema_version=report.draft.schema_version,
+        context_id=report.draft.context_id,
+        artifact_hash=artifact_hash(report.draft),
+        valid=False,
+        checks={"action": "revise"},
+        errors=[
+            ValidationErrorDetail(
+                schema_version=report.draft.schema_version,
+                code="PDF_SUMMARY",
+                location="pdf",
+                message="synthetic",
+            )
+        ],
+    )
+    result = finalize_fixture(replace(report, pdf=pdf))
+    assert result.workflow_status == "completed" and result.exit_code == 2
+    assert "pdf" in result.validations and not result.publication_allowed
+    stale = pdf.model_copy(update={"artifact_hash": "other"})
+    assert (
+        finalize_fixture(replace(report, pdf=stale)).reason == "STALE_REPORT_VALIDATION"
+    )

@@ -168,12 +168,13 @@ uv run python -m skala_rag.cli --theme 'Physical AI robotics' --config tests/fix
 `manifest.json`을 저장한다. 점수는 반올림 없이 decimal 문자열로 보존한다.
 산출물은 가상 데이터이고 외부 호출·유료 LLM·모델 다운로드는 없다.
 
-현재 #94의 v3 보고서 context adapter가 없어 draft는 진단용이며 검증된 보고서가
-아니다. adapter가 없는 실행은 `failed`/`technical_failure`, CLI exit 1로
-종료하고 `run-result.json`에 `REPORT_ADAPTER_UNAVAILABLE` 사유를 저장한다. 보고서 수정 소진의 `completed`+Warning+exit 2와 구별한다.
-구조·의미·PDF 검증과 final 발행은 미실행이다.
-프로그램 주입용 `ReportCompletion` fixture 경계는 같은 draft/context/hash의 검사만
-받는다. 구조·의미 수정 2회 소진은 `completed`+Warning+exit 2와 현재 draft/findings를
-보존한다. fixture 통과도 `acceptance=fixture_only`, `publication_allowed=false`이며
-검증된 제출용 final을 발행하지 않는다. 실제 v3 adapter 연결은 #94 이후 작업이다. `--mode live` 또는 live 설정은
-실행 전에 거절한다. 전체 live runner는 #96 범위다.
+병합된 #94 v3 고정 context·다섯 섹션 Generator/Judge 경로를 사용한다.
+Generator와 Judge 응답은 deterministic fixture stub이며 실모델 사실성 검증이 아니다.
+#95 renderer로 실제 fixture PDF를 생성·재검증하고 `report-context.json`,
+`report-draft.json`, `report-pipeline.json`, `validation-results.json`과 PDF도 저장한다.
+정상 fixture는 `completed`/exit 0, 공유 수정 2회 소진은 Warning/exit 2,
+fatal 오류는 `failed`/exit 1이다. `run-result.json`에서 종료 상태를 확인한다.
+모든 fixture 출력은 `publication_allowed=false`이며 `report.md`나 제출용 final을
+발행하지 않는다. PDF가 검증되어도 실제 투자 조사·M3 성공 증거로 표시하지 않는다.
+`--pdf-profile`로 승인된 PDF 설정 경로를 명시할 수 있다.
+`--mode live` 또는 live 설정은 실행 전에 거절한다. 전체 live runner는 #96 범위다.

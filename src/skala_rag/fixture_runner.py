@@ -29,6 +29,7 @@ def run_fixture(
     run_id="run",
     fixture_path=None,
     trace=None,
+    snapshots=None,
     policy_path="configs/scoring.v3.json",
     catalog_path="configs/scoring.draft.json",
 ):
@@ -126,7 +127,29 @@ def run_fixture(
             + (candidate["candidate_id"] in stale),
             snapshot_id=f"snapshot-{candidate['candidate_id']}",
         )
+        cid = candidate["candidate_id"]
+        evidence_ids = {eid: f"{eid}-{cid}" for eid in snap["evidence"]}
+        snap["evidence"] = {
+            evidence_ids[eid]: {
+                **item,
+                "evidence_id": evidence_ids[eid],
+                "supporting_evidence_ids": [
+                    evidence_ids[x] for x in item.get("supporting_evidence_ids", [])
+                ],
+                "conflicts_with": [
+                    evidence_ids.get(x, x) for x in item.get("conflicts_with", [])
+                ],
+                "supersedes": evidence_ids.get(
+                    item.get("supersedes"), item.get("supersedes")
+                ),
+            }
+            for eid, item in snap["evidence"].items()
+        }
         snap["evidence_ids"] = list(snap["evidence"])
+        for record in snap["retrieval_records"].values():
+            record["evidence_ids"] = [
+                evidence_ids.get(x, x) for x in record["evidence_ids"]
+            ]
         for evidence in snap["evidence"].values():
             evidence["candidate_id"] = candidate["candidate_id"]
             evidence["criterion_ids"] = [c.criterion_id for c in policy.criteria]
@@ -139,6 +162,8 @@ def run_fixture(
             chunk["text"] = "\n".join(e["excerpt"] for e in snap["evidence"].values())
         if tamper and freeze_mutation and candidate["candidate_id"] == "company-0":
             freeze_mutation(snap)
+        if tamper and snapshots is not None:
+            snapshots[cid] = deepcopy(snap)
         return snap
 
     def evaluate(branch, snap):
@@ -251,7 +276,7 @@ def run_fixture(
                 schema_version=schema_version or template["schema_version"],
                 applicability_reason="synthetic applicability",
                 applicability_rule_id="approved-external-rule",
-                evidence_ids=[next(iter(template["evidence"]))],
+                evidence_ids=[f"{next(iter(template['evidence']))}-{cid}"],
             )
             for criterion_id in na
         },

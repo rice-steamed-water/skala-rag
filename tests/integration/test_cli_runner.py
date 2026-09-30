@@ -26,9 +26,13 @@ def test_fixture_artifacts_have_valid_hashes_and_no_final(tmp_path):
     assert manifest.run_input.execution_mode == "fixture"
     assert manifest.usage["external_requests"] == 0
     assert manifest.usage["fixture_evaluation_branches"] == 10
-    assert manifest.workflow_status == "failed"
-    assert manifest.run_outcome == "technical_failure"
-    assert not manifest.validation_results
+    assert manifest.workflow_status == "completed"
+    assert manifest.run_outcome == "recommended"
+    assert manifest.validation_results["structural"].valid
+    assert manifest.validation_results["semantic"].verdict == "pass"
+    assert manifest.validation_results["pdf"].valid
+    assert manifest.model_versions["report_judge"] == "fixture-stub"
+    assert manifest.tool_status["pdf"] == "fixture_verified"
     assert not (destination / "report.md").exists()
     for artifact in manifest.artifacts.values():
         assert (
@@ -201,3 +205,62 @@ def test_failed_branch_trace_contains_only_ids_and_redacted_status():
     )
     assert "secret synthetic provider error" not in json.dumps(trace)
     assert result.selection.selected_candidate_id == "company-1"
+
+
+def test_default_fixture_cli_exits_zero_and_persists_context_pdf_and_report_trace(
+    tmp_path,
+):
+    assert (
+        main(
+            [
+                "--theme",
+                "Physical AI robotics",
+                "--config",
+                str(CONFIG),
+                "--output-dir",
+                str(tmp_path),
+            ]
+        )
+        == 0
+    )
+    destination = next(tmp_path.iterdir())
+    receipt = json.loads((destination / "run-result.json").read_text())
+    assert (
+        receipt["workflow_status"] == "completed" and not receipt["publication_allowed"]
+    )
+    context = json.loads((destination / "report-context.json").read_text())
+    assert context["execution_mode"] == "fixture"
+    assert set(context["scores"]) == {"company-0", "company-1"}
+    evidence = list(context["evidence"].values())
+    assert {item["candidate_id"] for item in evidence} == {"company-0", "company-1"}
+    trace = json.loads((destination / "trace.json").read_text())
+    for step in (
+        "report_context",
+        "report_generate",
+        "report_validate",
+        "report_judge",
+        "report_pdf",
+    ):
+        records = [t for t in trace if t["step"] == step]
+        assert records and all(t["output_ids"] and t["status"] == "ok" for t in records)
+    assert list(destination.glob("*.pdf"))
+    assert not (destination / "report.md").exists()
+
+
+def test_default_pdf_failure_is_terminal_and_does_not_claim_success(tmp_path):
+    destination = run(
+        "robotics",
+        output_dir=tmp_path,
+        policy_path="configs/scoring.v3.json",
+        catalog_path="configs/scoring.draft.json",
+        config_path=CONFIG,
+        pdf_profile="missing-profile",
+    )
+    receipt = json.loads((destination / "run-result.json").read_text())
+    assert receipt["workflow_status"] == "failed" and receipt["exit_code"] == 1
+    assert not receipt["publication_allowed"]
+    manifest = RunManifest.model_validate_json(
+        (destination / "manifest.json").read_text()
+    )
+    assert manifest.tool_status["pdf"] == "not_verified"
+    assert (destination / "report-draft.json").exists()

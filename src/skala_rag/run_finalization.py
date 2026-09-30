@@ -19,6 +19,7 @@ class ReportCompletion:
     semantic: ReportJudgement | None = None
     revisions: int = 0
     fatal: bool = False
+    pdf: ValidationResult | None = None
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,11 @@ def finalize_fixture(report: ReportCompletion | None) -> TerminalResult:
             if report.structural is not None
             else None
         )
+        pdf = (
+            ValidationResult.model_validate(report.pdf)
+            if report.pdf is not None
+            else None
+        )
         semantic = (
             ReportJudgement.model_validate(report.semantic)
             if report.semantic is not None
@@ -76,6 +82,7 @@ def finalize_fixture(report: ReportCompletion | None) -> TerminalResult:
     for validation, value in (
         (structural, structural.artifact_hash if structural else None),
         (semantic, semantic.judged_artifact_hash if semantic else None),
+        (pdf, pdf.artifact_hash if pdf else None),
     ):
         if validation and (
             validation.context_id != draft.context_id
@@ -88,22 +95,36 @@ def finalize_fixture(report: ReportCompletion | None) -> TerminalResult:
         validations["structural"] = structural
     if semantic:
         validations["semantic"] = semantic
+    if pdf:
+        validations["pdf"] = pdf
     if (
         report.fatal
         or outcome == RunOutcome.TECHNICAL_FAILURE
         or (semantic and semantic.verdict == "fail")
         or (structural and structural.checks.get("action") == "fail")
+        or (pdf and pdf.checks.get("action") == "fail")
     ):
         terminal = failed("REPORT_FATAL")
         return TerminalResult(**{**terminal.__dict__, "validations": validations})
     # Judge may only run on the current structurally valid draft.
     if semantic and (structural is None or not structural.valid):
         return failed("INVALID_REPORT_STAGE_ORDER")
+    if pdf and (
+        not structural
+        or not structural.valid
+        or not semantic
+        or semantic.verdict != "pass"
+    ):
+        return failed("INVALID_REPORT_STAGE_ORDER")
     revise = (
-        structural is not None
-        and not structural.valid
-        and structural.checks.get("action") == "revise"
-    ) or (semantic is not None and semantic.verdict == "revise")
+        (
+            structural is not None
+            and not structural.valid
+            and structural.checks.get("action") == "revise"
+        )
+        or (semantic is not None and semantic.verdict == "revise")
+        or (pdf is not None and not pdf.valid and pdf.checks.get("action") == "revise")
+    )
     if revise and report.revisions == 2:
         return TerminalResult(
             "completed",
@@ -113,13 +134,21 @@ def finalize_fixture(report: ReportCompletion | None) -> TerminalResult:
             warnings=("Warning: report revisions exhausted",),
             validations=validations,
         )
-    if structural and structural.valid and semantic and semantic.verdict == "pass":
+    if (
+        structural
+        and structural.valid
+        and semantic
+        and semantic.verdict == "pass"
+        and (pdf is None or pdf.valid)
+    ):
         return TerminalResult(
             "completed",
             outcome,
             0,
             "fixture_only",
-            reason="PDF_NOT_VERIFIED",
+            reason="FIXTURE_PDF_VERIFIED"
+            if pdf and pdf.checks.get("pdf_verified") is True
+            else "PDF_NOT_VERIFIED",
             validations=validations,
         )
     terminal = failed("INCOMPLETE_REPORT_VALIDATION")
