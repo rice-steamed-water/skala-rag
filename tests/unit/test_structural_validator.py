@@ -137,6 +137,27 @@ def test_code_block_token_not_counted(ctx):
     assert validate_report(good.model_copy(update={"markdown": md}), ctx).valid
 
 
+@pytest.mark.parametrize(
+    "fence,body",
+    [
+        ("~~~markdown", "[@evidence:ev-nope]\n## FAKE HEADING\n~~~"),
+        (
+            "   ~~~markdown",
+            "    ~~~\n[@evidence:ev-nope]\n## FAKE HEADING\n   ~~~",
+        ),
+        (
+            "````markdown",
+            "[@evidence:ev-nope]\n```\n## FAKE HEADING\n[@evidence:ev-nope]\n````",
+        ),
+    ],
+)
+def test_fenced_code_does_not_supply_headings_or_citations(ctx, fence, body):
+    good = _draft(ctx)
+    md = good.markdown.replace("## SUMMARY\n\n", f"## SUMMARY\n\n{fence}\n{body}\n")
+    result = validate_report(good.model_copy(update={"markdown": md}), ctx)
+    assert result.valid, result.errors
+
+
 def test_extra_reference_and_fabricated_bibliography(ctx):
     good = _draft(ctx)
     extra_sid = next(s for s in ctx.sources if s not in good.reference_source_ids)
