@@ -56,3 +56,39 @@ run_input은 검증된 RunInput이며 State의 JSON run_input과 일치해야 �
 `tests/unit/test_snapshot.py`는 가상 자료로 T25와 참조 실패·정정·귀속 경계를
 검증한다. live 검색/LLM 품질이나 정책 승인 검증 결과가 아니다. #35 v3 정합화는
 별도 이슈이며 현재 main DTO와 승인 baseline을 재사용한다.
+
+## 후보 Graph 골격 — #23
+
+`graph.candidates.build_candidate_graph(nodes, policy, *, run_id,
+schema_version, clock)`은 `StateGraph(InvestmentState)` builder를 반환한다.
+`CandidateNodes`에 discover/normalize/research/eligibility/collect/coverage/
+freeze/evaluate/aggregate와 설명 callback을 명시적으로 주입한다.
+Stage는 복사된 State를 읽고 자기 writer 필드의 JSON delta만 반환한다.
+각 adapter의 ToolResult/DTO를 State delta로 옮기는 책임은 주입 adapter에 있다.
+이 fixture 골격은 live 실행을 거절한다. async/live adapter는 여기서 제공하지 않는다.
+
+- 후보 수는 주입 policy의 max_candidates로 제한한다. normalize가 법인 병합을
+  담당하며 Graph는 후보 ID 유일성과 discovery Source 참조를 검증한다.
+- Select는 후보별 count map에 setdefault(0)을 적용한다. 부적격·unknown·
+  WATCHLIST·PASS·실패는 outcome을 저장한 후 Advance에서 index를 한 번 증가시킨다.
+- freeze adapter는 #21 함수를 호출한 뒤 snapshots/evaluation_rounds delta를
+  반환한다. SnapshotInvalid가 발생하면 복사 State의 새 오류를 회수하고
+  해당 후보 failed → archive → advance한다. 실패한 적격성·점수 참조는
+  ReportInput의 outcome에 포함하지 않는다.
+- evaluate는 #24 병렬 합류로 교체할 자리다. coverage 뒤 즉시 freeze하며
+  #25 재조사 loop를 아직 구현하지 않는다. 테스트는 가상 여섯 평가와 실제
+  build_score_summary/decide/build_investment_decision을 사용한다.
+- 설명 callback은 계산된 label/grade/reason을 읽고 Explanation만 반환한다.
+  추가 label 필드는 거절하며 설명 단계의 State 수정은 원래 State에 영향을 주지 않는다.
+- 첫 RECOMMEND에서 나머지는 not_evaluated로 기록하고 single_candidate
+  ReportInput을 report_input에 저장한다. 후보 정상 소진/0건은 사유별
+  no_recommendation 입력이다. 발견 실패나 전 후보 기술 실패는 workflow failed이며
+  정상 보고서 입력을 만들지 않는다. 발견 실패를 후보 0건으로 바꾸지 않는다.
+- ReportInput 인계 시 정상 workflow_status는 running이다. 보고서 생성·검증까지
+  완료하지 않았으므로 completed로 표시하지 않는다. report는 null로 유지한다.
+
+runner는 compile().invoke(initial_state, {"recursion_limit": 100})처럼 명시적으로
+충분한 step 제한을 공급한다. 이는 후보 예산 대체가 아닌 LangGraph 보조 제한이다.
+체크포인트·CLI·보고서 생성은 #29·#28 등 후속 작업 범위다.
+T08/T09는 tests/integration/test_candidate_graph.py에서 실제 설치 LangGraph로
+실행하지만 자료·조사·평가·설명은 가상 입력이며 live 성공 증거가 아니다.
