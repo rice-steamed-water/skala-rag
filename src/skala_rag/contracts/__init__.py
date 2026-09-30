@@ -30,6 +30,14 @@ from .reports import (
 )
 from .retrieval import RetrievalRecord, RetrievalRequest
 from .sources import Chunk, Source
+from .tools import (
+    CompanyResearchBundle,
+    DecisionPolicyResult,
+    EvidenceBundle,
+    RenderResult,
+    ToolBudget,
+    ToolResult,
+)
 
 __all__ = [
     "RunInput",
@@ -65,6 +73,12 @@ __all__ = [
     "WorkflowError",
     "ArtifactMetadata",
     "RunManifest",
+    "ToolBudget",
+    "ToolResult",
+    "EvidenceBundle",
+    "CompanyResearchBundle",
+    "DecisionPolicyResult",
+    "RenderResult",
     "snapshot_id",
     "eligibility_result_id",
     "score_summary_id",

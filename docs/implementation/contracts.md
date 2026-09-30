@@ -457,4 +457,11 @@ render_pdf(draft, template) -> RenderResult
 
 ToolResult는 `status`, typed `data`, `retrieval_records`, `errors`를 가진다. Discovery controller는 `DiscoveryBundle.sources`를 먼저 검증·저장하고 각 후보의 discovery_source_ids가 모두 해소되는지 확인한 뒤 Normalize로 넘긴다. Company Research가 실패해도 발견 출처는 남아야 한다. 검색은 `RetrievalRequest.as_of`를 반드시 사용하고, query·기업·corpus/index·allowed_source_ids·as_of를 모두 cache key에 포함한다. returned Chunk가 요청 밖의 기업/출처/기준일을 위반하면 반환을 거절한다. `CompanyResearchBundle`은 profile+sources+evidence, `EvidenceBundle`은 sources+evidence, `DecisionPolicyResult`는 label+grade+reason_codes, `RenderResult`는 artifact_path+page_count+layout_measurements+errors를 가진다.
 
-위 #5 구조 DTO 구현 범위에 명시한 import 외의 이름과 함수는 설계 계약이지 사용 가능한 API가 아니다. M0에서 schema와 fixture, M1에서 adapter stub, M2 이후 실제 구현을 연결한다. 각 기능은 주입된 Tool/LLM/clock을 사용해 외부 호출 없이 테스트할 수 있어야 한다.
+**#8 구현 범위:** `skala_rag.contracts`의 `ToolResult`·`ToolBudget`·`CompanyResearchBundle`·`EvidenceBundle`·`DecisionPolicyResult`·`RenderResult`, `contracts.error_codes`, `contracts.interfaces`(위 15개 경계와 `Clock`·`StructuredLLM` Protocol), `skala_rag.fakes`(fake Tool/LLM/clock)다.
+
+- ToolResult status: `ok`는 data 필수·errors 없음. `empty`는 조회 성공·0건으로, 빈 bundle을 data로 주고 errors 없음. `unavailable`/`failed`는 data=null·WorkflowError 1개 이상.
+- 도구 오류의 error_code는 `ErrorCode` 도구 코드만 허용하며, 코드별 status와 retryable이 고정된다. 401/403은 `unavailable`+`TOOL_AUTH_FAILED`(재시도 불가), timeout은 `failed`+`TOOL_TIMEOUT`(재시도 가능)이다.
+- `SNAPSHOT_INVALID`·`CONTEXT_INVALID`·`UPSTREAM_INVALID`와 LLM 코드는 controller·wrapper용이라 ToolResult에 쓰지 않는다. 재시도 횟수·backoff는 wrapper가 ToolBudget으로 정한다(M2).
+- 아직 타입이 없는 적격성·보고서 검증 policy와 rubric은 `JSONMap`, PDF template은 `str`로 둔다. 담당 이슈가 타입을 만들면 교체한다.
+
+위 #5·#6·#8 구현 범위에 명시한 import 외의 이름과 함수는 설계 계약이지 사용 가능한 API가 아니다. M0에서 schema와 fixture, M1에서 adapter stub, M2 이후 실제 구현을 연결한다. 각 기능은 주입된 Tool/LLM/clock을 사용해 외부 호출 없이 테스트할 수 있어야 한다.
