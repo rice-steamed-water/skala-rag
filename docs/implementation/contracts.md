@@ -4,6 +4,13 @@
 
 근거: 원문 §7의 StageInfo, §8의 InvestmentState. 원문은 대부분 타입 이름만 정의하므로, 아래 DTO 필드와 검증 규칙은 **구현 제안**이다. M0에서 schema를 고정한 뒤 각 담당자가 별도로 같은 타입을 재정의하지 않는다.
 
+D01–D06·D08의 정책 의미는 2026-09-30 xxhigh가 승인했다([승인 기록](decisions.md#m0-승인-검토-기록--이슈-3)). DTO의 전체 필드나 모든 구현 선택을 승인한 것은 아니다.
+
+- StageInfo/EligibilityResult: 직접 확인된 Seed~C만 단계 조건 통과. TIPS만으로 Seed 확정 금지, 명시적 프리시드·엔젤은 out_of_scope, 프리·브릿지는 직전 완료 라운드 근거로 판정. 추정/unknown만으로 eligible 처리 금지(D06).
+- CriterionAssessment/ScoreSummary: 1..5 정수 rating 또는 null, 비중 `5/30/25/20/10/10`, 총 분모 100 고정. 상위 영역 관측 가중평균 rating ≤2와 최종 결측 비중 ≥30은 WATCHLIST(D01·D02·D05).
+- EvaluationResult/InvestmentDecision: 다섯 병렬 평가 성공 후 동일 snapshot의 투자조건 직렬 평가까지 여섯 성공 결과를 집계. WATCHLIST/PASS는 다음 후보, 첫 RECOMMEND는 단일 기업 보고서(D03·D04).
+- State count: 후보 최대 5개, 후보별 추가 조사 총 2회, 실행별 보고서 수정 총 2회. 구조·의미·layout 수정은 같은 예산을 공유한다. 도구 batch 호출 8회·추가 재시도 2회·시도별 30초이며 live 총시간·LLM 호출·비용 상한은 별도 승인 전까지 미정(D08).
+
 ## 1. 공통 규칙
 
 - Graph 컨테이너는 원문대로 `InvestmentState(TypedDict, total=False)` 방향을 유지한다. 외부/LLM 경계의 DTO는 Pydantic으로 검증한다.
