@@ -23,26 +23,6 @@
 | D13 | HTML·PPT·추출 PDF의 200페이지 산정 규칙 미정                                  | §1.3, §6.2                                    | manifest에 원본·허용 페이지 구간 기록. HTML은 고정 PDF snapshot, PPT는 슬라이드 수. 승인 전 페이지 미상 자료는 인덱싱 보류                       | RAG + 과제 확인 담당 / 코퍼스           |
 | D14 | 세부항목별 1~5점 rubric과 재무 지표 적용 조건 미정                            | §3 상세 기준                                  | [scoring](scoring.md)의 공통 척도를 바탕으로 각 항목의 근거·점수 예시 작성. SaaS 경험칙과 투자 단계 순서를 자동 점수 규칙으로 쓰지 않음          | 지표 / 실제 평가·추천                   |
 
-## 결정 기록 — D14 founder·market·technology·moat (#10)
-
-```text
-Decision ID: D14 (founder·market·technology·moat 부분)
-Status: OPEN — 제안 작성 완료, 팀 승인 대기
-Decision: rubric-core.md와 configs/rubrics/core.yaml(rubric_version core-0.1.0)의
-  14개 criterion rating 1–5 기준·최소 근거·missing 코드를 baseline으로 채택.
-  상태 3종(observed/missing/not_applicable)은 v3 C-2·C-3에 맞추되 이 14개는 N/A 금지.
-  근거 없는 rating·다른 기업 근거·미해결 상충은 missing, 회사 자기주장만이면 최대 4
-Rationale and source: 원문 §3 상세 기준, scoring §2–§4, 설계 산출물 v3 C-2·C-3(#35, 미병합)
-Rejected alternatives: 근거 부족을 rating 1–2로 처리; 시장성·기술력 N/A 허용(저점수 조건 우회);
-  전체 로봇 시장 수치로 세부 시장 평가; 특허 검색 0건을 곧바로 "특허 없음"으로 처리
-Affected documents / policy version / tests: scoring.md §2, rubric-core.md,
-  configs/rubrics/core.yaml, tests/unit/test_core_rubric.py; #9 policy fixture, #22 평가 wrapper
-Open sub-questions: rubric-core.md §6 Q1–Q5
-Owner and reviewers: XXXXXim / 팀 리뷰 필요
-Approval date: -
-Supersedes: -
-```
-
 ## 승인 방법
 
 M0에서 결정할 수 없는 항목은 `OPEN`으로 남기고, 해당 기능은 fixture/인터페이스까지만 구현한다. `OPEN`을 기본값으로 감추거나 LLM이 실행 때 임의 결정하게 하지 않는다.
@@ -153,6 +133,19 @@ Supersedes:
 ### 승인 반영 범위
 
 7개 항목의 승인자·승인일·승인 근거를 기록하고 scoring.md·architecture.md·contracts.md와 문서 홈에 승인 상태를 반영했다. 다른 결정(D07·D09–D14)의 OPEN 상태는 유지한다. 코드·정책 파일은 이 이슈에서 작성하지 않는다. PR 병합은 별도 요청 후 수행한다.
+
+## D14 제안 기록 — founder·market·technology·moat (#10, OPEN)
+
+- Decision ID: D14 (founder·market·technology·moat 부분)
+- Status: OPEN — 제안 작성 완료, 팀 승인 대기
+- Decision: [rubric-core.md](rubric-core.md)와 `configs/rubrics/core.yaml`(rubric_version core-0.1.0)의 14개 criterion rating 1–5 기준·최소 근거·missing 코드를 baseline으로 채택. 승인된 D05에 따라 적용조건 미확정은 `missing + applicability_note`이며 이 14개에는 not_applicable을 쓰지 않는다. 근거 없는 rating·다른 기업 근거·미해결 상충은 missing, 회사 자기주장만이면 최대 4.
+- Rationale and source: 원문 §3 상세 기준, scoring §2–§4, D02·D05(APPROVED). 설계 산출물 v3 C-2·C-3(#35 / PR #36, 미병합)은 병합 시 재검토.
+- Rejected alternatives: 미채택 — 근거 부족을 rating 1–2로 처리; 시장성·기술력 N/A 허용(저점수 조건 우회); 전체 로봇 시장 수치로 세부 시장 평가; 특허 검색 0건을 곧바로 "특허 없음"으로 처리.
+- Affected documents / policy version / tests: scoring.md §2, rubric-core.md, configs/rubrics/core.yaml, tests/unit/test_core_rubric.py; #22 평가 wrapper, #16 집계.
+- Open sub-questions: rubric-core.md §6 Q1–Q5
+- Owner and reviewers: XXXXXim / 지표·평가 담당 검토 요청 대상.
+- Approval date: -
+- Supersedes: 없음.
 
 ## 조용히 바꾸면 안 되는 원문
 

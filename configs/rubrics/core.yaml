@@ -8,8 +8,8 @@ status: proposed          # proposed | approved
 decision_id: D14
 scale: {min: 1, max: 5, missing: null}
 comparison: pre_rounding
-statuses: [observed, missing, not_applicable]
-not_applicable_allowed: false   # 14개 criterion 모두 N/A 금지 (Q3)
+statuses: [observed, missing]   # D05(APPROVED): 적용조건 미확정은 missing + applicability_note
+not_applicable_allowed: false   # D05로 금지; v3(PR #36) 병합 후에도 유지 제안 (Q3)
 
 common_rules:
   self_claim_max_rating: 4      # 회사 자료만으로는 최대 4, 5는 독립 출처 교차확인 (Q2)

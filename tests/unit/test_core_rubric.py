@@ -59,7 +59,7 @@ def test_version_status_and_statuses(rubric):
     assert re.fullmatch(r"core-\d+\.\d+\.\d+", rubric["rubric_version"])
     assert rubric["status"] in {"proposed", "approved"}
     assert rubric["decision_id"] == "D14"
-    assert rubric["statuses"] == ["observed", "missing", "not_applicable"]
+    assert rubric["statuses"] == ["observed", "missing"]
     assert rubric["not_applicable_allowed"] is False
 
 
