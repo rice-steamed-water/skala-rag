@@ -25,7 +25,11 @@ def search_with_receipt(
     Retains every physical/normalization retrieval record and redacted error.
     This does not persist a receipt or promote snippets into Evidence.
     """
-    result = adapter(request, budget)
+    result = (
+        adapter.current_scope_result()
+        if request.execution_mode == "live"
+        else adapter(request, budget)
+    )
     return DiscoveryReceipt(
         result=result.model_copy(deep=True),
         observed_sources=adapter.observed_sources,

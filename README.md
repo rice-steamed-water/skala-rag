@@ -153,3 +153,28 @@ uv run python -m skala_rag.rag.extraction_runner --help
 | wjd990819-ops (정순욱) | criterion catalog·정책 fixture(#9), 공통 가상 fixture(#12), State reducer(#15), retrieve·Evidence Collector(#19) |
 | XXXXXim (심혁) | 23개 criterion rubric·재무 단위 규칙(#10, #11), 점수 집계·투자 판단과 DTO 어댑터(#16, #68), 영역 평가 wrapper(#22), ReportContext(#26), Structural Validator(#27), 재무 Evidence 단위·기간 검증(#53) |
 | hanyujin2002 (한유진) | 데이터·RAG 설계 및 문서화, 문서 유형별 Chunking·Embedding 전략 정리, DB/RAG 데이터 흐름 및 평가 Agent 연계 구조 설계 |
+
+## Fixture CLI (#29)
+
+저장소 루트에서 다음 명령을 실행한다.
+
+```bash
+uv run python -m skala_rag.cli --theme 'Physical AI robotics' --config tests/fixtures/cli-input.json
+```
+
+고정된 가상 후보 두 개를 v3 controller와 다섯 병렬 평가 branch로 처리한다.
+입력 주제는 manifest에 기록하며, 실제 검색이나 주제별 기업 발견은 수행하지 않는다.
+`outputs/<run_id>/`에 `candidate-result.json`, `trace.json`, `draft.md`,
+`manifest.json`을 저장한다. 점수는 반올림 없이 decimal 문자열로 보존한다.
+산출물은 가상 데이터이고 외부 호출·유료 LLM·모델 다운로드는 없다.
+
+병합된 #94 v3 고정 context·다섯 섹션 Generator/Judge 경로를 사용한다.
+Generator와 Judge 응답은 deterministic fixture stub이며 실모델 사실성 검증이 아니다.
+#95 renderer로 실제 fixture PDF를 생성·재검증하고 `report-context.json`,
+`report-draft.json`, `report-pipeline.json`, `validation-results.json`과 PDF도 저장한다.
+정상 fixture는 `completed`/exit 0, 공유 수정 2회 소진은 Warning/exit 2,
+fatal 오류는 `failed`/exit 1이다. `run-result.json`에서 종료 상태를 확인한다.
+모든 fixture 출력은 `publication_allowed=false`이며 `report.md`나 제출용 final을
+발행하지 않는다. PDF가 검증되어도 실제 투자 조사·M3 성공 증거로 표시하지 않는다.
+`--pdf-profile`로 승인된 PDF 설정 경로를 명시할 수 있다.
+`--mode live` 또는 live 설정은 실행 전에 거절한다. 전체 live runner는 #96 범위다.

@@ -1,5 +1,12 @@
 # #48 Tavily Discovery — offline boundary
 
+> **현재 실행 override — #158:** Tavily는 사용자 보고 실패 후 이번 실행에서 제외하고
+> #157로 보류한다. 아래 승인·adapter capability는 이력이며 현재 호출 허가가 아니다.
+> KIPRIS/KRX/중기부도 #154/#155/#156으로 보류한다. 실패를 여기서 재현한 것은 아니다.
+> [현재 provider 범위와 명시적 caller 주입 경계](provider-scope.md)를 따른다.
+> 기존 승인 RAG/공식 출처만 기존 gate 아래 계속하며 새 provider/유료 fallback은 없다.
+> 이 변경은 M2 전체 성공이나 #48/#55 완료를 뜻하지 않는다.
+
 ## Delivery status
 
 This increment is an **offline interface/response-normalization implementation**,
