@@ -19,6 +19,9 @@ from skala_rag.rag.corpus import (
     manifest_hash,
     require_indexable,
 )
+from skala_rag.rag.extraction import ExtractionResult
+from skala_rag.rag.reviewed_extraction import verify_text_review
+from skala_rag.rag.text_review import text_hash
 
 
 def _canonical(value: object) -> str:
@@ -181,12 +184,15 @@ def build_index_plan(
     sources: Mapping[str, Source],
     chunks: Sequence[Chunk],
     settings: IndexSettings,
+    extraction_results: Mapping[str, ExtractionResult] | None = None,
 ) -> IndexPlan:
     """Require full manifest closure; no partial indexing of a failed corpus."""
     if not isinstance(settings, IndexSettings):
         raise ValueError("explicit IndexSettings required")
     if expected_corpus_hash != manifest_hash(manifest):
         raise ValueError("corpus hash mismatch")
+    # Revalidate detached manifest metadata, including mutable nested review maps.
+    manifest = CorpusManifest.model_validate_json(manifest.model_dump_json())
     gate = check_corpus(manifest)
     doc_ids = require_indexable(gate)
     if not doc_ids:
@@ -228,16 +234,68 @@ def build_index_plan(
         ):
             raise ValueError(f"chunk provenance/model mismatch: {item.chunk_id}")
         observed.add(doc.document_id)
+    for doc in manifest.documents:
+        review = doc.text_index_review
+        if review is None:
+            continue
+        if extraction_results is None or doc.document_id not in extraction_results:
+            raise ValueError(
+                "reviewed partial corpus requires actual extraction result"
+            )
+        extracted = extraction_results[doc.document_id]
+        if (
+            extracted.document_id != doc.document_id
+            or extracted.source_id != doc.source_id
+            or extracted.corpus_version != manifest.corpus_version
+        ):
+            raise ValueError("reviewed extraction document/source/corpus mismatch")
+        verify_text_review(extracted, review)
+        if _canonical(settings.chunk_settings) != _canonical(
+            review.extraction_settings
+        ):
+            raise ValueError("chunk settings differ from reviewed text extraction")
+        by_page = {}
+        for item in ordered:
+            if item.source_id != doc.source_id:
+                continue
+            if (
+                item.page_start is None
+                or item.page_start != item.page_end
+                or item.page_start in by_page
+            ):
+                raise ValueError("reviewed text requires one atomic chunk per page")
+            by_page[item.page_start] = text_hash(item.text)
+        if {
+            str(page): digest for page, digest in by_page.items()
+        } != review.page_text_hashes:
+            raise ValueError("chunk text/pages differ from text index review")
     indexed = {doc_id: manifest.document(doc_id).content_hash for doc_id in observed}
     if not compare_index_inputs(manifest, gate, indexed).matches:
         raise ValueError("chunk documents differ from approved corpus")
     chunk_snapshots = tuple(
         _canonical(item.model_dump(mode="json")) for item in ordered
     )
-    source_snapshots = tuple(
-        _canonical(sources[source_id].model_dump(mode="json"))
-        for source_id in sorted(sources)
-    )
+    source_payloads = []
+    for source_id in sorted(sources):
+        payload = sources[source_id].model_dump(mode="json")
+        review = documents[source_id].text_index_review
+        if review is not None:
+            payload["access_notes"] = "\n".join(
+                filter(
+                    None,
+                    (
+                        payload.get("access_notes"),
+                        "Indexing scope: text_only; full document remains partial.",
+                        *review.limitations,
+                    ),
+                )
+            )
+            payload["bibliographic_metadata"] = {
+                **payload["bibliographic_metadata"],
+                "text_index_review": review.model_dump(mode="json"),
+            }
+        source_payloads.append(_canonical(payload))
+    source_snapshots = tuple(source_payloads)
     index_version = _index_version(
         corpus_version=manifest.corpus_version,
         corpus_hash=gate.manifest_hash,
