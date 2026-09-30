@@ -13,6 +13,7 @@ dependencies = [
     "langchain-core>=1.6.6",
     "langchain-text-splitters>=1.1.2",
     "langgraph>=1.2.12",
+    "playwright==1.63.0",
     "pydantic>=2.13.5",
     "pypdf>=6.19.0",
     "python-dotenv>=1.2.3",
@@ -36,6 +37,7 @@ select = ["E", "F", "I"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--import-mode=importlib"
+markers = ["browser: 실제 Chromium(Playwright)을 실행하는 테스트"]
 
 [dependency-groups]
 dev = [

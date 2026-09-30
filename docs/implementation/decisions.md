@@ -327,6 +327,18 @@ SQLite는 선택 가능한 offline 구현이며 운영 기본값을 정하지 �
 앞선 D09 PDF OPEN 표현은 당시 기록이다. 위 PDF 선택/측정/회계만 승인되었으며
 mode별 예외·실제 Generator/Judge·M3 live 완료를 함께 승인하거나 완료로 표시하지 않는다.
 
+## D09 후속 — 한글 HTML→Playwright PDF 경로 승인 (#175)
+
+- Status: APPROVED (추가 경로만; 위 ReportLab #95 승인은 삭제·변경하지 않는다)
+- Decision: 사용자 확인 UI 「제안한 HTML→PDF 경로·의존성 추가 승인」(2026-09-30, #175).
+  한글 정형 HTML을 저장하고 그 bytes를 Playwright/Chromium(`playwright==1.63.0`)으로 PDF화한다.
+  A4·18mm·NanumGothic·최대5페이지·SUMMARY≤0.5는 유지하며 PDF 좌표로 측정한다.
+- Error accounting: layout 위반은 공유 수정 예산(최대2회), browser/renderer 오류는 fatal이고
+  다른 renderer로 대체하지 않는다. fixture/stub은 final 승격 금지.
+- Affected: pyproject/uv.lock, reporting.html_report·html_pdf·korean_report, v3 Generator/Judge
+  prompt(`report-v3-2`), [korean-html-report.md](korean-html-report.md).
+- 병합·유료 API 실행·rubric/점수 변경은 승인 범위 밖이다.
+
 ## #94 D09 mode 형식·Generator/Judge 사용 범위 승인 — 2026-09-30
 
 xxhigh가 [제안한 형식·모델 범위를 승인](https://github.com/rice-steamed-water/skala-rag/issues/94#issuecomment-5906219758)했다.
