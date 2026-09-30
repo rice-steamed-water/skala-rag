@@ -13,6 +13,10 @@ from skala_rag.agents.evaluation import (
     assemble_evaluation,
     validate_output,
 )
+from skala_rag.agents.finance_verification import (
+    ReviewedFinancialFact,
+    validate_financial_facts,
+)
 from skala_rag.contracts.error_codes import ErrorCode, is_retryable
 from skala_rag.contracts.evaluation import EvaluationSnapshot
 from skala_rag.contracts.interfaces import Clock, LLMError, StructuredLLM
@@ -23,6 +27,7 @@ from skala_rag.contracts.v3 import (
     WorkflowError,
 )
 from skala_rag.prompts.business_deal_evaluation import SYSTEM_PROMPT, build_user_prompt
+from skala_rag.scoring.approved_policy import ApprovedScoringPolicy
 from skala_rag.scoring.catalog import ScoringPolicy
 from skala_rag.scoring.finance import Unavailable, to_amount
 from skala_rag.scoring.v3_policy import CATALOG
@@ -76,12 +81,13 @@ def evaluate_business_deal(
     snapshot: EvaluationSnapshot,
     *,
     rubric: Mapping[str, object],
-    policy: ScoringPolicy,
+    policy: ScoringPolicy | ApprovedScoringPolicy,
     llm: StructuredLLM,
     clock: Clock,
     schema_version: str,
     verifiers: ApprovedVerifiers,
     execution_mode: Literal["fixture", "real"] = "fixture",
+    financial_facts: tuple[ReviewedFinancialFact, ...] = (),
 ) -> EvaluationBranchResult:
     """One structured call; any invalid domain invalidates the entire branch.
 
@@ -108,6 +114,19 @@ def evaluate_business_deal(
     identity.update(schema_version=schema_version, branch_id="business_deal")
     code = ErrorCode.LLM_OUTPUT_INVALID
     try:
+        approved = isinstance(policy, ApprovedScoringPolicy)
+        if approved:
+            policy = ApprovedScoringPolicy.model_validate(policy.model_dump())
+            if policy.execution_mode != "fixture":
+                raise ValueError("live policy cannot enter fixture consumer")
+            if (
+                rubric.get("rubric_version") != policy.approvals.finance.version
+                or rubric.get("status") != "approved"
+                or verifiers.finance_version != policy.approvals.finance.version
+                or verifiers.applicability_version != policy.approvals.finance.version
+            ):
+                raise ValueError("approved finance version mismatch")
+        facts = validate_financial_facts(financial_facts, snapshot)
         if snapshot.policy_version != policy.policy_version:
             raise ValueError("policy mismatch")
         if rubric.get("rubric_version") != verifiers.rubric_version:
@@ -156,6 +175,34 @@ def evaluate_business_deal(
                         raise ValueError("unverified evidence")
                     if not set(e.supporting_evidence_ids) <= set(snapshot.evidence):
                         raise ValueError("support outside snapshot")
+                if approved and c.status != "missing":
+                    cited = (
+                        c.evidence_ids
+                        if c.status == "observed"
+                        else (c.applicability_evidence_ids or [])
+                    )
+                    if not cited or any(eid not in facts for eid in cited):
+                        raise ValueError("reviewed metric-role facts required")
+                    roles = {facts[eid].metric_role for eid in cited}
+                    if c.status == "not_applicable":
+                        if c.criterion_id == "traction.rule_of_40":
+                            if roles != {"confirmed_pre_revenue"}:
+                                raise ValueError("confirmed pre-revenue fact required")
+                        elif c.criterion_id == "traction.runway":
+                            if roles != {"operating_cash_flow"} or any(
+                                to_amount(facts[eid].evidence).value < 0
+                                for eid in cited
+                            ):
+                                raise ValueError("confirmed nonnegative OCF required")
+                        else:
+                            raise ValueError("unapproved N/A criterion")
+                    else:
+                        # Fact attribution is not anchor correspondence. Keep the
+                        # approved observed path closed until deterministic bands
+                        # and cross-metric derivations are implemented.
+                        raise ValueError(
+                            "approved observed rating correspondence unavailable"
+                        )
                 if c.status == "observed":
                     inputs = [allowed[eid] for eid in c.evidence_ids]
                     inputs += [
