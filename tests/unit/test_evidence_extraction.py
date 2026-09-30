@@ -18,6 +18,7 @@ from skala_rag.agents.evidence_extraction import (
     locate_excerpt,
     rag_segment,
     recompute_evidence_id,
+    split_segment,
     verify_provenance,
     web_segment,
 )
@@ -670,3 +671,75 @@ def test_pdf_whitespace_excerpt_still_checks_values(web):
     result, _ = extract(segment, {**REVENUE_CLAIM, "excerpt": tidy, "value": 150})
     assert result.evidence == {}
     assert [r.reason for r in result.rejected] == [ClaimRejection.VALUE_NOT_IN_EXCERPT]
+
+
+# --- #163 기업 자체 발행 Source와 긴 구간 분할 ----------------------------------------
+
+OWN_TEXT = (
+    "당사는 2025년 협동로봇 누적 출하량 1,200대를 달성했다.\n"
+    "경쟁사 가상 로봇 베타도 출시했다."
+)
+OWN_CLAIM = dict(
+    claim="협동로봇 누적 출하량 1,200대를 달성했다.",
+    excerpt="당사는 2025년 협동로봇 누적 출하량 1,200대를 달성했다.",
+    subject="가상 로봇 알파",
+    confidence="medium",
+)
+
+
+def own_segment(**source_changes):
+    snapshot = raw(OWN_TEXT)
+    src = source(snapshot).model_copy(update=source_changes)
+    return web_seg((snapshot, src, record("ret-own", src)))
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [{"publisher": "가상 로봇 알파 / arXiv"}, {"author": "Alpha Robotics Research"}],
+)
+def test_own_publication_does_not_require_name_in_excerpt(changes):
+    result, _ = extract(own_segment(**changes), OWN_CLAIM)
+    (item,) = result.evidence.values()
+    assert item.candidate_id == "co-alpha" and result.rejected == []
+
+
+@pytest.mark.parametrize(
+    "changes, claim",
+    [
+        ({"publisher": "가상 뉴스"}, OWN_CLAIM),
+        ({"publisher": "가상 로봇 알파"}, {**OWN_CLAIM, "subject": "가상 로봇 베타"}),
+    ],
+)
+def test_third_party_or_other_subject_still_rejected(changes, claim):
+    result, _ = extract(own_segment(**changes), claim)
+    assert result.evidence == {}
+    assert [r.reason for r in result.rejected] in (
+        [ClaimRejection.SUBJECT_NOT_IN_EXCERPT],
+        [ClaimRejection.SUBJECT_MISMATCH],
+    )
+
+
+def test_split_segment_keeps_substrings_within_bound(web):
+    segment = web_seg(web)
+    pieces = split_segment(segment, 90)
+    assert len(pieces) > 1
+    assert all(len(p.text.encode()) <= 90 and p.text in segment.text for p in pieces)
+    assert "".join(p.text for p in pieces) == segment.text
+    assert all(
+        (p.source, p.locator, p.provenance)
+        == (segment.source, segment.locator, segment.provenance)
+        for p in pieces
+    )
+    # 줄 경계에서 나뉘어 한 줄이 두 조각에 걸치지 않는다.
+    assert pieces[0].text.endswith("\n")
+
+
+def test_split_segment_hard_splits_long_line_and_drops_blank(web):
+    snapshot = raw("가" * 50 + "\n\n   \n")
+    src = source(snapshot)
+    segment = web_seg((snapshot, src, record("ret-long", src)))
+    pieces = split_segment(segment, 30)
+    assert all(len(p.text.encode()) <= 30 and p.text.strip() for p in pieces)
+    assert "".join(p.text for p in pieces) == "가" * 50
+    with pytest.raises(ValueError):
+        split_segment(segment, 0)

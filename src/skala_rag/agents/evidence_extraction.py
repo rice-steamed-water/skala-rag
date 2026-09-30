@@ -15,6 +15,8 @@
    날짜, 원문 속 지시문은 Evidence로 만들지 않고
    ``RejectedClaim``으로 남긴다(원문·모델 출력 문자열은 담지 않는다). 발췌가 원문과
    공백만 다르면 ``locate_excerpt``로 원문 구간을 찾아 그 구간으로 검증·저장한다(#161).
+   기업 자체 발행 Source는 발췌의 기업명을 요구하지 않는다. 긴 구간은 호출자가
+   ``split_segment``로 나눠 넘긴다(#163).
 3. Evidence ID는 ``contracts.ids.evidence_id``(식별 core, 경로 제외)로 만든다. 같은
    구간의 같은 주장을 Web·RAG로 다시 얻으면 같은 ID가 되고 #15 reducer
    (``merge_evidence``)가 provenance만 합친다.
@@ -30,7 +32,7 @@
 import re
 import unicodedata
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from enum import StrEnum
 from typing import Literal
@@ -274,6 +276,41 @@ def locate_excerpt(excerpt: str, text: str) -> str | None:
     return text[positions[start] : positions[start + len(needle) - 1] + 1]
 
 
+def _own_publication(source: Source, names: set[str]) -> bool:
+    """발행처 또는 저자에 대상 기업명·별칭이 있으면 기업 자체 발행 문서다(#163)."""
+    fields = [_name_key(f) for f in (source.publisher, source.author) if f]
+    return any(name in field for field in fields for name in names)
+
+
+def split_segment(segment: SourceSegment, max_bytes: int) -> list[SourceSegment]:
+    """검증된 구간을 UTF-8 ``max_bytes`` 이하 조각으로 나눈다(#163).
+
+    줄 경계에서 나누고, 한 줄이 상한을 넘으면 글자 단위로 자른다. 조각은 원문의
+    연속 부분 문자열이라 Source·locator·provenance를 그대로 쓴다. 공백뿐인 조각은
+    버린다. 조각 경계를 걸치는 주장은 복원하지 않는다.
+    """
+    if max_bytes < 1:
+        raise ValueError("max_bytes must be positive")
+    pieces: list[str] = []
+    current = ""
+    for line in segment.text.splitlines(keepends=True):
+        while len(line.encode()) > max_bytes:
+            cut = len(line)
+            while len(line[:cut].encode()) > max_bytes:
+                cut -= 1
+            if current:
+                pieces.append(current)
+                current = ""
+            pieces.append(line[:cut])
+            line = line[cut:]
+        if len((current + line).encode()) > max_bytes:
+            pieces.append(current)
+            current = ""
+        current += line
+    pieces.append(current)
+    return [replace(segment, text=piece) for piece in pieces if piece.strip()]
+
+
 def _check_claim(
     draft: ClaimDraft,
     segment: SourceSegment,
@@ -331,10 +368,13 @@ def _check_claim(
         names = {_name_key(n) for n in [candidate.canonical_name, *candidate.aliases]}
         if _name_key(draft.subject) not in names:
             return ClaimRejection.SUBJECT_MISMATCH
-        # 다른 기업 발췌에 대상 기업을 subject로 붙이는 경우를 막는다. 기업명 없는
-        # 발췌("당사는 …")도 거절되는 보수적 규칙이다.
+        # 다른 기업 발췌에 대상 기업을 subject로 붙이는 경우를 막는다. 기업이 직접
+        # 펴낸 Source(발행처·저자에 기업명)만 발췌의 기업명을 요구하지 않는다(#163).
+        # 제3자 문서의 기업명 없는 발췌("당사는 …")는 계속 거절한다.
         excerpt_key = _name_key(draft.excerpt)
-        if not any(name in excerpt_key for name in names):
+        if not _own_publication(segment.source, names) and not any(
+            name in excerpt_key for name in names
+        ):
             return ClaimRejection.SUBJECT_NOT_IN_EXCERPT
     return None
 
