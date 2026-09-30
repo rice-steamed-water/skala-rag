@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from skala_rag.contracts.errors import WorkflowError
 from skala_rag.contracts.evaluation import EvaluationResult
 from skala_rag.contracts.ids import eligibility_result_id, evaluation_key
 from skala_rag.contracts.inputs import RunInput
@@ -16,6 +17,7 @@ from skala_rag.contracts.state import create_initial_state
 from skala_rag.graph.candidates import (
     CandidateNodes,
     Explanation,
+    StageFailure,
     build_candidate_graph,
 )
 from skala_rag.graph.snapshot import freeze_snapshot
@@ -392,3 +394,136 @@ def test_discovery_error_is_not_zero_candidates(harness):
     assert result["workflow_status"] == "failed"
     assert result["run_outcome"] == "technical_failure"
     assert result["report_input"] is None
+
+
+def test_tool_failure_attributed_to_current_candidate(harness):
+    make, execute, _, _, _ = harness
+    nodes = make(["recommend"])
+
+    def failed(state):
+        raise StageFailure(
+            [
+                WorkflowError(
+                    schema_version="synthetic-1",
+                    error_id="tool-error",
+                    run_id="run-synthetic",
+                    candidate_id=None,
+                    node="research",
+                    error_code="TOOL_TIMEOUT",
+                    message_redacted="Synthetic timeout",
+                    retryable=True,
+                    attempt=1,
+                    timestamp=datetime(2026, 9, 1, tzinfo=timezone.utc),
+                )
+            ]
+        )
+
+    result = execute(replace(nodes, research=failed))
+    assert result["candidate_outcomes"]["co-0"]["failure_ids"] == ["tool-error"]
+    assert result["errors"][0]["error_code"] == "TOOL_TIMEOUT"
+
+
+def test_live_input_rejected_before_discovery_call(harness):
+    make, execute, calls, run, _ = harness
+    state = create_initial_state(run.model_dump(mode="json"))
+    state["run_input"]["execution_mode"] = "live"
+    nodes = make(["recommend"])
+
+    def should_not_run(state):
+        calls.append(("external-call", None))
+        raise AssertionError("Must not call live discovery")
+
+    result = execute(replace(nodes, discover=should_not_run), state)
+    assert not calls
+    assert result["workflow_status"] == "failed"
+
+
+@pytest.mark.parametrize(
+    "kind", ["missing_source", "duplicate_candidate", "invalid_source"]
+)
+def test_discovery_reference_errors_are_redacted(harness, kind):
+    make, execute, _, _, _ = harness
+    nodes = make(["recommend"])
+    original = nodes.discover
+
+    def bad(state):
+        delta = original(state)
+        if kind == "missing_source":
+            delta["sources"] = {}
+        elif kind == "duplicate_candidate":
+            delta["candidates"].append(deepcopy(delta["candidates"][0]))
+        else:
+            delta["sources"]["src-synthetic"]["source_kind"] = "secret-invalid"
+        return delta
+
+    result = execute(replace(nodes, discover=bad))
+    assert result["workflow_status"] == "failed"
+    assert "secret-invalid" not in json.dumps(result["errors"])
+
+
+def test_stage_cannot_overwrite_other_candidate_result(harness):
+    make, execute, _, _, _ = harness
+    nodes = make(["ineligible", "ineligible"])
+    original = nodes.eligibility
+
+    def bad(state):
+        delta = original(state)
+        if state["current_candidate_id"] == "co-1":
+            previous = deepcopy(state["eligibility_results"]["co-0"])
+            previous["status"] = "eligible"
+            delta["eligibility_results"]["co-0"] = previous
+        return delta
+
+    result = execute(replace(nodes, eligibility=bad))
+    assert result["eligibility_results"]["co-0"]["status"] == "ineligible"
+    assert result["candidate_outcomes"]["co-1"]["status"] == "failed"
+
+
+def test_stage_receives_detached_state(harness):
+    make, execute, _, _, _ = harness
+    nodes = make(["ineligible"])
+
+    def mutate(state):
+        state["sources"].clear()
+        state["candidate_index"] = 99
+        return {}
+
+    result = execute(replace(nodes, research=mutate))
+    assert "src-synthetic" in result["sources"]
+    assert result["candidate_index"] == 1
+
+
+def test_source_core_conflict_fails_candidate_before_reducer(harness):
+    make, execute, _, _, _ = harness
+    nodes = make(["recommend", "recommend"])
+    original = nodes.collect
+
+    def bad_first(state):
+        delta = original(state)
+        if state["current_candidate_id"] == "co-0":
+            source = deepcopy(state["sources"]["src-synthetic"])
+            source["title"] = "Conflicting synthetic core"
+            delta["sources"] = {source["source_id"]: source}
+        return delta
+
+    result = execute(replace(nodes, collect=bad_first))
+    assert result["candidate_outcomes"]["co-0"]["status"] == "failed"
+    assert result["selected_candidate_id"] == "co-1"
+    assert result["sources"]["src-synthetic"]["title"] == "Synthetic document"
+
+
+def test_explanation_cannot_cite_other_candidate_evidence(harness):
+    make, execute, _, _, _ = harness
+    nodes = make(["watchlist", "recommend"])
+    original = nodes.explain
+
+    def wrong_reference(state):
+        result = original(state)
+        if state["current_candidate_id"] == "co-1":
+            result.evidence_ids = ["ev-co-0"]
+        return result
+
+    result = execute(replace(nodes, explain=wrong_reference))
+    assert result["candidate_outcomes"]["co-0"]["status"] == "watchlist"
+    assert result["candidate_outcomes"]["co-1"]["status"] == "failed"
+    assert result["selected_candidate_id"] is None

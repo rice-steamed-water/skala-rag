@@ -9,15 +9,24 @@ from typing import Any
 
 from langgraph.graph import END, START, StateGraph
 
-from skala_rag.contracts.candidates import Candidate, EligibilityResult
+from skala_rag.contracts.candidates import Candidate, CompanyProfile, EligibilityResult
 from skala_rag.contracts.common import Contract, Text
+from skala_rag.contracts.coverage import CoverageResult, ResearchGap
 from skala_rag.contracts.decisions import ScoreSummary
 from skala_rag.contracts.errors import WorkflowError
-from skala_rag.contracts.evaluation import EvaluationSnapshot
+from skala_rag.contracts.evaluation import (
+    Evaluation,
+    EvaluationResult,
+    EvaluationSnapshot,
+)
+from skala_rag.contracts.evidence import Evidence
+from skala_rag.contracts.ids import evaluation_key
 from skala_rag.contracts.inputs import RunInput
 from skala_rag.contracts.reports import CandidateOutcome, ReportInput
-from skala_rag.contracts.sources import Source
+from skala_rag.contracts.retrieval import RetrievalRecord
+from skala_rag.contracts.sources import Chunk, Source
 from skala_rag.contracts.state import InvestmentState
+from skala_rag.graph.reducers import merge_evidence, merge_result_maps, merge_sources
 from skala_rag.graph.snapshot import SnapshotInvalid
 from skala_rag.scoring.catalog import ScoringPolicy
 from skala_rag.scoring.decide import decide
@@ -83,6 +92,27 @@ _WRITERS = {
     "aggregate": {"score_summaries"},
 }
 _REDUCER_MAPS = {"sources", "chunks", "evidence", "evaluation_results"}
+_PAYLOAD_MAPS = {
+    "sources": (Source, "source_id"),
+    "chunks": (Chunk, "chunk_id"),
+    "evidence": (Evidence, "evidence_id"),
+    "company_profiles": (CompanyProfile, "candidate_id"),
+    "eligibility_results": (EligibilityResult, "candidate_id"),
+    "coverage_results": (CoverageResult, "candidate_id"),
+    "snapshots": (EvaluationSnapshot, "snapshot_id"),
+    "evaluations": (Evaluation, None),
+    "evaluation_results": (EvaluationResult, None),
+    "score_summaries": (ScoreSummary, "candidate_id"),
+}
+_CANDIDATE_MAPS = {
+    "company_profiles",
+    "eligibility_results",
+    "coverage_results",
+    "research_gaps",
+    "evidence_revisions",
+    "evaluation_rounds",
+    "score_summaries",
+}
 
 
 def build_candidate_graph(
@@ -103,6 +133,12 @@ def build_candidate_graph(
     def require(condition, message):
         if not condition:
             raise ValueError(message)
+
+    require(isinstance(run_id, str) and bool(run_id.strip()), "Missing run_id")
+    require(
+        isinstance(schema_version, str) and bool(schema_version.strip()),
+        "Missing schema_version",
+    )
 
     def run_input(state):
         run = RunInput.model_validate(state["run_input"])
@@ -128,12 +164,13 @@ def build_candidate_graph(
                 )
             ]
         validated = [WorkflowError.model_validate(error) for error in errors]
-        require(
-            all(
-                e.run_id == run_id and e.candidate_id in (None, cid) for e in validated
-            ),
-            "Error attribution mismatch",
-        )
+        if not all(
+            e.run_id == run_id and e.candidate_id in (None, cid) for e in validated
+        ):
+            return fail(state, name)
+        validated = [
+            error.model_copy(update={"candidate_id": cid}) for error in validated
+        ]
         update = {"errors": [e.model_dump(mode="json") for e in validated]}
         if cid is None:
             update.update(workflow_status="failed", run_outcome="technical_failure")
@@ -151,6 +188,73 @@ def build_candidate_graph(
                 delta = dict(callback(detached))
                 require(set(delta) <= _WRITERS[name], "Stage writer violation")
                 delta = json.loads(json.dumps(delta, allow_nan=False))
+                context = {"execution_mode": "fixture"}
+                cid = state.get("current_candidate_id")
+                for field, value in delta.items():
+                    if field in _PAYLOAD_MAPS:
+                        model, identifier = _PAYLOAD_MAPS[field]
+                        for key, payload in value.items():
+                            dto = model.model_validate(payload, context=context)
+                            expected = (
+                                getattr(dto, identifier)
+                                if identifier
+                                else evaluation_key(
+                                    dto.candidate_id,
+                                    dto.evaluation_round,
+                                    dto.dimension,
+                                )
+                            )
+                            require(key == expected, "Stage payload map key mismatch")
+                            if hasattr(dto, "candidate_id"):
+                                require(
+                                    dto.candidate_id in (None, cid)
+                                    or state.get(field, {}).get(key) == payload,
+                                    "Stage payload belongs to another candidate",
+                                )
+                    if field in _CANDIDATE_MAPS:
+                        require(
+                            all(
+                                key == cid or state.get(field, {}).get(key) == payload
+                                for key, payload in value.items()
+                            ),
+                            "Stage modifies another candidate",
+                        )
+                    if field in ("evidence_revisions", "evaluation_rounds"):
+                        require(
+                            all(
+                                type(n) is int and n >= state.get(field, {}).get(key, 0)
+                                for key, n in value.items()
+                            ),
+                            "Invalid stage counter",
+                        )
+                    if field == "research_gaps":
+                        for key, gaps in value.items():
+                            require(
+                                all(
+                                    ResearchGap.model_validate(gap).candidate_id == key
+                                    for gap in gaps
+                                ),
+                                "ResearchGap attribution mismatch",
+                            )
+                    if field in _REDUCER_MAPS or field in ("snapshots", "evaluations"):
+                        merger = {
+                            "sources": merge_sources,
+                            "evidence": merge_evidence,
+                        }.get(field, merge_result_maps)
+                        # Validate conflicts before LangGraph applies its reducer.
+                        merger(state.get(field, {}), value)
+                if "retrieval_history" in delta:
+                    records = {}
+                    for payload in [
+                        *state.get("retrieval_history", []),
+                        *delta["retrieval_history"],
+                    ]:
+                        record = RetrievalRecord.model_validate(payload)
+                        require(record.run_id == run_id, "Retrieval run mismatch")
+                        records = merge_result_maps(
+                            records, {record.retrieval_id: payload}
+                        )
+                    delta["retrieval_history"] = list(records.values())
                 for field, value in list(delta.items()):
                     if isinstance(value, dict) and field not in _REDUCER_MAPS:
                         delta[field] = {**state.get(field, {}), **value}

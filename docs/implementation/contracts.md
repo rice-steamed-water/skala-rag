@@ -397,6 +397,16 @@ missing_reason을 요구한다. 실제 근거 존재·snapshot 포함 여부와 
 | `WorkflowError` | error_id, run_id, candidate_id?, node, error_code, message_redacted, retryable, attempt, timestamp |
 | `RunManifest` | 실행 입력, 코드 revision 또는 uncommitted 표시, schema/policy/prompt/model 버전, corpus hash, 도구 상태, 예산/사용량, artifact 경로·hash, 검증 결과, workflow_status, run_outcome |
 
+### #23 후보 Graph 인계
+
+InvestmentState에 nullable `report_input` JSON payload를 추가하며 초기값은 null이다.
+후보 controller가 첫 추천의 single_candidate 또는 정상 후보 소진의
+no_recommendation 입력을 작성한다. 전 후보 기술 실패나 Discovery 실패는
+workflow failed로 종료하며 정상 보고서 입력을 만들지 않는다. 후보 Graph 종료는
+보고서 완료가 아니므로 정상 인계의 workflow_status는 running, report는 null이다.
+failed 후보는 failure_ids만 인계하고 무효 적격성·점수/판정 참조는 포함하지 않는다.
+후속 build_report_context는 이 입력과 State payload의 참조를 검증한다(#26).
+
 ### ReportContext — 보고서 단계에 전달할 실제 내용
 
 보고서 controller가 `ReportInput`과 완료된 State로부터 context를 조립·검증하고 고정한다. 각 필드는 ID만 나열한 목록이 아니라 **해소된 DTO payload map**이다.
@@ -423,14 +433,14 @@ missing_reason을 요구한다. 실제 근거 존재·snapshot 포함 여부와 
 | 조사 제어 | coverage_results, research_gaps, research_retry_count, evidence_revisions | coverage/controller만 변경 |
 | 평가 | evaluation_results, evaluations, evaluation_rounds, snapshots | evaluation_results만 병렬 merge; 성공 evaluations는 join/직렬 평가 controller, rounds·snapshots는 Freeze controller |
 | 판정/이력 | score_summaries, investment_decisions, candidate_outcomes | 단계별 단독 writer; 후보 결과 덮어쓰기 금지 |
-| 보고서 | report_context, report_draft, report, report_validation, report_judgement, pdf_validation, report_revision_count | context는 controller가 최초 고정, 나머지는 순차 갱신 |
+| 보고서 | report_input, report_context, report_draft, report, report_validation, report_judgement, pdf_validation, report_revision_count | context는 controller가 최초 고정, 나머지는 순차 갱신 |
 | 오류/종료 | errors, workflow_status, run_outcome | 오류는 ID 병합; 종료 상태는 controller만 변경 |
 
 - 평가 key: `{candidate_id}:{evaluation_round}:{dimension}`. 원문의 `{candidate_id}:{dimension}`을 확장한 이유는 재평가 세대 혼입 방지다. `evaluation_results`도 같은 key를 쓰며 key와 envelope 필드가 일치해야 한다.
 - candidate_status: `discovered/researching/ineligible/eligibility_unknown/evaluating/recommend/watchlist/pass/failed/not_evaluated`.
 - workflow_status는 원문대로 `running/completed/failed`.
 - run_outcome은 `recommended/no_recommendation/no_candidates/insufficient_evidence/technical_failure` 중 하나. 완료와 투자 추천은 별개다.
-- 실행 시작 시 `research_retry_count={}`, `evaluation_rounds={}`, `evidence_revisions={}`, `snapshots={}`와 나머지 map/list를 비운다. `candidate_index=0`, `report_revision_count=0`; current/selected ID, report_context, report_draft, report는 null이다.
+- 실행 시작 시 `research_retry_count={}`, `evaluation_rounds={}`, `evidence_revisions={}`, `snapshots={}`와 나머지 map/list를 비운다. `candidate_index=0`, `report_revision_count=0`; current/selected ID, report_input, report_context, report_draft, report는 null이다.
 - 후보 최초 선택 시 후보별 map인 `research_retry_count`, `evaluation_rounds`, `evidence_revisions`에 각각 `setdefault(candidate_id, 0)`을 적용한다. 다른 후보로 이동해도 기존 후보의 count를 지우지 않는다. Freeze마다 해당 후보 evaluation_round를 증가시키며, 보고서 수정 횟수만 실행 단위 scalar다.
 - 완료 시 검증된 Markdown을 `report`에 넣는다. 실패 시 `report=null`, `report_draft`와 오류를 보존한다.
 - `candidate_index`는 처리 순서이지 기업 ID가 아니다. 후보 변경 시 평가 controller의 현재 세대 참조도 바꾼다.
