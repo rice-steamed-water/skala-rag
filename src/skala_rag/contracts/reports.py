@@ -115,6 +115,12 @@ class ReportDraft(Contract):
     reference_source_ids: list[Text]
     limitations: list[Text]
 
+    @model_validator(mode="after")
+    def validate_citation_metadata(self) -> Self:
+        validate_unique(self.cited_evidence_ids, "cited_evidence_ids")
+        validate_unique(self.reference_source_ids, "reference_source_ids")
+        return self
+
 
 class ValidationErrorDetail(Contract):
     code: Text

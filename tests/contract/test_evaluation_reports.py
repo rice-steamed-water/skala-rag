@@ -283,6 +283,14 @@ def test_context_keys_and_permissions(evaluation_payloads):
         contracts.ReportContext.model_validate(data)
 
 
+@pytest.mark.parametrize("field", ["cited_evidence_ids", "reference_source_ids"])
+def test_draft_citation_metadata_is_unique(field, evaluation_payloads):
+    data = evaluation_payloads["ReportDraft"]
+    data[field] = ["synthetic-id", "synthetic-id"]
+    with pytest.raises(ValidationError, match="must be unique"):
+        contracts.ReportDraft.model_validate(data)
+
+
 def test_snapshot_detached_payloads(evaluation_payloads):
     data = evaluation_payloads["EvaluationSnapshot"]
     instance = contracts.EvaluationSnapshot.model_validate(data)

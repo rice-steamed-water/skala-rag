@@ -1,4 +1,4 @@
-"""Public structural DTOs; policy decisions remain OPEN."""
+"""Public structural DTOs and IDs; policy computation belongs to controllers."""
 
 from .assessment import CriterionAssessment
 from .bundles import DiscoveryBundle, RetrievalBundle

@@ -27,8 +27,8 @@ D01–D06·D08의 정책 의미는 2026-09-30 xxhigh가 승인했다([승인 기
 `CompanyProfile`, `EligibilityResult`, `Source`, `Chunk`, `Evidence`,
 `EvidenceProvenance`, `DiscoveryBundle`, `RetrievalRequest`, `RetrievalBundle`,
 `RetrievalRecord`, `ResearchGap`, `CoverageResult`와 보조 `MonetaryObservation`을
-import할 수 있다. 이는 이 문서의 **구현 제안에 대한 구조 검증**이며 D01–D14는
-모두 OPEN이다. `eligible`, `research_ready`, 단계·bucket·confidence·status는
+import할 수 있다. 이는 이 문서의 **구현 제안에 대한 구조 검증**이며 정책 승인
+상태는 [결정 목록](decisions.md)을 따른다. `eligible`, `research_ready`, 단계·bucket·confidence·status는
 호출자가 공급한 관측을 저장할 뿐, 서로를 계산하거나 정당화하지 않는다.
 `execution_mode="live"`의 schema 통과도 정책·예산·도구 readiness 승인과 무관하다.
 State, reducer, stable ID 생성, snapshot/controller 참조 검증, 평가·점수·보고서·
@@ -163,10 +163,11 @@ DTO는 변경 가능한 경계 객체이므로 controller가 검증된 복사본
 | ScoreSummary.criterion_points | `dict[criterion_id, 유한 비음수 수치 또는 null]`; missing 기여를 0으로 바꾸지 않음 |
 | ScoreSummary.dimension_ratings | `dict[dimension, 유한 1..5 수치 또는 null]`; 영역 평균은 소수 허용 |
 | observed_score, missing_weight, coverage_pct | 앞의 두 값은 유한 비음수 수치, coverage는 0..100; 합산·분모·반올림·label은 별도 정책 계산 |
-| InvestmentDecision.report_grade, ReportFinding.severity | nonblank 문자열; 승인되지 않은 grade/severity taxonomy를 기본값으로 선택하지 않음 |
+| InvestmentDecision.report_grade, ReportFinding.severity | 호출자가 공급한 nonblank 문자열; DTO가 grade나 severity를 판단하거나 생성하지 않음 |
 | CandidateOutcome.status | 종료 상태 `ineligible/eligibility_unknown/recommend/watchlist/pass/failed/not_evaluated`; optional 결과 ID와 failure_ids의 해소는 controller 담당 |
 | ReportInput.candidate_outcomes | `list[CandidateOutcome]`, candidate_id 중복 거절; single_candidate는 해당 outcome의 selected ID 필수, no_recommendation은 selected=null |
 | ReportContext | 실제 DTO map; 각각 payload ID와 key 일치, evaluations key는 공통 evaluation_key와 일치, permitted_evidence_ids와 evidence key 집합 일치; 내용 조립/세대 참조는 #26 |
+| ReportDraft.cited_evidence_ids, reference_source_ids | 중복 없는 nonblank ID list; 실제 Markdown 인용/REFERENCE와의 집합 대조는 #27 ([D09 계약](reporting.md#정확한-집합-관계)) |
 | ValidationResult | checks는 JSON map, errors는 `list[ValidationErrorDetail]`; valid=true는 errors 빈 list, false는 오류 하나 이상 |
 | ReportJudgement | findings는 `list[ReportFinding]`, revision_instructions는 nonblank 문자열 list; verdict는 pass/revise/fail. 의미·severity에 따른 verdict 판단은 Judge 담당 |
 
