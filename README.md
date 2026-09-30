@@ -131,7 +131,9 @@ uv run pytest
 
 ### 구현된 실행 경로
 
-전체 투자 평가용 `app.py`·`cli.py`는 아직 없습니다. 독립 실행 가능한 PDF 추출 runner의 옵션은 다음 명령으로 확인합니다.
+**최종 실행 인터페이스는 Python 직접 호출입니다(#166).** 신규 CLI·flag·subcommand·console-script 패키징·CLI UX 개발은 중단합니다. 기존 `src/skala_rag/cli.py`의 fixture callable `run(...)`과 parser·테스트는 이미 존재하며 삭제하지 않습니다. 복사해 실행할 Python 코드와 receipt/hash 확인은 [Python 직접 실행 안내](docs/implementation/python-execution.md)를 따릅니다. 반환값은 `Path`이며 `RunResult`가 아닙니다. 전체 live 통합이나 새 `app.py` 구현을 뜻하지 않습니다.
+
+아래 PDF 추출 명령도 **기존 호환 도구 안내**이며 신규 실행 인터페이스 개발 요구가 아닙니다. 기존 옵션 확인:
 
 ```bash
 uv run python -m skala_rag.rag.extraction_runner --help
@@ -154,9 +156,9 @@ uv run python -m skala_rag.rag.extraction_runner --help
 | XXXXXim (심혁) | 23개 criterion rubric·재무 단위 규칙(#10, #11), 점수 집계·투자 판단과 DTO 어댑터(#16, #68), 영역 평가 wrapper(#22), ReportContext(#26), Structural Validator(#27), 재무 Evidence 단위·기간 검증(#53) |
 | hanyujin2002 (한유진) | 데이터·RAG 설계 및 문서화, 문서 유형별 Chunking·Embedding 전략 정리, DB/RAG 데이터 흐름 및 평가 Agent 연계 구조 설계 |
 
-## Fixture CLI (#29)
+## Fixture 실행 — Python 직접 호출 (#166)
 
-저장소 루트에서 다음 명령을 실행한다.
+저장소 루트의 설치된 환경에서 [정식 실행 예제](docs/implementation/python-execution.md#저장소-루트에서-실행하는-offline-fixture)를 실행한다. `from skala_rag.cli import run`은 기존 callable 재사용이며 argparse를 실행하지 않는다. 아래는 삭제하지 않고 보존하는 **legacy/호환 CLI** 예시일 뿐 새 표준 실행 방식이 아니다.
 
 ```bash
 uv run python -m skala_rag.cli --theme 'Physical AI robotics' --config tests/fixtures/cli-input.json
@@ -172,9 +174,13 @@ uv run python -m skala_rag.cli --theme 'Physical AI robotics' --config tests/fix
 Generator와 Judge 응답은 deterministic fixture stub이며 실모델 사실성 검증이 아니다.
 #95 renderer로 실제 fixture PDF를 생성·재검증하고 `report-context.json`,
 `report-draft.json`, `report-pipeline.json`, `validation-results.json`과 PDF도 저장한다.
-정상 fixture는 `completed`/exit 0, 공유 수정 2회 소진은 Warning/exit 2,
-fatal 오류는 `failed`/exit 1이다. `run-result.json`에서 종료 상태를 확인한다.
+정상 fixture는 `completed`/`acceptance=fixture_only`, 공유 수정 2회 소진은
+`completed`+Warning/`acceptance=warning`, fatal은 `failed`/`acceptance=rejected`다.
+반환 디렉터리의 `run-result.json`에서 상태·warnings·acceptance·publication_allowed를 확인한다.
+Python 프로세스 exit 0은 보고서 성공을 보장하지 않는다. 기존 receipt `exit_code`와
+CLI 0/2/1 매핑은 [호환 안내](docs/implementation/fixture-cli.md#기존-exit-code-매핑)에 보존한다.
 모든 fixture 출력은 `publication_allowed=false`이며 `report.md`나 제출용 final을
 발행하지 않는다. PDF가 검증되어도 실제 투자 조사·M3 성공 증거로 표시하지 않는다.
-`--pdf-profile`로 승인된 PDF 설정 경로를 명시할 수 있다.
-`--mode live` 또는 live 설정은 실행 전에 거절한다. 전체 live runner는 #96 범위다.
+직접 호출은 `pdf_profile` 인자로 승인된 PDF 설정 경로를 전달한다. 기존 CLI의
+`--pdf-profile`·`--mode`는 호환 옵션이다. fixture callable도 live 설정을 거절한다.
+전체 live runner는 #96 범위이며 신규 CLI 개발을 그 완료 조건으로 요구하지 않는다.

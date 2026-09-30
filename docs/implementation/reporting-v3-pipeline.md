@@ -73,7 +73,11 @@ callback이 #95 `PDFRenderer`에 최신 proof를 bind하고 `PDFLayoutValidator`
 반환한다. layout revise는 같은 예산을 소비하며 렌더/손상 오류는 예외 또는 action=fail이다.
 PDF callback 생략은 PDF 성공이 아니다. `ReportRunV3.final_allowed`는 항상 False이며,
 fixture/stub/Warning 또는 미검증 Markdown을 final PDF로 승격하지 않는다.
-최종 live 발행·CLI2/manifest/Graph 연결은 #29/#96 runner가 current proofs를 소비한다.
+기존 #29 fixture runner는 current proofs를 소비해 receipt/manifest를 저장한다.
+#166 이후 최종 인터페이스는 [Python 직접 호출](python-execution.md)이며 CLI2는
+[기존 호환 매핑](fixture-cli.md#기존-exit-code-매핑)이다. #96의 live 발행·Graph 통합은
+해당 담당 범위이고 추가 CLI 개발을 요구하지 않는다. Python 호출에서도 상태·Warning·
+acceptance/publication과 current proofs를 별도로 확인한다.
 
 ## Runtime·실측 한계
 

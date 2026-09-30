@@ -1,4 +1,19 @@
 # 결정 목록 — v3 방향·운영 승인과 남은 세부 정책
+
+<a id="execution-python-direct"></a>
+## EXECUTION-PYTHON-DIRECT — Python 직접 실행 승인 (#166)
+
+- Decision ID: EXECUTION-PYTHON-DIRECT
+- Status: APPROVED (실행 인터페이스 방향만; 문서 정합화)
+- Decision: Python 코드에서 기존 runner/Graph를 직접 호출하는 방식으로 마무리한다. 신규 CLI·flag·subcommand·console-script 패키징·CLI UX/배포 개선은 중단한다. 기존 병합 CLI/parser와 테스트는 호환성으로 보존한다.
+- Rationale and source: 사용자 작업 대화 “cli 관련 부분은 더이상 진행하지 말자. python을 직접 실행하는 것으로 끝내자.” 및 “issue로 만들어서 진행해. 설계 문서 업데이트부터”; [#166](https://github.com/rice-steamed-water/skala-rag/issues/166)에 기록.
+- Rejected alternatives: CLI-first 추가 개발; `python -m skala_rag.cli`를 직접 callable 실행으로 재명명; 존재하지 않는 실행 스크립트/API를 구현된 것으로 안내; 기존 코드·테스트 삭제.
+- Affected documents / policy version / tests: [Python 실행 안내](python-execution.md), README·문서 홈·architecture·contracts·delivery·alignment·fixture 안내. 정책/schema 버전 변경 없음. Python 호출 receipt·artifact 검증과 기존 fixture 회귀를 구별한다. #96 live runner 및 #111 도식은 담당자 정합화 대상이며 이 결정으로 완료되지 않는다.
+- Owner and reviewers: 사용자 승인, 기록자 luk0715 (#166); 다른 담당자 승인을 추정하지 않는다.
+- Source date: 2026-09-30 (작업 대화 및 이슈 근거 기록일). 이슈 생성 `2026-09-30T09:16:42Z`는 사용자 승인 시각이 아니며 별도 승인 시각은 미기록이다.
+- Supersedes: 신규 실행 인터페이스의 CLI-first 방향과 CLI 기능/프로세스 종료 코드를 새 개발 완료 조건으로 요구하는 부분만 대체한다. 아래 D01–D14·V3-OPERATIONS 원문 기록은 수정하지 않는다. completed+Warning·현재 draft/findings·final 금지·fatal 구분은 유지하며 CLI exit 0/2/1은 기존 호환 매핑이다.
+- Still gated: 정책·rubric·selector·provider·corpus·예산/readiness·유료 호출 승인은 이 결정의 범위가 아니다. 기존 `skala_rag.cli.run(...) -> Path` 재사용만 안내하며 runner 이동·새 RunResult API·live 구현 완료를 주장하지 않는다.
+
 ## #158 현재 실행 provider 제외 승인 범위
 
 사용자의 이번 실행 지시로 KIPRIS·KRX·중기부·Tavily를 제외하고 각각

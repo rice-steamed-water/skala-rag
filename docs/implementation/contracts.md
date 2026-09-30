@@ -15,6 +15,8 @@
 
 ## 1. 공통 규칙
 
+**실행 인터페이스 후속 승인 #166:** 신규 실행은 [Python 직접 호출](python-execution.md)을 따른다. 기존 `skala_rag.cli.run(...)`은 산출물 `Path`를 반환하고 해당 디렉터리의 `run-result.json`이 상태·warnings·acceptance·publication_allowed·reason을 담는다. 아래 제안 `RunResult` 반환 API/State 필드와 현재 callable의 shape는 다르다. 기존 receipt `exit_code`·policy의 CLI 관련 필드명은 호환성으로 유지하며 schema migration을 수행하지 않는다. 기존 종료 코드 매핑은 [호환 안내](fixture-cli.md#기존-exit-code-매핑)를 따른다. 정상 Python 종료가 검증 성공을 뜻하지 않으며 CLI 추가 개발은 요구하지 않는다.
+
 - Graph 컨테이너는 원문대로 `InvestmentState(TypedDict, total=False)` 방향을 유지한다. 외부/LLM 경계의 DTO는 Pydantic으로 검증한다.
 - 누락값은 `null`/`None`. 숫자 0, 빈 문자열, 추측한 값으로 대체하지 않는다. 0은 실제 관측값일 수 있다.
 - 날짜는 ISO 8601, 시각은 시간대 포함. 발행일·사건일·수집일을 분리한다.
@@ -446,8 +448,8 @@ missing_reason을 요구한다. 실제 근거 존재·snapshot 포함 여부와 
 | `ValidationResult` | valid, context_id, checks, errors (`code/location/message`), artifact_hash |
 | `ReportJudgement` | verdict (`pass/revise/fail`), context_id, findings (`severity/claim_location/evidence_ids/reason`), revision_instructions, judged_artifact_hash |
 | `WorkflowError` | error_id, run_id, candidate_id?, node, error_code, message_redacted, retryable, attempt, timestamp |
-| `RunManifest` | 실행 입력, 코드 revision 또는 uncommitted 표시, schema/policy/prompt/model 버전, corpus hash, 도구 상태, 예산/사용량, artifact 경로·hash, 검증 결과, workflow_status, run_outcome; Warning completed·CLI2·final 금지는 승인; manifest 필드 연결은 후속 |
-| `RunResult` | 제안: run_id, execution_terminated, current_draft?, validated_report?, validation_findings, warnings, acceptance, publication_allowed; completed Warning·CLI exit=2·final 금지는 승인; payload/manifest 연결은 후속 |
+| `RunManifest` | 실행 입력, 코드 revision 또는 uncommitted 표시, schema/policy/prompt/model 버전, corpus hash, 도구 상태, 예산/사용량, artifact 경로·hash, 검증 결과, workflow_status, run_outcome; Warning completed·final 금지는 유지; 현재 fixture와 목표 연결은 실행 안내로 구별 |
+| `RunResult` | 제안: run_id, execution_terminated, current_draft?, validated_report?, validation_findings, warnings, acceptance, publication_allowed; completed Warning·final 금지 유지; 현재 callable 반환은 Path이며 receipt를 별도 읽음 |
 
 ### #23 후보 Graph 인계 — 현재 baseline 구현, v3 목표 아님
 
@@ -474,7 +476,7 @@ failed 후보는 failure_ids만 인계하고 무효 적격성·점수/판정 참
 
 ### Warning 반환과 final 발행 — #82 운영 승인, PDF 상세 OPEN
 
-최초 생성 제외 구조·의미 공유 수정2회 후 completed + Warning·현재 draft/findings·CLI exit=2·validated final 금지는 승인되었다. **실행 종료, 결과 반환, 검증 수용(acceptance), 최종 발행(publication)은 별개**다. 제안하는 RunResult는 현재 draft와 그 hash에 묶인 findings·Warning을 반환하되, 실패/미검증 draft를 validated_report나 State.report로 승격하지 않는다.
+최초 생성 제외 구조·의미 공유 수정2회 후 completed + Warning·현재 draft/findings·validated final 금지는 승인되었다. #166은 CLI 종료 코드 대신 Python 상태/receipt를 실행 확인 기준으로 한다. **실행 종료, 결과 반환, 검증 수용(acceptance), 최종 발행(publication)은 별개**다. 제안하는 RunResult는 현재 draft와 그 hash에 묶인 findings·Warning을 반환하되, 실패/미검증 draft를 validated_report나 State.report로 승격하지 않는다.
 
 | 경로 | 반환/보존 제안 | 검증·발행 경계 |
 | --- | --- | --- |
@@ -482,7 +484,7 @@ failed 후보는 failure_ids만 인계하고 무효 적격성·점수/판정 참
 | 구조/의미 revise 한도 소진 | current_draft, 기존 검증 결과·미실행 검사 표시, warnings | failed/not-run 검사를 pass로 바꾸지 않음; final 발행 불가 |
 | context/upstream 참조 파손·실행 오류 | 오류·진단·있다면 draft 보존, fatal 종료 | Warning 품질 경로로 복구하거나 투자 결론을 지어내지 않음 |
 
-`workflow_status`는 `running/completed/failed`를 유지한다. 구조·의미 수정 소진은 completed + Warning 및 CLI exit=2, context/upstream 파손은 failed다. acceptance payload/manifest/파일명·PDF layout 회계는 별도 연결·승인 대상이다. 이 문서가 `completed_with_warning` 같은 enum을 추가 승인하지 않는다. `report_revision_count=0`으로 최초 생성, 각 재작성 직전에 +1, 구조·의미 합산 2회, 두 번째 수정도 실패하면 세 번째 수정 없이 Warning을 반환하는 승인 규칙을 테스트한다. 실제 renderer 실패·깨진 context는 별도 fatal로 다루며 그 구체적 경계도 D08·D09에 기록한다.
+`workflow_status`는 `running/completed/failed`를 유지한다. 구조·의미 수정 소진은 completed + Warning, context/upstream 파손은 failed다. 기존 CLI exit=2는 호환 매핑이며 Python 호출의 프로세스 종료 코드를 강제하지 않는다. 목표 acceptance payload/manifest 연결과 현재 fixture receipt는 구별한다. 이 문서가 `completed_with_warning` 같은 enum을 추가 승인하지 않는다. `report_revision_count=0`으로 최초 생성, 각 재작성 직전에 +1, 구조·의미 합산 2회, 두 번째 수정도 실패하면 세 번째 수정 없이 Warning을 반환하는 승인 규칙을 테스트한다. 실제 renderer 실패·깨진 context는 별도 fatal로 다루며 그 구체적 경계도 D08·D09에 기록한다.
 
 ## 6. InvestmentState 계약과 단독 writer
 
@@ -499,18 +501,20 @@ failed 후보는 failure_ids만 인계하고 무효 적격성·점수/판정 참
 | 평가 | evaluation_results, evaluations, evaluation_rounds, snapshots | branch-key evaluation_results만 병렬 merge; dimension-key 성공 evaluations는 Join 단독 writer, rounds·snapshots는 Freeze controller |
 | 판정/이력 | score_summaries, investment_decisions, candidate_outcomes | 단계별 단독 writer; 후보 결과 덮어쓰기 금지 |
 | 보고서 | report_input, report_context, report_draft, report, report_validation, report_judgement, pdf_validation, report_revision_count | context는 controller가 최초 고정, 나머지는 순차 갱신 |
-| 오류/종료 | errors, workflow_status, run_outcome, run_result | 오류는 ID 병합; 종료/acceptance/publication은 controller만 변경; 수정 소진은 completed + Warning, CLI exit=2 |
+| 오류/종료 | errors, workflow_status, run_outcome, run_result | 오류는 ID 병합; 종료/acceptance/publication은 controller만 변경; 수정 소진은 completed + Warning·final 금지 |
 
 - `evaluation_results` key는 `{candidate_id}:{evaluation_round}:{branch_id}`(5개), 성공 `evaluations` key는 `{candidate_id}:{evaluation_round}:{dimension}`(6개)다. 각각 envelope/payload와 일치해야 한다. 원문의 후보+차원 key에 세대를 더하는 것은 혼입 방지용이며 사후 재평가 loop를 새로 요구하지 않는다.
 - candidate_status 제안: `discovered/researching/ineligible/eligibility_unknown/evaluating/recommend_priority/recommend/watchlist/pass/failed`. 실행 중단 시 미처리 후보의 `not_evaluated` 필요 여부는 D03·D08에서 결정하며 정상 첫 추천의 결과로 사용하지 않는다. 상태와 네 대문자 투자 label은 별개 필드다.
-- workflow_status는 v3의 `running/completed/failed`를 보존한다. 구조·의미 수정 소진은 completed + Warning이며 CLI exit=2, context/upstream 파손은 failed다.
-- run_outcome의 과거 제안은 `recommended/no_recommendation/no_candidates/insufficient_evidence/technical_failure`였다. 이 목록은 현재 baseline State enum이며 v3 네 label·selection·acceptance 연결은 후속이다. Warning workflow=completed·CLI2 승인과 구별한다. 완료와 투자 추천은 별개다.
+- workflow_status는 v3의 `running/completed/failed`를 보존한다. 구조·의미 수정 소진은 completed + Warning이며 context/upstream 파손은 failed다. Python receipt·현재 draft/findings·발행 금지를 확인한다.
+- run_outcome의 과거 제안은 `recommended/no_recommendation/no_candidates/insufficient_evidence/technical_failure`였다. 이 목록은 현재 baseline State enum이며 v3 네 label·selection·acceptance 연결은 후속이다. Warning workflow=completed 승인과 구별한다. 완료와 투자 추천은 별개다.
 - 실행 시작 시 `research_retry_count={}`, `evaluation_rounds={}`, `evidence_revisions={}`, `snapshots={}`와 나머지 map/list를 비운다. `candidate_index=0`, `report_revision_count=0`; current/selected ID, selection_result, report_input, report_context, report_draft, report, run_result는 null이다.
 - 후보 최초 선택 시 후보별 map인 `research_retry_count`, `evaluation_rounds`, `evidence_revisions`에 각각 `setdefault(candidate_id, 0)`을 적용한다. 다른 후보로 이동해도 기존 후보의 count를 지우지 않는다. Freeze마다 해당 후보 evaluation_round를 증가시키며, 보고서 수정 횟수만 실행 단위 scalar다.
 - 구조·의미·PDF 검증을 모두 통과한 현재 artifact만 `report`에 넣는다. Warning 반환 또는 fatal 실패 시 `report=null`, draft·findings·오류를 별도 보존한다. Warning=검증 통과로 해석하지 않는다.
 - `candidate_index`는 처리 순서이지 기업 ID가 아니다. 후보 변경 시 평가 controller의 현재 세대 참조도 바꾼다.
 
 ## 7. 팀 사이의 함수 경계 — 구현할 인터페이스
+
+아래는 목표 인터페이스이며 실행 예제의 public callable 목록이 아니다. 과거 pinned 구현 설명의 CLI 미구현 표현은 당시 snapshot이다. #166 확인 기준의 fixture callable·산출물은 [Python 실행 안내](python-execution.md)로 보완하며 전체 live 통합 완료로 확대하지 않는다.
 
 ```text
 search_candidates(request, budget) -> ToolResult[DiscoveryBundle]

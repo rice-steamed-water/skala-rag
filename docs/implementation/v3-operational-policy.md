@@ -2,6 +2,8 @@
 
 ## 범위와 승인
 
+**#166 실행 인터페이스 overlay:** 신규 실행 기준은 [Python 직접 호출과 receipt](python-execution.md)다. 아래 #82 정책·필드명과 과거 미연결 snapshot은 보존하되 CLI 개발 요구로 읽지 않는다. 기존 CLI/parser·테스트·exit-code 매핑은 [호환 안내](fixture-cli.md#기존-exit-code-매핑)에 남긴다. 정책 파일의 CLI 관련 이름/값은 이번 문서 변경으로 삭제·변경하지 않는다.
+
 승인 근거는 `rice-steamed-water/skala-rag#82`의 본문(2026-09-30)이다.
 `configs/scoring.v3.json` / `v3-operational-1.0.0`은 운영 규칙의 별도 버전이다.
 기존 `configs/scoring.draft.json`, rubric, 공통 DTO/State는 변경하지 않는다.
@@ -39,7 +41,7 @@ assert restored == policy
 | `applicability` | 근거 부재 missing; N/A는 적용 사유·승인 rule·적용성 근거 모두 필요 |
 | `selection` | eligible 정상 평가 후보, label 우선 → normalized_score DESC → weighted_missing_pct ASC → 원본 candidate_id ASC |
 | `research` | 후보별 추가 2회, 최초 제외, 요청 전 차감, empty/failure 소비, 평가 후 금지 |
-| `report` | 구조/의미 수정 공유 2회, 최초 제외; 소진 시 completed + Warning, draft/findings, validated final 금지, CLI exit 2; context/upstream 파손 failed |
+| `report` | 구조/의미 수정 공유 2회, 최초 제외; 소진 시 completed + Warning, draft/findings, validated final 금지; context/upstream 파손 failed. 기존 CLI exit 2는 호환 매핑이며 Python 상태/receipt로 확인 |
 
 `numeric.missing_comparison`은 `>=`, `low_dimension_comparison`은 `<=`,
 `score_comparison`은 `>=`이다. 따라서 결측률 30 이상 또는 market/technology
@@ -66,6 +68,8 @@ baseline 모델을 구성해 catalog 검증만 호출하며 draft 정책이나 D
 이 변경은 기존 baseline 실행 함수를 자동 변경하지 않는다.
 
 ## 아직 구현하지 않은 부분
+
+다음 목록은 #82 loader 작성 당시의 구현 경계다. #166 기준의 fixture callable·보고서 receipt 연결은 [실행 안내](python-execution.md)로 보완하며 CLI exit 2를 새로 구현할 할 일로 취급하지 않는다. loader 자체가 전체 Graph/live 실행을 구현하는 것은 아니다.
 
 - 실제 applicability rule 목록/권한 검증은 **외부 controller의 필수 입력**이다.
   이 정책에 목록이나 자동 승인 기본값을 만들지 않는다. loader 통과는 N/A 승인 증명이 아니다.
