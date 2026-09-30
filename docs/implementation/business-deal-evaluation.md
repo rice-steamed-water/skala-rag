@@ -24,9 +24,11 @@ missing이나 0점으로 바꾸지 않는다. 별도 FX나 재무 파생값을 �
 ## 검증과 차단
 
 테스트의 verifier/버전은 synthetic fixture다. 정책 승인·실측이 아니다.
-`execution_mode="real"`은 #55 실제 조사
-통합 미완료 때문에 차단한다. #47 adapter/#45 runtime은 StructuredLLM protocol로
-주입 가능하지만 이번 작업은 외부 요청·credential·유료 호출을 실행하지 않는다.
+#55 실제 조사 통합은 병합되었지만 평가 실행 준비 완료를 의미하지 않는다.
+`execution_mode="real"`은 아래 Finance semantic prerequisite 때문에 계속 차단한다.
+공식 adapter/runtime의 actual mode는 `live`이며 `real`을 새 runtime mode로
+해석하거나 fixture evidence를 재라벨링하지 않는다. #47 adapter/#45 runtime은
+StructuredLLM protocol로 주입 가능하지만 이번 작업은 외부 요청·credential·유료 호출을 실행하지 않는다.
 실제 structured-output smoke는 완료하지 않았으며 offline test와 구별한다.
 
 ## Finance 승인 후 semantic boundary
