@@ -2,16 +2,18 @@
 
 import hashlib
 import json
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
 from io import BytesIO
+from pathlib import Path
 from typing import Literal
 from urllib.parse import urldefrag
 
 from pypdf import PdfReader
 
 from skala_rag.contracts import Chunk, Source
-from skala_rag.rag.corpus import ManifestDocument
+from skala_rag.rag.corpus import CorpusManifest, ManifestDocument
 from skala_rag.tools.source_fetch import content_hash
 
 
@@ -24,6 +26,7 @@ class PageChunkSettings:
     tokenizer: Literal["none-page-atomic"]
     document_kind: Literal["technical_whitepaper", "product_document"]
     version: str
+    section_mode: Literal["provided", "pdf-outline"] = "provided"
 
     def __post_init__(self):
         if type(self.max_characters) is not int or self.max_characters <= 0:
@@ -34,6 +37,8 @@ class PageChunkSettings:
             raise ValueError("tokenizer 분할은 지원하지 않습니다")
         if self.document_kind not in ("technical_whitepaper", "product_document"):
             raise ValueError("기술 백서·제품 문서 PDF만 지원합니다")
+        if self.section_mode not in ("provided", "pdf-outline"):
+            raise ValueError("지원하지 않는 section 추출 방식입니다")
         if not self.version.strip():
             raise ValueError("chunk 설정 버전이 필요합니다")
 
@@ -55,6 +60,110 @@ class ExtractionResult:
     source_id: str
     content_hash: str
     corpus_version: str
+
+
+class _LayoutWarnings(logging.Handler):
+    def __init__(self):
+        super().__init__(logging.WARNING)
+        self.warned = False
+
+    def emit(self, record):
+        self.warned = True
+
+
+def _page_text(page):
+    logger = logging.getLogger("pypdf")
+    handler = _LayoutWarnings()
+    logger.addHandler(handler)
+    try:
+        text = page.extract_text(
+            extraction_mode="layout", layout_mode_strip_rotated=False
+        )
+        return text, handler.warned
+    finally:
+        logger.removeHandler(handler)
+
+
+def _contains_visual(resources, seen=None):
+    seen = set() if seen is None else seen
+    resources = (
+        resources.get_object() if hasattr(resources, "get_object") else resources
+    )
+    xobjects = resources.get("/XObject", {})
+    xobjects = xobjects.get_object() if hasattr(xobjects, "get_object") else xobjects
+    for reference in xobjects.values():
+        item = reference.get_object()
+        if id(item) in seen:
+            continue
+        seen.add(id(item))
+        if item.get("/Subtype") == "/Image":
+            return True
+        if item.get("/Subtype") == "/Form":
+            if _contains_visual(item.get("/Resources", {}), seen):
+                return True
+        else:
+            return True
+    return False
+
+
+def _outline_sections(reader):
+    sections = {}
+
+    def walk(items, parents):
+        previous = parents
+        for item in items:
+            if isinstance(item, list):
+                walk(item, previous)
+                continue
+            title = str(item.get("/Title", "")).strip()
+            page = reader.get_destination_page_number(item)
+            if not title or page is None or not 0 <= page < len(reader.pages):
+                raise ValueError("PDF outline 참조 오류")
+            previous = (*parents, title)
+            sections[page + 1] = " / ".join(previous)
+
+    walk(reader.outline, ())
+    return sections
+
+
+def extract_local_document(
+    manifest: CorpusManifest,
+    document_id: str,
+    source: Source,
+    *,
+    root: Path,
+    schema_version: str,
+    settings: PageChunkSettings,
+    sections_by_page: Mapping[int, str],
+    embedding_model: str,
+    embedding_revision: str,
+) -> ExtractionResult:
+    """승인 manifest의 data/local 원문을 읽는다. 다운로드나 승인을 대신하지 않는다."""
+    document = manifest.document(document_id)
+    if not document.approved or not document.reviewer:
+        raise ValueError("승인·검토자가 있는 문서만 읽을 수 있습니다")
+    if document.local_path.startswith("fixture://"):
+        raise ValueError("실제 로컬 실행 경로에는 fixture://를 사용할 수 없습니다")
+    target = (root / document.local_path).resolve()
+    permitted = (root / "data/local").resolve()
+    if not target.is_relative_to(permitted) or not target.is_relative_to(
+        root.resolve()
+    ):
+        raise ValueError("원문 경로가 허용된 data/local 밖입니다")
+    if target.suffix.lower() != ".pdf":
+        raise ValueError("첫 로컬 추출 경로는 PDF만 지원합니다")
+    return extract_pdf(
+        target.read_bytes(),
+        document,
+        source,
+        corpus_version=manifest.corpus_version,
+        schema_version=schema_version,
+        settings=settings,
+        sections_by_page=sections_by_page,
+        embedding_model=embedding_model,
+        embedding_revision=embedding_revision,
+        execution_mode="live",
+    )
 
 
 def extract_pdf(
@@ -110,37 +219,39 @@ def extract_pdf(
             for page, section in sections_by_page.items()
         ):
             raise ValueError("section metadata 페이지·제목 오류")
+        outline = {}
+        if settings.section_mode == "pdf-outline":
+            try:
+                outline = _outline_sections(reader)
+            except Exception:
+                issues.append(ExtractionIssue("OUTLINE_UNREADABLE", None))
         for number, page in enumerate(reader.pages, start=1):
             if "/Contents" not in page:
                 issues.append(ExtractionIssue("NO_EXTRACTABLE_TEXT", number))
                 continue
             try:
-                text = page.extract_text(extraction_mode="layout")
+                text, warned = _page_text(page)
+                if warned:
+                    issues.append(ExtractionIssue("TEXT_LAYOUT_WARNING", number))
             except Exception:
                 issues.append(ExtractionIssue("TEXT_EXTRACTION_FAILED", number))
                 continue
             if not text or not text.strip():
                 issues.append(ExtractionIssue("NO_EXTRACTABLE_TEXT", number))
                 continue
-            resources = page.get("/Resources", {})
-            resources = (
-                resources.get_object()
-                if hasattr(resources, "get_object")
-                else resources
-            )
-            xobjects = resources.get("/XObject", {})
-            xobjects = (
-                xobjects.get_object() if hasattr(xobjects, "get_object") else xobjects
-            )
-            if xobjects:
-                # Form 내부 이미지 가능성도 시각 payload 누락으로 표시한다.
+            if _contains_visual(page.get("/Resources", {})):
                 issues.append(ExtractionIssue("VISUAL_CONTENT_NOT_EXTRACTED", number))
             if len(text) > settings.max_characters:
                 issues.append(ExtractionIssue("PAGE_EXCEEDS_CHARACTER_LIMIT", number))
+            preceding = [
+                page_number for page_number in outline if page_number <= number
+            ]
             section = sections_by_page.get(number)
+            if section is None and preceding:
+                section = outline[max(preceding)]
             key = json.dumps(
                 [
-                    "page-chunk-v1",
+                    "page-chunk-v2",
                     document.source_id,
                     digest,
                     corpus_version,
@@ -155,7 +266,7 @@ def extract_pdf(
                 ensure_ascii=False,
                 separators=(",", ":"),
             ).encode("utf-8")
-            identifier = "chunk-page-v1-" + hashlib.sha256(key).hexdigest()
+            identifier = "chunk-page-v2-" + hashlib.sha256(key).hexdigest()
             locator = urldefrag(source.url or source.local_path)[0] + f"#page={number}"
             chunk = Chunk.model_validate(
                 dict(

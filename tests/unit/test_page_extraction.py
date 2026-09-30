@@ -225,3 +225,222 @@ def test_partial_pdf_preserves_original_page_number(context):
     assert result.chunks[0].page_start == 2
     assert result.chunks[0].locator.endswith("#page=2")
     assert result.issues[0].page == 1
+
+
+def test_text_form_is_not_falsely_reported_as_missing_image():
+    from skala_rag.rag.extraction import _contains_visual
+
+    resources = DictionaryObject(
+        {
+            NameObject("/XObject"): DictionaryObject(
+                {
+                    NameObject("/Fm"): DictionaryObject(
+                        {NameObject("/Subtype"): NameObject("/Form")}
+                    )
+                }
+            )
+        }
+    )
+    assert _contains_visual(resources) is False
+    resources["/XObject"]["/Fm"][NameObject("/Resources")] = DictionaryObject(
+        {
+            NameObject("/XObject"): DictionaryObject(
+                {
+                    NameObject("/Im"): DictionaryObject(
+                        {NameObject("/Subtype"): NameObject("/Image")}
+                    )
+                }
+            )
+        }
+    )
+    assert _contains_visual(resources) is True
+
+
+def test_outline_section_hierarchy_and_inheritance(context):
+    from pypdf import PdfReader
+
+    content, document, source = context
+    writer = PdfWriter()
+    writer.clone_document_from_reader(PdfReader(BytesIO(content)))
+    parent = writer.add_outline_item("Integration", 0)
+    writer.add_outline_item("Control loop", 1, parent=parent)
+    buffer = BytesIO()
+    writer.write(buffer)
+    content = buffer.getvalue()
+    document = document.model_copy(update={"content_hash": content_hash(content)})
+    source = source.model_copy(update={"content_hash": content_hash(content)})
+    result = extract(
+        (content, document, source),
+        settings=settings(section_mode="pdf-outline"),
+        sections_by_page={},
+    )
+    assert result.status == "ok"
+    assert result.chunks[0].section == "Integration"
+    assert result.chunks[1].section == "Integration / Control loop"
+    override = extract(
+        (content, document, source),
+        settings=settings(section_mode="pdf-outline"),
+        sections_by_page={2: "검토자가 지정한 제목"},
+    )
+    assert override.chunks[1].section == "검토자가 지정한 제목"
+
+
+def test_approved_local_manifest_and_path_boundary(context, tmp_path):
+    from skala_rag.rag.corpus import CorpusManifest
+    from skala_rag.rag.extraction import extract_local_document
+
+    content, document, source = context
+    path = tmp_path / "data/local/manual.pdf"
+    path.parent.mkdir(parents=True)
+    path.write_bytes(content)
+    document = ManifestDocument.model_validate(
+        dict(document.model_dump(mode="json"), local_path="data/local/manual.pdf")
+    )
+    source = Source.model_validate(
+        dict(source.model_dump(mode="json"), local_path="data/local/manual.pdf")
+    )
+    manifest = CorpusManifest(
+        schema_version="fixture-1",
+        corpus_version="corpus-fixture",
+        documents=(document,),
+    )
+    arguments = dict(
+        root=tmp_path,
+        schema_version="fixture-1",
+        settings=settings(),
+        sections_by_page={},
+        embedding_model="not-embedded",
+        embedding_revision="not-embedded",
+    )
+    result = extract_local_document(manifest, document.document_id, source, **arguments)
+    assert result.status == "ok"
+    assert result.chunks[0].locator == "data/local/manual.pdf#page=1"
+    external = tmp_path / "outside.pdf"
+    external.write_bytes(content)
+    # 생성한 임시 PDF도 data/local 밖으로 연결된 symlink로 읽지 못한다.
+    link = tmp_path / "data/local/link.pdf"
+    link.symlink_to(external)
+    changed = document.model_copy(update={"local_path": "data/local/link.pdf"})
+    manifest = CorpusManifest(
+        schema_version="fixture-1",
+        corpus_version="corpus-fixture",
+        documents=(changed,),
+    )
+    with pytest.raises(ValueError, match="data/local"):
+        extract_local_document(manifest, document.document_id, source, **arguments)
+
+
+def test_extraction_chunk_consumed_by_real_rag_segment(context):
+    from skala_rag.agents.evidence_extraction import rag_segment
+    from skala_rag.contracts import RetrievalBundle, RetrievalRecord
+
+    result = extract(context)
+    chunk = result.chunks[0]
+    bundle = RetrievalBundle.model_validate(
+        dict(
+            schema_version="fixture-1",
+            chunks=[chunk],
+            sources={context[2].source_id: context[2]},
+        ),
+        context={"execution_mode": "fixture"},
+    )
+    record = RetrievalRecord(
+        schema_version="fixture-1",
+        retrieval_id="retrieval-fixture",
+        run_id="run-fixture",
+        candidate_id="co-fixture",
+        tool_name="fixture-search",
+        arguments_without_secrets={},
+        started_at="2026-09-30T00:00:00Z",
+        finished_at="2026-09-30T00:00:01Z",
+        status="ok",
+        source_ids=[chunk.source_id],
+        chunk_ids=[chunk.chunk_id],
+        evidence_ids=[],
+        cache_hit=False,
+    )
+    segment = rag_segment(chunk, bundle, record, schema_version="fixture-1")
+    assert segment.locator == chunk.locator
+    assert segment.text == chunk.text
+    assert segment.provenance.chunk_id == chunk.chunk_id
+
+
+def test_runner_writes_only_local_outputs_and_retains_metadata(context, tmp_path):
+    import json
+    from dataclasses import asdict
+
+    from skala_rag.rag.corpus import CorpusManifest
+    from skala_rag.rag.extraction_runner import run_extraction
+
+    content, document, source = context
+    path = tmp_path / "data/local/manual.pdf"
+    path.parent.mkdir(parents=True)
+    path.write_bytes(content)
+    document = ManifestDocument.model_validate(
+        dict(document.model_dump(mode="json"), local_path="data/local/manual.pdf")
+    )
+    source = Source.model_validate(
+        dict(source.model_dump(mode="json"), local_path=document.local_path)
+    )
+    manifest = CorpusManifest(
+        schema_version="fixture-1",
+        corpus_version="corpus-fixture",
+        documents=(document,),
+    )
+    files = {}
+    for name, payload in [
+        ("manifest", manifest.model_dump(mode="json")),
+        ("source", source.model_dump(mode="json")),
+        ("settings", asdict(settings(section_mode="pdf-outline"))),
+        ("sections", {}),
+    ]:
+        files[name] = tmp_path / f"{name}.json"
+        files[name].write_text(json.dumps(payload))
+    arguments = dict(
+        root=tmp_path,
+        manifest_path=files["manifest"],
+        source_path=files["source"],
+        settings_path=files["settings"],
+        sections_path=files["sections"],
+        document_id=document.document_id,
+        embedding_model="not-embedded",
+        embedding_revision="not-embedded",
+    )
+    output = tmp_path / "outputs/fixture/extraction.json"
+    result = run_extraction(**arguments, output_path=output)
+    payload = json.loads(output.read_text())
+    assert payload["status"] == result.status == "ok"
+    assert payload["content_hash"] == document.content_hash
+    assert payload["chunks"][0]["page_start"] == 1
+    assert payload["settings"]["section_mode"] == "pdf-outline"
+    with pytest.raises(FileExistsError):
+        run_extraction(**arguments, output_path=output)
+    with pytest.raises(ValueError, match="outputs"):
+        run_extraction(**arguments, output_path=tmp_path / "wrong.json")
+
+
+def test_rotated_text_warning_is_recorded_in_result(context):
+    from pypdf import PdfReader
+
+    content, document, source = context
+    writer = PdfWriter()
+    writer.clone_document_from_reader(PdfReader(BytesIO(content)))
+    page = writer.pages[0]
+    stream = DecodedStreamObject()
+    stream.set_data(
+        page["/Contents"].get_object().get_data()
+        + b"\nBT /F1 8 Tf 0 1 -1 0 25 700 Tm (SIDE HEADER) Tj ET\n"
+    )
+    page[NameObject("/Contents")] = writer._add_object(stream)
+    buffer = BytesIO()
+    writer.write(buffer)
+    content = buffer.getvalue()
+    document = document.model_copy(update={"content_hash": content_hash(content)})
+    source = source.model_copy(update={"content_hash": content_hash(content)})
+    result = extract((content, document, source))
+    assert result.status == "partial"
+    assert any(
+        issue.code == "TEXT_LAYOUT_WARNING" and issue.page == 1
+        for issue in result.issues
+    )
+    assert "SIDE HEADER" in result.chunks[0].text

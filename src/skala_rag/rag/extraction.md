@@ -3,6 +3,8 @@
 `rag.extraction.extract_pdf`는 원문 bytes, ManifestDocument, Source를 받아
 ExtractionResult를 반환한다. corpus_version·schema_version·PageChunkSettings·
 sections_by_page·embedding_model/revision·execution_mode를 명시적으로 전달한다.
+section_mode=pdf-outline이면 PDF bookmark 계층과 페이지 간 상속을 보존하며,
+검토자가 제공한 page 제목이 우선한다. provided는 기존 호출 호환 모드다.
 문서 approved/reviewer·Source ID/언어/저장 경로와 양쪽 실제 bytes hash를 확인한다.
 fixture:// 문서는 live 모드에서 거절한다. extraction_status=pending은 추출 입력으로
 가능하며, 완료 후 검토한 결과를 새 manifest에 기록하고 #44 gate를 통과해야 한다.
@@ -17,7 +19,9 @@ fixture:// 문서는 live 모드에서 거절한다. extraction_status=pending�
 PageChunkSettings에는 max_characters, overlap=0, tokenizer=none-page-atomic,
 document_kind, 설정 version을 명시한다. max_characters는 soft 경계다. 초과 페이지를
 자르거나 수치를 보간하지 않고 PAGE_EXCEEDS_CHARACTER_LIMIT + partial로 표시한다.
-이미지/Form XObject가 있는 페이지는 VISUAL_CONTENT_NOT_EXTRACTED로 partial이다.
+Image XObject와 Form 내부 이미지는 VISUAL_CONTENT_NOT_EXTRACTED로 partial이다.
+텍스트만 담긴 Form은 이미지 누락으로 처리하지 않는다. 회전 텍스트는 보존하지만
+pypdf layout 경고가 있으면 TEXT_LAYOUT_WARNING으로 partial을 기록한다.
 스캔 PDF·빈 페이지는 NO_EXTRACTABLE_TEXT, parser 오류는 TEXT_EXTRACTION_FAILED,
 읽을 수 없거나 암호화된 PDF는 PDF_UNREADABLE로 기록한다. 정상 Chunk가 없으면 failed다.
 부분 실패의 읽힌 페이지도 원래 페이지 번호를 유지한다. 정상 추출이나 OCR 성공으로
@@ -31,8 +35,23 @@ Source/corpus, 페이지, 텍스트·section, chunk 설정과 embedding metadata
 정식 모델/revision metadata를 관리해야 한다.
 
 자동 테스트는 직접 만든 가상 PDF를 메모리에서만 생성한다. 재배포 불가 PDF나
-실제 원문을 커밋하지 않는다. 현재 `corpus-candidates.draft.json`의 실제 후보는 모두
-approved=false / runtime_ready=false이고 로컬 승인 원문도 없어 실제 기술 문서의
-layout/표 추출·locator 검증은 미실행이다. 승인자·권한·실제 candidate ID·Source/hash와
-원문 bytes가 준비되면 실제 PDF 페이지를 렌더링해 추출 문맥을 대조해야 한다.
-가상 PDF 테스트 결과를 실제 문서 품질 검증으로 표시하지 않는다.
+실제 원문을 커밋하지 않는다. 실제 문서 검증은 [#49 검증 기록](../../../docs/implementation/extraction-validation.md)에
+기록했다. 사용자 승인에 따라 π0 v4(17페이지)·π0.5 v1(19페이지)를 로컬에서 추출하고
+페이지·실제 표·locator·결정적 ID·#50 rag_segment를 대조했다. 두 문서는 시각 자료를
+읽지 않았으므로 partial이며 인덱싱 gate는 계속 거절한다. partial을 ok로 바꾸지 않는다.
+
+`extract_local_document`는 승인 CorpusManifest의 data/local 원문만 읽는다.
+외부로 연결된 symlink와 미승인 문서를 거절하고 bytes hash를 다시 확인한다.
+`python -m skala_rag.rag.extraction_runner`로 다음 필수 인자를 명시해 실행한다:
+
+```text
+--root <project-root> --manifest <manifest.json> --document-id <id>
+--source <source.json> --settings <settings.json> --sections <page-sections.json>
+--output <project-root>/outputs/<run>/extraction.json
+--embedding-model not-embedded --embedding-revision not-embedded
+```
+
+실행기는 settings/누락/page·Chunk payload를 outputs에만 저장하며 기존 파일을
+덮어쓰지 않는다. 종료 코드는 ok=0, partial=2, failed=3이다. 실제 원문·추출 내용은
+커밋하지 않는다. clean clone에서는 승인 원문이 없는 실제 PDF 테스트 2개를 건너뛰며
+그 사유가 명시된다. 공개 metadata와 가상 PDF 테스트는 언제나 검사할 수 있다.
