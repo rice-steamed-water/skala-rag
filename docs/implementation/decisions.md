@@ -43,6 +43,101 @@ Supersedes:
 
 `APPROVED` 전환 후에는 해당 문서와 정책 fixture를 같은 변경으로 수정한다. 과제 필수 조건을 완화하는 결정에는 팀 승인뿐 아니라 과제 담당자의 확인 근거가 필요하다.
 
+## M0 baseline 승인 기록 — D01–D06·D08 (#3)
+
+팀 논의 전 상태다. `Decision`은 위 표의 제안이며 승인된 내용이 아니다. 승인·거절되면 이 기록과 영향 문서의 '제안' 표기를 같은 PR에서 바꾼다. `Blocks`는 이 항목이 `OPEN`인 동안 fixture·인터페이스 단계를 넘을 수 없는 이슈다.
+
+```text
+Decision ID: D01
+Status: OPEN
+Decision: (제안) 고정 가중치 5/30/25/20/10/10만 baseline으로 사용한다. unknown stage에서도 가중치를 자동 변경하지 않는다.
+Rationale and source: §3.1 현재 팀 가중치. 교수님 예시(§12)와 단계별 가중치(§3 단계별 제안, §7.1)는 비교용으로만 남긴다.
+Rejected alternatives: (논의 후 기록) 후보 — 교수님 예시 30/25/15/10/10/10, 투자 단계별 가변 가중치
+Affected documents / policy version / tests: scoring.md §2, delivery.md §3 M0 / 정책 파일 가중치 / 점수 집계 기대값 fixture
+Blocks: #9, #16
+Owner and reviewers: 지표 담당 / 전원
+Approval date: —
+Supersedes: —
+```
+
+```text
+Decision ID: D02
+Status: OPEN
+Decision: (제안) 세부항목 rating은 1~5, 가중점수는 별도로 계산한다. 저점수 보류는 여섯 상위 영역의 관측 가중평균 rating ≤ 2에 적용한다.
+Rationale and source: §3.1–3.2. "특정 항목 2점 이하"의 단위가 없고, 비중 1점짜리 세부항목의 획득점수와 직접 비교하면 안 된다.
+Rejected alternatives: (논의 후 기록) 후보 — 세부항목 단위 ≤ 2 적용, 획득 가중점수 기준 적용
+Affected documents / policy version / tests: scoring.md §3 / 저점수 임계값 / 평가 prompt와 임계값 경계 테스트
+Blocks: #9, #16, #22
+Owner and reviewers: 지표 담당 / 전원
+Approval date: —
+Supersedes: —
+```
+
+```text
+Decision ID: D03
+Status: OPEN
+Decision: (제안) WATCHLIST와 PASS 모두 다음 후보로 간다. 첫 RECOMMEND에서 보고서를 만들고, 모두 미추천이면 비교 요약을 만든다. 첫 추천을 전체 최우수라고 표현하지 않는다.
+Rationale and source: §4.3 팀 Graph(WATCHLIST 즉시 보고서)와 §12 교수님 노션 D(보류 시 다음 후보, 원문 L2741–2746)가 충돌한다.
+Rejected alternatives: (논의 후 기록) 후보 — WATCHLIST 즉시 보고서
+Affected documents / policy version / tests: scoring.md §5, architecture.md §2 / 판단 정책 / 라우팅 분기 테스트, E2E 시나리오
+Blocks: #16, #23, #30
+Owner and reviewers: Graph 담당 / 전원
+Approval date: —
+Supersedes: —
+```
+
+```text
+Decision ID: D04
+Status: OPEN
+Decision: (제안) 병렬 평가 노드 5개를 유지하고, 합류 뒤 별도 deal_terms_evaluation structured-output 노드를 둔다. Aggregator는 숫자만 합산한다.
+Rationale and source: §3.1 가중치 영역 6개와 §3.3·§4.2 병렬 노드 5개의 불일치. 투자조건 10%를 누락하거나 재정규화하지 않는다.
+Rejected alternatives: (논의 후 기록) 후보 — 병렬 노드 6개, Aggregator 안에서 투자조건 평가
+Affected documents / policy version / tests: architecture.md §2–3, contracts.md §4·§6, README / State·집계 / 평가 합류 테스트
+Blocks: #16, #24
+Owner and reviewers: 평가 담당 + Graph 담당 / 전원
+Approval date: —
+Supersedes: —
+```
+
+```text
+Decision ID: D05
+Status: OPEN
+Decision: (제안) 전체 세부항목 비중 100을 분모로 고정한다. 직접 근거나 필수 맥락이 없는 항목은 결측이다. 조사 전과 조사 후의 coverage 기준을 분리한다.
+Rationale and source: §2.2, §3.2, §11. 최소 데이터, coverage 충분성, 결측 분모가 정해지지 않았다.
+Rejected alternatives: (논의 후 기록) 후보 — 관측 항목만으로 분모 재정규화
+Affected documents / policy version / tests: scoring.md §3–4, contracts.md §4 / coverage 임계값 / coverage·결측 계산 테스트
+Blocks: #16, #20
+Owner and reviewers: 데이터 담당 + 지표 담당 / 전원
+Approval date: —
+Supersedes: —
+```
+
+```text
+Decision ID: D06
+Status: OPEN
+Decision: (제안) TIPS만으로 라운드를 확정하지 않는다. unknown이나 추정만으로는 적격 처리하지 않는다. 프리시드·브릿지 라운드는 근거로 이전 라운드를 확인한다.
+Rationale and source: §2.2, §7. Seed~C 조건에 비해 TIPS·프리시드 정규화가 과도하고, 추정 기준이 없다.
+Rejected alternatives: (논의 후 기록) 후보 — TIPS 선정을 Seed로 간주
+Affected documents / policy version / tests: scoring.md §1, delivery.md §3 M0 / 적격성 정책 / 적격성 판정 테스트
+Blocks: #17, #18
+Owner and reviewers: Discovery 담당 / 전원
+Approval date: —
+Supersedes: —
+```
+
+```text
+Decision ID: D08
+Status: OPEN
+Decision: (제안) 후보 5개, 후보별 추가조사 총 2회, 보고서 수정 총 2회로 제한한다. 정상 조사 후 후보가 소진되면 사유를 담은 Summary로 끝낸다. 비용·총 실행시간 상한은 live 실행 전에 명시한다.
+Rationale and source: §2.3(후보 소진 시 Summary)와 §4 그림(부적격이면 END)이 충돌하고, §8·§11에 반복 상한이 없다.
+Rejected alternatives: (논의 후 기록) 후보 — 후보 소진 시 END
+Affected documents / policy version / tests: architecture.md §2·§5, delivery.md §3 M0 / 실행 예산 설정 / 재조사·수정 loop 상한 테스트
+Blocks: #23, #25, #28
+Owner and reviewers: Graph 담당 / 전원
+Approval date: —
+Supersedes: —
+```
+
 ## 조용히 바꾸면 안 되는 원문
 
 - 현재 팀 가중치를 교수님 예시 `30/25/15/10/10/10`으로 되돌리지 않는다.
