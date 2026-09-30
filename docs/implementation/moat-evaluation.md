@@ -42,3 +42,28 @@ rubric/policy version과 Evidence ID는 결과에서 추적한다. live 실측 �
 남은 차단: 실제 semantic verifier 통합, #55 EvidenceResearch 병합·연결,
 runtime readiness 및 opt-in 실제 평가. Core 승인만으로 live gate를 해제하지 않는다.
 fixture 통과는 live 완료가 아니다.
+
+
+## #168 approved scoring consumer
+
+`evaluate_moat_approved_fixture` reads the explicit `policy_path` with the merged
+`load_approved_policy` and consumes its catalog directly (no legacy thresholds
+or policy relabelling). It requires explicit approvals and a trusted controller
+approval verifier. That verifier must bind the supplied Core rubric contents to
+an authoritative artifact; the proposed main Core file is not promoted by this
+entry point. Synthetic tests are fixture compatibility, not artifact approval.
+The entry accepts only FakeLLM and defaults `actual_runtime=False`.
+
+Direct ApprovedScoringPolicy construction is not approval proof: the legacy
+entry rejects that object. #168 currently returns no trusted-loading receipt,
+so separately loaded objects cannot safely be admitted by their fields alone.
+`actual_runtime=True` fails before any model call. Actual mode remains absent,
+not implemented opt-in execution: authoritative Core verification, a trusted
+receipt and RealRuntimeStructuredLLM with exact candidate/run/policy/runtime,
+readiness and call/cost admission matching are prerequisites. No plain/fake LLM
+is an actual-mode substitute. Snapshot provenance checks remain fixture checks;
+no live snapshot is labelled fixture to enable actual execution.
+
+Negative-fact rating 1–2 and independent cross-check rating 5 semantics still
+belong to the injected observation verifier; no semantic implementation is
+claimed. KIPRIS/KRX/중기부/Tavily exclusions remain unchanged.

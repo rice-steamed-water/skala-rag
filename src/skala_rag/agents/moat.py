@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 
 from skala_rag.agents.evaluation import EvaluationValidationError, evaluate_dimension
 from skala_rag.contracts.evaluation import EvaluationSnapshot
@@ -9,6 +10,12 @@ from skala_rag.contracts.evidence import Evidence
 from skala_rag.contracts.interfaces import Clock, StructuredLLM
 from skala_rag.contracts.v3 import Evaluation, EvaluationBranchResult
 from skala_rag.prompts.moat_evaluation import SYSTEM_PROMPT, build_user_prompt
+from skala_rag.scoring.approved_policy import (
+    ApprovalVerifier,
+    ApprovedScoringPolicy,
+    PolicyApprovals,
+    load_approved_policy,
+)
 from skala_rag.scoring.catalog import ScoringPolicy
 
 MOAT_CRITERIA = frozenset(
@@ -32,11 +39,11 @@ class IndependentComparison:
     evidence_ids: tuple[str, ...]
 
 
-def evaluate_moat(
+def _evaluate_moat(
     snapshot: EvaluationSnapshot,
     *,
     rubric: Mapping[str, object],
-    policy: ScoringPolicy,
+    policy: ScoringPolicy | ApprovedScoringPolicy,
     llm: StructuredLLM,
     clock: Clock,
     schema_version: str,
@@ -58,10 +65,13 @@ def evaluate_moat(
         rubric.get("status") == "approved"
         and rubric.get("rubric_version") == "core-0.1.0"
     )
-    if (
-        not approved_core and rubric.get("status") != "proposed"
-    ) or policy.status != "draft":
+    if (not approved_core and rubric.get("status") != "proposed") or (
+        not isinstance(policy, ApprovedScoringPolicy) and policy.status != "draft"
+    ):
         raise ValueError("Moat offline fixture only; unsupported rubric or policy")
+    if isinstance(policy, ApprovedScoringPolicy):
+        if policy.execution_mode != "fixture" or not approved_core:
+            raise ValueError("Approved Moat fixture requires approved Core rubric")
     snapshot = EvaluationSnapshot.model_validate(
         snapshot.model_dump(), context={"execution_mode": "fixture"}
     )
@@ -171,7 +181,7 @@ def evaluate_moat(
         scoped,
         rubric,
         llm=CheckedLLM(),
-        policy=policy,
+        policy=policy,  # type: ignore[arg-type]  # Catalog-only shared wrapper.
         clock=clock,
         schema_version=schema_version,
         max_repairs=0,
@@ -185,3 +195,77 @@ def evaluate_moat(
             "moat": Evaluation.model_validate(result.evaluation.model_dump())
         }
     return EvaluationBranchResult.model_validate(payload)
+
+
+def evaluate_moat(
+    snapshot: EvaluationSnapshot,
+    *,
+    rubric: Mapping[str, object],
+    policy: ScoringPolicy,
+    llm: StructuredLLM,
+    clock: Clock,
+    schema_version: str,
+    verify_observation: Callable[[object, Mapping[str, Evidence]], bool],
+    verified_patents: Mapping[str, VerifiedPatent],
+    independent_comparisons: Mapping[str, IndependentComparison],
+) -> EvaluationBranchResult:
+    """Legacy fixture entry; constructed approved contracts are not receipts."""
+    if isinstance(policy, ApprovedScoringPolicy):
+        raise ValueError("#168: approved contract has no trusted-loading receipt")
+    return _evaluate_moat(
+        snapshot,
+        rubric=rubric,
+        policy=policy,
+        llm=llm,
+        clock=clock,
+        schema_version=schema_version,
+        verify_observation=verify_observation,
+        verified_patents=verified_patents,
+        independent_comparisons=independent_comparisons,
+    )
+
+
+def evaluate_moat_approved_fixture(
+    snapshot: EvaluationSnapshot,
+    *,
+    policy_path: str | Path,
+    approvals: PolicyApprovals,
+    approval_verifier: ApprovalVerifier,
+    rubric: Mapping[str, object],
+    llm: StructuredLLM,
+    clock: Clock,
+    schema_version: str,
+    verify_observation: Callable[[object, Mapping[str, Evidence]], bool],
+    actual_runtime: bool = False,
+) -> EvaluationBranchResult:
+    """Load and consume approvals in this call, never infer a loading receipt.
+
+    The trusted controller verifier must bind core approval to supplied rubric
+    contents, not merely its claimed version. No live promotion is made.
+    """
+    if actual_runtime is not False:
+        raise ValueError(
+            "#168: actual runtime unavailable: no trusted-loading receipt; "
+            "authoritative Core artifact and matched runtime admission required"
+        )
+    from skala_rag.fakes import FakeLLM
+
+    if not isinstance(llm, FakeLLM):
+        raise ValueError("Approved fixture requires FakeLLM; actual runtime is blocked")
+    policy = load_approved_policy(
+        policy_path,
+        approvals=approvals,
+        approval_verifier=approval_verifier,
+        execution_mode="fixture",
+    )
+    return _evaluate_moat(
+        snapshot,
+        rubric=rubric,
+        policy=policy,
+        llm=llm,
+        clock=clock,
+        schema_version=schema_version,
+        verify_observation=verify_observation,
+        verified_patents={},
+        independent_comparisons={},
+    )
