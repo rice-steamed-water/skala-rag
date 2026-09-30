@@ -8,6 +8,22 @@
 
 ## 1. 출처와 우선순위
 
+### #166 후속 실행 인터페이스 overlay — 2026-09-30
+
+사용자 작업 대화와 [#166](https://github.com/rice-steamed-water/skala-rag/issues/166)의 [EXECUTION-PYTHON-DIRECT](decisions.md#execution-python-direct)는 실행 인터페이스만 후속 대체한다. **Python 직접 호출로 마무리하고 신규 CLI/옵션/console-script/UX 개발을 중단한다.** 원본 HTML·raws 및 아래 historical snapshot·기존 D01–D14/V3-OPERATIONS 기록은 그대로 보존한다. 원본 설계의 생략을 다른 과제 요건 폐기로 해석하지 않는다.
+
+실행 구현 확인 기준은 `5bebad436ec5fe032f23b0c5bf4b503bbc4a7a27`이며 #29/PR #118의 `skala_rag.cli.run(...) -> Path`와 기존 parser가 존재한다. 아래 `906312a` 등 과거 snapshot의 CLI 미구현/후속 개발 표현은 이 기준의 새 개발 지시가 아니다. 현재 fixture 예제와 receipt/hash 경계는 [Python 실행 안내](python-execution.md)를 따른다. `pyproject.toml`·`uv.lock`은 이 tree에 추적되어 있으며 변경하지 않는다.
+
+| 영향 | 이번 문서 정합화 | 유지/후속 경계 |
+| --- | --- | --- |
+| 실행 인터페이스 | README·문서 홈·architecture·delivery를 Python callable 호출로 연결 | 기존 CLI/parser·테스트 보존, 신규 API/스크립트 구현 없음 |
+| D-3 Warning·결과 반환 | completed+Warning·현재 draft/findings·final 금지를 Python 상태/receipt 기준으로 설명 | CLI 0/2/1은 호환 이력; 정책 필드명/schema 변경 없음 |
+| manifest/trace·검증 | receipt, acceptance/publication, 실제 파일과 hash 대조 | 예산/readiness·고정 context·현재 proof·fatal 구분 유지 |
+| #96 live 통합 | Python 실행 계약으로 인계할 대상 | 담당자 작업 인수·본문 수정·live 완료/유료 호출 승인 아님 |
+| #111 도식 | 후속 결정 교차참조 대상으로 식별 | 원본 HTML·생성 `.archify/` 수정/재생성 없음 |
+
+이 절의 날짜는 근거 기록일이며 이슈 생성 시각을 사용자 승인 시각으로 사용하지 않는다. 영향 알림의 게시/read-back과 실행 검증은 별도 증거가 필요하며 이 표만으로 완료 처리하지 않는다.
+
 | 자료 | 보존·참조 방법 | 의미 |
 | --- | --- | --- |
 | 사용자 제공 `설계_산출물_최종본_v3.html` | [동일 바이트 보존본](../design/design-v3.html) | 새 구현 목표의 설계 입력. 원본 HTML 수정 금지 |
@@ -21,7 +37,7 @@
 
 ## 2. 현재 통합 cutoff와 historical GitHub snapshot
 
-### 최신 supplied snapshot 및 pinned 통합 — 906312a
+### 당시 최신 supplied snapshot 및 pinned 통합 — 906312a (historical)
 
 현재 충돌 해소 기준은 `906312ae91a1d0473100c2a8a94029d52ac7c9fe`다. 로컬 HEAD `0be6bd0`과의 merge-base는 `24eaa366f9ef0b3dce64b7d698542426878e45c7`이며, 이 문서에서 moving main을 추정하지 않는다. 다음은 부모가 제공한 2026-09-30 후속 API snapshot과 해당 통합 코드 대조다. **열린 이슈는 29개**이며 이전 34개/44개 snapshot과 48개 영향표 행은 historical이다.
 
