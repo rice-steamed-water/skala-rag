@@ -39,7 +39,7 @@ Rejected alternatives: SaaS 기준 매출총이익률 구간(70–80%) 사용; �
   pre-revenue를 rating 1로 처리; 분모 0 이하일 때 런웨이 무한대/최대점 처리
 Affected documents / policy version / tests: scoring.md §3·§4, rubric-finance.md,
   configs/rubrics/finance.yaml, tests/unit/test_finance_rubric.py; #9 policy fixture, #16, #22
-Open sub-questions: rubric-finance.md §5 Q1–Q5
+Open sub-questions: rubric-finance.md §5 Q1–Q6 (작성자 의견 포함)
 Owner and reviewers: XXXXXim / 팀 리뷰 필요
 Approval date: -
 Supersedes: -
