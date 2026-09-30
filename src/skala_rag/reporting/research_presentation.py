@@ -32,6 +32,9 @@ CSS = """
 .research-report .item-kind { font-size: 8pt; color: #17675f; font-weight: 700; }
 .research-report .review-item, .research-report .review-missing { margin-bottom: 5pt; }
 .research-report .review-missing { color: #4b5b69; }
+.research-report #investment-evidence-details { border-top: .5pt solid #d4dddf; }
+.research-report #investment-evidence-details h4 { margin: 4pt 0;
+  font-size: 10.5pt; line-height: 15pt; break-after: avoid; }
 .research-report #sec-REFERENCE { break-before: page; }
 .research-report .evidence-entry { margin-bottom: 9pt; padding-top: 5pt;
   border-top: .5pt solid #d4dddf; }
@@ -74,7 +77,8 @@ ROLE_SECTIONS = {
 
 def role_details(data, section, inline):
     """Preserve full saved text. Dedup only identical text + reference sets."""
-    parts = []
+    parts, details = [], []
+    investment = section == "INVESTMENT ASSESSMENT & RISKS"
     for role in ROLE_SECTIONS.get(section, ()):
         review = data.get("live_reviews", {}).get(role)
         if review is None:
@@ -88,6 +92,14 @@ def role_details(data, section, inline):
             ("observations", "관측 · 저자 보고"),
             ("interpretations", "분석·해석"),
         ):
+            target = parts
+            if investment and kind == "observations":
+                target = details
+                if review.get(kind):
+                    details.append(
+                        f'<div id="observations-{role}"><h4>{ROLES[role]} '
+                        "· 원본 관측</h4>"
+                    )
             seen = set()
             for item in review.get(kind, []):
                 ids = tuple(dict.fromkeys(item.get("evidence_ids", [])))
@@ -96,10 +108,12 @@ def role_details(data, section, inline):
                     continue
                 seen.add(key)
                 citations = " ".join(f"[@evidence:{eid}]" for eid in ids)
-                parts.append(
+                target.append(
                     f'<p class="review-item"><span class="item-kind">{label}</span> '
                     f"{escape(item['text'])} {inline(citations)}</p>"
                 )
+            if investment and kind == "observations" and review.get(kind):
+                details.append("</div>")
         missing = list(dict.fromkeys(review.get("missing", [])))
         if missing:
             parts.append(
@@ -117,6 +131,16 @@ def role_details(data, section, inline):
             "포함될 수 있습니다. 추가 역할 출력은 별도 의미 검증을 거치지 않았습니다. "
             "동일 역할·분류 내 문장과 참조가 같은 항목만 중복 제거하며 "
             "나머지는 전부 표시합니다.</p>",
+        )
+    if details:
+        parts.append(
+            '<aside id="investment-evidence-details" '
+            'aria-label="투자 평가 관측 상세">'
+            "<h3>보충 근거 · 투자 평가 관측 상세</h3>"
+            '<p class="meta">원본 관측과 수치는 아래에 보존합니다. '
+            "위 해석의 근거이며 독립된 투자 실사 결과가 아닙니다.</p>"
+            + "".join(details)
+            + "</aside>"
         )
     return "".join(parts)
 

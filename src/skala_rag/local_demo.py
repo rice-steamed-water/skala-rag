@@ -319,7 +319,15 @@ class DemoLLM:
                 "If review disagrees with excerpt, the excerpt takes precedence. "
                 "role_scores are controller calculations, never facts about the "
                 "company. Do not invent, modify or infer scores. Blank is unknown, "
-                "not zero. Explain missing-weight limitations without recommendation."
+                "not zero. Explain missing-weight limitations without recommendation. "
+                "In assessment_risks, prioritize interpretation, risk impact and "
+                "follow-up checks; frame checks as unresolved questions, not results. "
+                "Do not repeat benchmark numbers or score-table values from other "
+                "sections. Preserve decision-critical factual numbers with units, "
+                "conditions and exact evidence_ids when needed for the risk claim. "
+                "Detailed observations remain in the rendered supplementary evidence "
+                "area; do not duplicate them in the narrative. Never fabricate risk "
+                "impacts or follow-up findings; state unknown when unsupported."
             )
         if self.node == "judge":
             system += (

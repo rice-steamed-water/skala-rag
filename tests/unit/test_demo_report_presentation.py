@@ -288,7 +288,12 @@ def test_all_saved_review_items_are_preserved_with_role_and_evidence_links():
     rendered = render_report_html(draft, ctx)
     for role in data["live_reviews"]:
         role_block = rendered.split(f'id="review-{role}"')[1].split("</article>")[0]
-        assert role_block.count("원문 역할의 기술 관측 &lt;400시간&gt;") == 1
+        observation_block = role_block
+        if role in ("moat", "business_deal"):
+            observation_block = rendered.split(f'id="observations-{role}"')[1].split(
+                "</div>"
+            )[0]
+        assert observation_block.count("원문 역할의 기술 관측 &lt;400시간&gt;") == 1
         assert f"{role} 해석" in role_block and f"{role} 자료 부족" in role_block
         assert "원본 역할 출력" in role_block
     assert "역할명이 해당 영역의 실사를 보장하지 않습니다" in rendered
@@ -301,6 +306,42 @@ def test_all_saved_review_items_are_preserved_with_role_and_evidence_links():
     )
     assert ctx.payload == before
     assert extra not in draft.cited_evidence_ids
+
+
+def test_investment_details_follow_interpretations_without_losing_numbers():
+    draft, data = research_report()
+    eid = draft.cited_evidence_ids[0]
+    data["live_reviews"] = {
+        role: {
+            "observations": [
+                {"text": "π0.5: 10–15분, $2.5M <원문>", "evidence_ids": [eid]},
+                {"text": "숫자 없는 관측도 보존", "evidence_ids": [eid]},
+            ],
+            "interpretations": [{"text": "2개 환경의 한계", "evidence_ids": [eid]}],
+            "missing": ["비용·운영 위험 후속 확인"],
+        }
+        for role in ("moat", "business_deal")
+    }
+    ctx = rehash(canonical(data))
+    before = ctx.payload
+    rendered = render_report_html(draft, ctx)
+    assessment = rendered.split('data-section="INVESTMENT ASSESSMENT &amp; RISKS"')[1]
+    narrative, details = assessment.split('id="investment-evidence-details"', 1)
+    details = details.split('id="sec-REFERENCE"')[0]
+    assert "π0.5: 10–15분" not in narrative
+    for role in data["live_reviews"]:
+        assert f'id="review-{role}"' in narrative
+        assert f'id="observations-{role}"' in details
+    assert narrative.count("2개 환경의 한계") == 2
+    assert narrative.count("비용·운영 위험 후속 확인") == 2
+    assert details.count("π0.5: 10–15분, $2.5M &lt;원문&gt;") == 2
+    assert details.count("숫자 없는 관측도 보존") == 2
+    assert details.count('<sup class="citation">') == 4
+    assert "#investment-evidence-details h4 { margin: 4pt 0;" in rendered
+    assert ctx.payload == before
+    assert set(re.findall(r'href="#([^\"]+)"', rendered)) <= set(
+        re.findall(r'id="([^\"]+)"', rendered)
+    )
 
 
 def test_review_only_source_is_in_appendix_with_traceable_provenance():

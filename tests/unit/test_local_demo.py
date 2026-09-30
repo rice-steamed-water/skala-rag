@@ -249,6 +249,29 @@ def test_demo_llm_uses_existing_approved_transport_limits(tmp_path):
         assert len(calls) == 1
 
 
+def test_generator_guides_interpretation_first_without_repeated_metrics(monkeypatch):
+    import skala_rag.local_demo as demo
+
+    captured = {}
+
+    def capture(system, *args, **kwargs):
+        captured["system"] = system
+        raise RuntimeError("captured before transport or reservation")
+
+    monkeypatch.setattr(demo, "byte_bound_allowance", capture)
+    llm = demo.DemoLLM.__new__(demo.DemoLLM)
+    llm.called = False
+    llm.node = "generator"
+    llm.progress = lambda _: None
+    with pytest.raises(RuntimeError, match="captured before transport"):
+        llm.generate(system="test", user="test", output_schema=demo.ResearchContent)
+    prompt = captured["system"]
+    assert "risk impact and follow-up checks" in prompt
+    assert "Do not repeat benchmark numbers" in prompt
+    assert "Preserve decision-critical factual numbers" in prompt
+    assert "Never fabricate risk impacts or follow-up findings" in prompt
+
+
 def test_generated_citations_are_structural_not_optional_prompt_text():
     from skala_rag.demo_context import SCHEMA
     from skala_rag.local_demo import ResearchContent, cited_content
