@@ -19,9 +19,9 @@
 
 ## 2. 현재 통합 cutoff와 historical GitHub snapshot
 
-### 이번 upstream 통합 기준 — 1f23e09
+### 이번 upstream 통합 기준 — 24eaa36
 
-통합 기준은 `1f23e09d176b7bfbb6afd59216ec1ca5faafe109`다. 앞선 `c5a30f3da3b55ea05bff681e2b1058bea9e78a10`에 #6/PR #37(`b8eef06`)과 #68/PR #69가 추가된 Git 이력·코드를 확인했다. 이 cutoff 이후 main/이슈 상태를 추정하지 않는다. 아래 과거 API snapshot·44개 이슈 표는 그대로 역사 자료이며 현재 열린 작업 수를 뜻하지 않는다.
+충돌 해소 통합 기준은 `24eaa366f9ef0b3dce64b7d698542426878e45c7`다. 앞선 `c5a30f3`에 #6/PR #37(`b8eef06`)과 #68/PR #69(`1f23e09`), 이어 #8/PR #70·#12/PR #71·#21/PR #72가 추가된 Git 이력·코드를 확인했다. 이 cutoff 이후 main/이슈 상태를 추정하지 않는다. 아래 과거 API snapshot·44개 이슈 표는 그대로 역사 자료이며 현재 열린 작업 수를 뜻하지 않는다.
 
 | 통합된 PR / 이슈 | 현재 코드·문서 범위 | v3 전환 경계 |
 | --- | --- | --- |
@@ -32,6 +32,7 @@
 | #40 / #10, #34 / #11 | core/finance rubric 문서·YAML·fixture 테스트 및 D14 제안 기록 | 병합 후에도 D14 OPEN. baseline 고정100/missing 규칙과 작성자 조건부 N/A 제안을 보존 |
 | #37 / #6 | 평가·점수·판정·보고서·오류·manifest DTO, Decimal 왕복과 결정적 ID 인코딩 | dimension 단위·observed/missing·세 label 구조. v3 복합 branch/N/A/네 label·SelectionResult는 별도 확장 |
 | #69 / #68 | `build_score_summary`·`build_investment_decision`으로 baseline 계산값을 #6 DTO에 연결 | adapter 병합은 v3 점수·label·selector 정책의 승인·구현이 아님 |
+| #70 / #8, #71 / #12, #72 / #21 | ToolResult·Protocol·fake 주입, 공통 가상 fixture/loader, snapshot 복사·참조 검증 | Protocol≠live adapter. EvaluateDimension/기존 DTO는 baseline이며 v3 복합 branch·selector 계약은 별도. 가상 검증은 live 실측·v3 정책 승인이 아님 |
 
 #5 DTO/#7 State/#9 draft catalog 위에 이 구현이 추가되었다. 업무 Graph·CLI·live RAG·평가 agent·보고서 출력이나 v3 정책 승인이 완료된 것은 아니다. 이 문서 통합은 upstream 코드·tests·configs를 수정하지 않는다. 최종 delivery head·gate·리뷰 결과는 PR 검증 기록에서 별도로 보고한다.
 

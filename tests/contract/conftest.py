@@ -10,8 +10,8 @@ import pytest
 def payloads():
     fixtures = Path(__file__).parents[1] / "fixtures"
     base = json.loads((fixtures / "contracts.json").read_text())
-    evaluation = json.loads((fixtures / "evaluation_contracts.json").read_text())
-    return {
-        **base,
-        **{key: value for key, value in evaluation.items() if key != "label"},
-    }
+    extra = {}
+    for name in ("evaluation_contracts.json", "tool_contracts.json"):
+        extra.update(json.loads((fixtures / name).read_text()))
+    extra.pop("label")
+    return {**base, **extra}
