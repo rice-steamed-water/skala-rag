@@ -36,9 +36,11 @@ uv run pytest tests/integration/test_m2_trace_boundaries.py -q
 | runtime | required/optional readiness, 계정 요금·잔여 credit, 승인 범위·시간/호출/비용/retry 기록이 필요하다 |
 
 OpenAI credential의 존재만 확인했으며 값은 기록하지 않았다. 실제 API 요청은 실행하지
-않았다. [승인 요청안 §3](m2-live-approval-proposal.md)의 LLM 전용 timeout과 구체적인
-transport retry 운용은 OPEN/pending이다. 기존 도구 timeout을 LLM 승인으로 확대하지 않는다.
-실행에는 해당 설정 승인과 적격성 근거를 포함한 실제 조사 State의 경로가 필요하다.
+않았다. 사용자 후속 승인으로 [승인 요청안 §3](m2-live-approval-proposal.md)의
+#62 LLM timeout은 30초, 추가 transport 재시도는 0회로 확정되었다.
+실행에는 적격성 근거를 포함한 실제 조사 State의 경로와 계정 요금·잔여 credit 확인이
+필요하다. 로컬 산출물에는 해당 State가 없으며, #51의 공개 live 기록은
+레인보우로보틱스의 `ineligible`/`LISTED` 결과여서 적격 후보 State로 사용할 수 없다.
 
 실제 실행 기록에는 run/retrieval/chunk/source/page/evidence/snapshot/evaluation ID와
 model/prompt/policy/corpus/index version, 공유 예산 사용량을 남긴다.

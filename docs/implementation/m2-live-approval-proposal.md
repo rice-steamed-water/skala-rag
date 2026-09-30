@@ -34,6 +34,16 @@
 
 ## 3. 호출·시간·비용 승인 요청안
 
+### #62 후속 실행 승인 (2026-09-30)
+
+사용자에게 “LLM timeout 30초·transport 재시도 0회”로 실행할 것을 제안했고,
+사용자가 “승인합니다.”라고 응답했다. #62 M2 smoke의 LLM 시도 timeout은
+30초, 추가 transport 재시도는 0회로 승인되었다. 아래 최초 제안의
+LLM timeout OPEN 및 retry pending은 이 범위에서만 해소된다.
+다른 실행의 retry/backoff 운용이나 M3 실행으로 확대하지 않는다.
+기존 model/token/공유 호출·시간·비용 한도와 schema 보정 회계는 유지한다.
+실제 조사 State, 계정 요금·잔여 credit 및 required readiness의 확인은 별도다.
+
 아래 **approved 열에 pending인 값은 기본값으로 적용할 수 없다.** D08 기존 제한은 현재 worktree [승인 기록](decisions.md)의 값이며, #35 정합화 후 변경 여부를 재확인한다. M2 adapter smoke/검색 실험 예산이며 M3 전체 runner·보고서/Judge 허용을 뜻하지 않는다.
 
 | 항목 | 승인 요청안(proposed) | 승인된 값(approved) / 범위 |
