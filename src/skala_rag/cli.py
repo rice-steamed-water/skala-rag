@@ -37,7 +37,10 @@ def run(
     config_path,
     report_adapter=None,
     pdf_profile="configs/pdf.layout.v1.json",
+    fixture_ratings=(5, 4),
+    fixture_judge_verdict="pass",
 ):
+    """Persist one fixture run; optional ratings/verdict select offline test paths."""
     config = json.loads(Path(config_path).read_text(encoding="utf-8"))
     config["investment_theme"] = theme
     run_input = RunInput.model_validate(config)
@@ -45,6 +48,13 @@ def run(
         raise ValueError(
             "live execution requires approved policy, budgets and readiness; #96"
         )
+    if len(fixture_ratings) != 2 or any(
+        type(rating) is not int or rating not in range(1, 6)
+        for rating in fixture_ratings
+    ):
+        raise ValueError("fixture ratings require two integers in 1..5")
+    if fixture_judge_verdict not in ("pass", "revise"):
+        raise ValueError("fixture judge verdict must be pass or revise")
     policy = load_v3_policy(policy_path, execution_mode="fixture")
     if run_input.policy_version != policy.policy_version:
         raise ValueError("run input policy version differs from loaded policy")
@@ -60,6 +70,7 @@ def run(
     trace = []
     snapshots = {}
     result, _ = run_fixture(
+        ratings=fixture_ratings,
         run_id=run_id,
         trace=trace,
         snapshots=snapshots,
@@ -76,6 +87,7 @@ def run(
             destination=destination,
             trace=trace,
             pdf_profile=pdf_profile,
+            judge_verdict=fixture_judge_verdict,
         )
         report_adapter = default_adapter
     report = None
