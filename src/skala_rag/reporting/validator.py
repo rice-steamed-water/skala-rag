@@ -24,7 +24,7 @@ from skala_rag.reporting.format import (
 )
 
 TOKEN = re.compile(r"\[@evidence:([^\]\s]+)\]")
-LOOSE_TOKEN = re.compile(r"\[@evidence:[^\]]*\]?")
+LOOSE_TOKEN = re.compile(r"\[@evidence:[^\]\s]*\]?")
 REF_LINE = re.compile(r"^- \[@source:([^\]\s]+)\] (.+)$")
 FENCE_OPEN = re.compile(r"^ {0,3}(?P<fence>`{3,}|~{3,})(?P<info>.*)$")
 CHECK_IDS = [f"SV0{i}" for i in range(1, 10)]
@@ -81,6 +81,16 @@ def _strip_code(markdown: str) -> list[str]:
                 minimum_length = len(fence)
                 out.append("")
                 continue
+        out.append(line)
+    return out
+
+
+def _preamble(lines: list[str]) -> list[str]:
+    """첫 ``##`` 이전 줄(표지·제목). 목차에는 없지만 인용 검사는 한다."""
+    out = []
+    for line in lines:
+        if line.startswith("## "):
+            break
         out.append(line)
     return out
 
@@ -177,7 +187,7 @@ def validate_report(draft: ReportDraft, context: ReportContext) -> ValidationRes
                 )
 
     # SV05 — 인용 token
-    body_lines = [
+    body_lines = _preamble(lines) + [
         line
         for title, body in sections
         if title != "REFERENCE"
