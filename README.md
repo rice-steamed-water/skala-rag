@@ -47,18 +47,12 @@ Physical AI / Robotics 스타트업의 투자 조사·평가를 위한 **LangGra
 
 ## Agents
 
-| Agent / Node | 역할 | 구현 범위 |
-| --- | --- | --- |
-| Startup Discovery / Normalize | 후보 발견·중복 제거·정규화 | fixture·주입 인터페이스 |
-| Company Research / Eligibility | 기업 식별·라운드·상장·Exit 확인 | 조사·사실 추출 adapter 및 적격성 판정 |
-| Evidence Research / Coverage | 근거 수집·검색 추적·부족 근거 확인 | fixture 흐름·추출·Coverage 구현 |
-| Founder Evaluation | 창업자 인물 귀속을 확인한 근거 평가 | 전용 fixture wrapper |
-| Market Evaluation | 시장 규모·성장성·진입 시점 평가 | 공통 평가 wrapper·fixture |
-| Technology Evaluation | 기업 RAG 근거로 기술 평가, criterion→Evidence→Chunk 추적 | 전용 adapter; live는 승인 rubric·입력·예산 조건 필요 |
-| Moat Evaluation | 경쟁 우위·방어력 평가 | 공통 평가 wrapper·fixture |
-| Business & Deal Evaluation | 실적·투자조건 두 차원을 원자적으로 반환 | v3 branch·합류 계약 |
-| Score / Decision / Best Selector | 점수·label 계산, 전체 후보 처리 후 최종 선정 | v3 구현 |
-| Report Generator / Validator / Judge | 보고서 생성·구조·인용·의미 검증 | baseline fixture loop; 실제 Judge·v3 연결 미완료 |
+| Agent | 역할 | 주요 데이터 |
+|---|---|---|
+| **1. 스타트업 판별 Agent** | 투자 단계, Exit 여부 등을 확인해 평가 대상인지 판별 | DB + 외부 조회 |
+| **2. 투자 평가 Agent** | 창업자·기술·시장·재무 등의 투자 지표 평가 | **DB + RAG** |
+| **3. 보고서 평가 Agent** | 생성된 투자 보고서의 근거성·일관성·누락 검증 | **DB + RAG + 보고서** |
+| **4. 스타트업 탐색 Agent** | 뉴스/검색 결과에서 기업을 찾아 후보를 추출 | 검색 결과 |
 
 ## Architecture
 
