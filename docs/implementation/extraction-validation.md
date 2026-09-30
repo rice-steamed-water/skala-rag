@@ -53,3 +53,11 @@ layout 문자열을 의미상 단일 문단이라고 표시하지 않는다.
 검증 테스트는 tests/unit/test_page_extraction.py와
  tests/integration/test_real_pdf_extraction.py다. 실제 PDF 테스트는 로컬 원문이 있을
 때만 실행하며 없으면 원문 git 제외 사유로 skip한다. 기본 자동 테스트는 네트워크가 없다.
+
+## #52 후속 — 승인된 텍스트 범위
+
+2026-09-30 xxhigh의 별도 승인으로 두 논문의 검증된 본문·caption·텍스트 표를
+text-only scope에 한해 사용할 수 있다. 기존 전체 문서의 partial·기존 manifest 거절은
+그대로다. 새로운 corpus_version과 페이지별 text hash·검토된 누락 항목을 묶은
+text_index_review가 별도 gate를 통과한다. [승인·실제 검증·한계](issue52-text-scope.md)를
+따른다. 이미지/OCR·실제 embedding/index/search 완료를 뜻하지 않는다.

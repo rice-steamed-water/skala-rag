@@ -243,3 +243,45 @@ D09 중 렌더러·A4·폰트·여백·SUMMARY 측정 기준·인용 token 화�
 - “특정 항목 2점”을 비중이 1점인 세부항목의 획득점수와 직접 비교하지 않는다.
 - 최종 embedding 후보가 공개되어 있다는 사실만으로 과제의 오픈소스 요구 충족을 선언하지 않는다.
 - 원문의 도구 비용·접근성 표는 당시 메모다. 키 발급, 이용조건, 접근 성공은 구현 시 다시 확인해야 한다.
+
+## #52 텍스트 범위 corpus 사용 승인 — 2026-09-30
+
+xxhigh가 [사용자 확인 UI에서 텍스트 전용 범위를 승인](https://github.com/rice-steamed-water/skala-rag/issues/52#issuecomment-5905563007)했다.
+π0 v4/π0.5 v1의 본문·caption·텍스트 표만 인덱싱하며 이미지·그래프 미추출 정보는
+한계로 보존한다. 기존 전체 문서 `partial`을 유지하고, 원문/페이지 텍스트 hash·추출 설정·
+검토된 누락 항목에 묶인 별도 text_index_review로 승인 범위를 고정한다.
+다른 partial 문서·텍스트 누락/추출 실패를 이 승인으로 허용하지 않는다.
+실제 두 PDF/36페이지 텍스트 검증과 범위 gate 결과는
+[검증 기록](issue52-text-scope.md)에 있다. BGE-M3 다운로드·embedding 실행·store 선택·
+#52 전체 완료는 승인/검증되지 않았다.
+
+### #52 후속 범위 승인 — 2026-09-30
+
+이후 xxhigh가 실제 embedding/index 성공 조건을 후속 작업으로 옮기고 현재 #52의
+blocked 제거를 요청했다. 로컬 다운로드 대신 Hugging Face API를 사용하며,
+endpoint 주소는 이후 설정하고 지금은 API 인터페이스·테스트를 진행하도록 확인했다.
+위 이전 승인 기록의 전체 완료 보류는 이 구현 범위 변경으로 대체한다.
+모델/tokenizer 다운로드 보류와 실제 실행 미검증은 유지한다. endpoint/provider 지원,
+배포 revision 확인·실제 저장소 선택·실측 검증은 후속 live 작업에서 해결한다.
+SQLite는 선택 가능한 offline 구현이며 운영 기본값을 정하지 않는다.
+
+## D09 PDF renderer·분량 측정·layout 회계 승인 — #95
+
+- Decision ID: D09 PDF
+- Status: APPROVED
+- Decision: ReportLab4.4.9, NanumGothic Regular/Bold(OFL1.1 포함), A4·18mm 여백,
+  본문10.5pt/leading15pt·heading14pt. SUMMARY heading 포함 실제 draw bbox 높이를
+  전체 A4 높이로 나누며 단일 page·fraction<=0.5. 표지/REFERENCE 포함 PDF<=5page.
+  renderer는 사실/점수/label을 바꾸지 않으며 저장 파일의 페이지/인용/hash를 대조한다.
+- Error accounting: layout 위반은 기존 공유 report 수정 예산(최대2회)을 소비한다.
+  renderer 오류와 변경/stale artifact는 fatal. 새 render retry loop는 없고
+  소진/미검증 PDF는 final 승격 금지. 수정된 draft는 구조·의미 검증부터 다시 실행한다.
+- Rationale: 실제 PDF fixture 검토와 사용자 확인 UI의 명시적 승인.
+- Rejected alternatives: 이번 범위에 여러 renderer 비교·새 품질 benchmark·추가 재시도 없음.
+- Affected: configs/pdf.layout.v1.json, pyproject/uv.lock, reporting.pdf, #94/#96 runner 인계.
+- Owner/reviewer: wjd990819-ops / 사용자
+- Approval date: 2026-09-30
+- Evidence: 사용자 질문 답변 「제안한 설정·의존성·오류 처리 승인」.
+
+앞선 D09 PDF OPEN 표현은 당시 기록이다. 위 PDF 선택/측정/회계만 승인되었으며
+mode별 예외·실제 Generator/Judge·M3 live 완료를 함께 승인하거나 완료로 표시하지 않는다.

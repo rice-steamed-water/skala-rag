@@ -49,11 +49,19 @@ def evaluate_moat(
     #22 supports observed/missing only. This explicit bridge rejects N/A rather
     than silently converting it; approved applicability integration remains open.
     Verifier must check anchors and minimum evidence, not trust provider prose.
-    Patent status vocabulary is upstream policy; only verified active rights
-    support an exclusive-rights observation in this bounded fixture interface.
+    Approved core-0.1.0 anchors allow absent rights/applications and company
+    comparisons. Their semantics (including negative facts and independent
+    cross-checks for rating 5) belong to the injected verifier. Legacy proposed
+    fixtures retain the active-patent/independent-comparison checks.
     """
-    if rubric.get("status") != "proposed" or policy.status != "draft":
-        raise ValueError("Moat offline fixture only; D14/#55 live gates remain open")
+    approved_core = (
+        rubric.get("status") == "approved"
+        and rubric.get("rubric_version") == "core-0.1.0"
+    )
+    if (
+        not approved_core and rubric.get("status") != "proposed"
+    ) or policy.status != "draft":
+        raise ValueError("Moat offline fixture only; unsupported rubric or policy")
     snapshot = EvaluationSnapshot.model_validate(
         snapshot.model_dump(), context={"execution_mode": "fixture"}
     )
@@ -127,7 +135,7 @@ def evaluate_moat(
                 cited = set(criterion.evidence_ids)
                 if not cited or not cited <= set(allowed):
                     raise EvaluationValidationError(["MOAT_EVIDENCE_INVALID"])
-                if criterion.criterion_id == "moat.ip":
+                if not approved_core and criterion.criterion_id == "moat.ip":
                     patent = verified_patents.get(criterion.criterion_id)
                     if (
                         patent is None
@@ -138,7 +146,10 @@ def evaluate_moat(
                         or not set(patent.evidence_ids) <= cited
                     ):
                         raise EvaluationValidationError(["MOAT_PATENT_UNVERIFIED"])
-                if criterion.criterion_id == "moat.differentiation":
+                if (
+                    not approved_core
+                    and criterion.criterion_id == "moat.differentiation"
+                ):
                     comparison = independent_comparisons.get(criterion.criterion_id)
                     if (
                         comparison is None
