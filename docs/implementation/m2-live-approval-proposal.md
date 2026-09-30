@@ -9,7 +9,7 @@
 - #43 목적은 D07 실험 허용/저장소, D08 미정 live 예산, D12 국가·언어를 한 번에 검토할 제안이다. **실험 승인과 측정 후 최종 모델 승인은 별개**다. 최종 모델 OPEN 때문에 이미 승인된 비교 실험을 순환 차단하지 않는다.
 - [#35 v3 전환 승인](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)은 정합화 방향 승인이다. provider·모델·코퍼스·비용·시간·benchmark 설정 승인을 포함하지 않는다. 현재 worktree의 baseline 문서는 v3 전체 반영 완료가 아니므로 병합된 정책·계약과 실행 전에 다시 대조한다.
 - #13(D13 코퍼스 등록/페이지 산정)과 #35는 다른 담당자의 진행 중 작업이다. 이 문서는 corpus_manifest 필드·등록규칙·승인권을 새로 정하지 않는다. 총 200페이지 조건을 보존하고 #13의 승인된 corpus_version/hash/권한·페이지 산정 결과만 소비한다.
-- #8 주입 경계와 #73 versioned 구조 DTO를 재정의하지 않는다. #73은 runtime/정책 실행 구현이 아니다. #82에 별도 명시 승인된 v3 운영 규칙도 live provider·비용·시간·corpus 승인을 포함하지 않는다. 아래 값은 후속 runtime이 소비할 **승인 제안**이며 새로운 DTO/API 계약이 아니다. transport 재시도는 #45, schema 구조 보정은 #22 wrapper 소유다.
+- #8 주입 경계와 #73 versioned 구조 DTO를 재정의하지 않는다. #73은 runtime/정책 실행 구현이 아니다. #82에 별도 명시 승인된 v3 운영 규칙도 live provider·비용·시간·corpus 승인을 포함하지 않는다. 아래 표는 후속 runtime의 **승인값과 미승인 제안**을 구분하며 새로운 DTO/API 계약이 아니다. transport 재시도는 #45, schema 구조 보정은 #22 wrapper 소유다.
 - 공식 문서의 기능 설명은 관측했으나 계정 접근 성공은 관측하지 않았다. 실제 `.env`·credential 파일·secret store를 읽지 않았으며 **credential 존재 boolean도 미확인**이다. key/model/index readiness, 계정별 quota, 실제 사용량·과금·성능은 모두 미확인이다. mock/fixture 성공을 live 성공으로 표시하지 않는다.
 - Hermes의 OpenAI Codex 로그인과 앱의 OpenAI API 인증·billing은 별개다. 이 세션의 모델/provider를 앱 기본값으로 전용하지 않는다. 비밀값은 문서·이슈·로그에 기록하지 않는다.
 
@@ -116,7 +116,7 @@ provider가 제공하는 default retry/auto 옵션은 명시적으로 끄거나 
 | #52 실제 index | #13·#35·#43·#49 준비, C 실험/store 승인, 정확한 revision/라이선스/환경·corpus 승인 확인 | index fake embedding은 real model indexing 아님; 최종 모델 승인을 기다릴 필요는 없음 |
 | #56 benchmark | #13·#35·#43·#54 준비, C 기준·동일 corpus/Chunk/검수 정답셋·3종 revision/environment 확인 | skip/비교 코드만으로 완료 아님. 실제 비교와 최종 선택 팀 승인은 별도 |
 
-#43 부분 승인 기록과 #43 완료는 다르다. #13/#35 선행이 남고 C가 보류되어 **#43 blocked / PR #75 OPEN Draft를 유지**한다. 이 작업은 기존 담당자·PR을 변경하지 않으며 commit/push/merge/GitHub 상태 갱신을 수행하지 않는다. 코드·config·의존성·기존 docs는 수정하지 않는다. 승인 이후에도 readiness 불충족이면 live는 계속 막힌다.
+#43 부분 승인 기록과 #43 완료는 다르다. #13/#35 선행이 남고 C가 보류되어 **#43 blocked / PR #75 OPEN Draft를 유지**한다. 이 기록은 전용 브랜치에 commit/push하고 PR #75 및 관련 이슈에 반영한다. 다른 담당자의 PR·#35 문서·코드·config·의존성은 수정하지 않는다. 승인 이후에도 readiness 불충족이면 live는 계속 막힌다.
 
 ## 7. 공식 근거 목록과 retrieval gaps
 
