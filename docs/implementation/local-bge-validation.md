@@ -42,11 +42,19 @@ HF token은 필요하지 않으며 설정돼 있어도 이 다운로드에는 �
 
 ```python
 from huggingface_hub import snapshot_download
+
 snapshot_download(
-    "BAAI/bge-m3", revision="5617a9f61b028005a4858fdac845db406aefb181",
-    local_dir="data/local/models/bge-m3-5617a9f", token=False,
-    allow_patterns=["*.json", "sentencepiece.bpe.model", "pytorch_model.bin",
-                    "1_Pooling/config.json", "README.md"],
+    "BAAI/bge-m3",
+    revision="5617a9f61b028005a4858fdac845db406aefb181",
+    local_dir="data/local/models/bge-m3-5617a9f",
+    token=False,
+    allow_patterns=[
+        "*.json",
+        "sentencepiece.bpe.model",
+        "pytorch_model.bin",
+        "1_Pooling/config.json",
+        "README.md",
+    ],
 )
 ```
 
