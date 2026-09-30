@@ -2,7 +2,7 @@
 
 [문서 홈](../README.md) · [공통 계약](contracts.md) · [결정 목록](decisions.md)
 
-근거: 원문 §3, §7, §11. **비중과 보고서 구간은 원문 팀안**, rating 척도·결측 계산·분기 매핑은 D01–D06·D14의 **승인 전 제안**이다. 이 문서는 금융 지표의 보편적 투자 기준을 제시하지 않고 수업 프로젝트의 구현 계약을 정의한다.
+근거: [v3](../design/design-v3.html) A-2, C-1–C-4. **23개 항목·비중, 1..5 anchor, N/A 제외 분모, 네 label, 핵심차원 보류는 v3 명시 목표**다. ID·DTO·적용성 검증·소수 경계·reason 우선순위는 D01–D06·D14의 승인 전 제안이다. 이전 원문 §3·§7의 상세 자료는 rubric 참고로 보존한다. 이 문서는 보편적 금융 투자 기준이나 구현 완료 주장이 아니다.
 
 ## 1. 먼저 적격성부터 판단한다
 
@@ -14,11 +14,11 @@
 | 상장 | 비상장임을 근거로 확인 | 검색 0건만으로 비상장 처리하지 않음 |
 | 투자 단계 | Seed, Series A, B, C 중 하나를 근거로 확인 | 추정 또는 unknown은 추가 조사 후에도 미확정이면 eligibility unknown |
 | Exit | 완료된 Exit가 없음을 검토 가능한 자료 범위에서 확인 | 자료 범위/확인일 명시; 모름을 false로 바꾸지 않음 |
-| 최소 평가 가능성 | 기업 식별 근거와 기술/제품 또는 사업 관련 평가 근거 확보 | 추가 조사 후에도 없으면 unknown |
+| 최소 평가 가능성 | v3 A-2의 여섯 차원에 필요한 최소 Evidence 확보 가능 | 정량 gate·확보 가능/현재 확보의 의미는 D05·D06 OPEN |
 
 상장·Exit 완료·명시적 Series D 이상 등 확실한 부적격 조건이 하나라도 있으면 ineligible. 그 외 필수 조건이 하나라도 미확정이면 unknown으로 기록하고 다음 후보를 처리한다. 이 둘을 `PASS`라는 투자 판정과 혼동하지 않는다.
 
-원문 정규화 표의 프리B·브릿지 등은 후보 검색용 힌트로 보존하되, 직전 완료 라운드를 근거로 확인한다. TIPS 선정만으로 seed를 확정하지 않는다. 프리시드/엔젤을 Seed~C 범위에 포함하는지는 D06에서 결정한다. 이번 baseline에서는 직접 확인된 Seed~C만 자동 적격 처리한다.
+이전 원문 정규화 표의 프리B·브릿지 등은 후보 검색용 힌트로 보존하되, 직전 완료 라운드를 근거로 확인한다. TIPS 선정만으로 seed를 확정하지 않는다. 프리시드/엔젤의 범위와 추정 단계 허용은 D06 OPEN이다. 직접 확인된 Seed~C도 나머지 적격 조건을 모두 확인해야 한다. 최소 Evidence gate를 Coverage의 30% 결측 기준과 동일시하지 않는다. Company Research의 unknown 보강 경로·예산도 승인 전이며, 위 unknown→다음 후보는 보수적 fixture 제안이다.
 
 ## 2. 평가 catalog — 원문 비중, ID는 제안
 
@@ -52,94 +52,118 @@
 
 원문 `Ruld of 40`은 raw에 보존되어 있다. 구현 ID와 표시명에서는 `Rule of 40`으로 통일한다. 위 “최소 근거”는 공개 자료의 보유를 보장하지 않으며, 점수별 rubric을 대신하지 않는다.
 
-## 3. rating과 가중점수 — D02 제안
+## 3. rating·적용성·가중점수
 
 각 criterion의 rating은 정수 `1..5` 또는 `null`이다. `0`을 missing 표현으로 사용하지 않는다.
 
 | Rating | 공통 의미 | 요구 |
 | --- | --- | --- |
-| 1 | 기준을 크게 충족하지 못함 | 낮다는 직접 근거 필요 |
-| 2 | 약하거나 중요한 위험이 확인됨 | 부족한 지점과 근거 명시 |
-| 3 | 기준을 충족하되 뚜렷한 우위는 제한적 | 보통으로 보는 이유 |
-| 4 | 강점이 구체적인 근거로 확인됨 | 항목별 높은 점수 기준 충족 |
-| 5 | 팀이 정한 최상위 기준을 충족 | 재현·교차검증 가능한 강한 근거 |
-| null | 필요한 근거 부족 / 적용조건 미확정 | missing_reason 필수; 부정 평가와 구별 |
+| 1 | 매우 미흡: 근거가 약하거나 부정적 Evidence가 우세 | 평가 가능한 근거와 낮게 본 이유; 자료 부재와 구별 |
+| 2 | 미흡: 일부 근거가 있으나 위험·불확실성이 큼 | 위험·불확실성과 근거 명시 |
+| 3 | 보통: 기본 요건 충족, 차별성 또는 근거 제한 | 보통으로 보는 이유 |
+| 4 | 우수: 신뢰 가능한 근거가 충분하고 긍정적 결과 확인 | 항목별 rubric에 따라 설명 |
+| 5 | 매우 우수: 복수의 신뢰 가능한 근거 및 경쟁사 대비 우위 확인 | 근거·비교 조건 확인 |
+| null | missing 또는 not_applicable | 아래 상태별 사유 필수; rating으로 부정 평가하지 않음 |
 
 M0에서 23개 criterion별로 이 척도를 구체화한다. 정책 담당자는 “왜 3이 아니라 4인가”를 검토할 수 있는 rubric과 예시를 제공해야 한다. 숫자 임계값을 새로 정할 경우 승인 근거가 필요하다. **Series C라는 이유만으로 Seed보다 높은 투자조건 점수를 자동 부여하지 않는다.**
 
+### 상태와 분모 — C-2/C-3 용어 충돌은 D05 OPEN
+
+C-2는 근거 부족을 `N/A`라 부르지만 C-3는 `N/A`를 지표 자체의 해당 없음으로 정의한다. 두 의미를 같은 machine status로 인코딩하지 않는다. 아래 세 상태로 분리하는 안을 제안하며 C-2 문구 해석·정정, 적용성 근거와 검증 주체는 승인받아야 한다.
+
+| status 제안 | rating | 사유/근거 | 분모 처리 |
+| --- | --- | --- | --- |
+| `observed` | 정수 1..5 | 평가 가능한 Evidence·rationale | 포함 |
+| `missing` | null | missing_reason; 공개값 부재·맥락 부족·미해결 상충 | 포함, 결측 비중에도 포함 |
+| `not_applicable` | null | applicability_reason·근거·승인 rubric rule | 제외; 원 catalog 비중은 삭제하지 않음 |
+
+공개되지 않은 valuation·지분율은 Missing이다. C-3는 매출 전 Seed 기업의 매출성장률·매출총이익률·Rule of 40을 해당 없음의 예로 든다. 그러나 단순 `Seed` 문자열이나 검색 실패만으로 N/A를 부여하지 않는다. 매출 전 상태와 지표 적용조건을 확인하는 D14 rubric이 필요하다. 적용 여부 자체가 미확정이면 missing+applicability_note로 남기는 보수적 제안이다. 기술적 평가 실패는 이 세 상태가 아닌 failure envelope다.
+
 ```text
-w_i = criterion의 비중 (전체 합 100)
-r_i = 관측된 criterion의 rating (1..5)
-p_i = w_i × r_i / 5          if observed
-p_i = null                  if missing
+w_i = 원 catalog 비중 (23개 합 100)
+r_i = observed rating (1..5)
+p_i = w_i × r_i / 5   if observed; 그 외 null
+observed_score = Σ observed p_i                       # 원배점 획득점수
+not_applicable_weight = Σ not_applicable w_i
+applicable_weight = Σ observed/missing w_i            # 100 - N/A 비중
+missing_weight = Σ missing w_i                       # 원배점, % 아님
+normalized_score = observed_score / applicable_weight × 100
+weighted_missing_pct = missing_weight / applicable_weight × 100
+coverage_pct = 100 - weighted_missing_pct
 
-observed_score = Σ observed p_i
-missing_weight = Σ missing w_i
-coverage_pct = 100 - missing_weight
-
-dimension_rating(d) = Σ observed(w_i × r_i) / Σ observed(w_i)
-                     단, 해당 영역의 관측 비중이 0이면 null
+dimension_score_pct(d) = Σ d의 observed p_i / Σ d의 observed/missing w_i × 100
 ```
 
-- missing 항목을 제외한 비중으로 총점을 100점에 재정규화하지 않는다.
-- observed_score 합산에는 missing의 기여가 없지만, 이는 실제 평가점수 0이라는 뜻이 아니다. `관측 근거 기반 점수 X/100, 결측 Y%`로 함께 표시한다.
-- 저점수 보류는 `dimension_rating <= 2`인 **상위 영역**이 있을 때 적용하는 제안이다. 일부 관측된 영역은 그 관측 부분만으로 계산하고 coverage를 함께 표시한다.
-- 한 영역 전체가 missing이면 rating=null이고 저점수 조건은 적용하지 않는다. 결측 비중 규칙은 그대로 적용한다.
-- 임계값 비교는 반올림 전 값으로 수행한다. 표시만 소수 둘째 자리로 반올림한다. Decimal 또는 동등한 정확도 정책을 사용한다.
+위 비율식은 분모가 양수일 때만 정의한다. **Missing을 제외한 관측 항목만의 분모로 정규화하는 것은 금지**다. Missing의 p_i=null은 합산에 기여하지 않지만 실제 0점 관측이 아니다. `획득 X / 적용가능 A, 정규화 S/100, 결측 M/A=Y%, N/A N`을 구분해 표시한다.
 
-### 계산 fixture — 실제 기업 아님
+- 핵심 보류는 **market 또는 technology의 dimension_score_pct ≤40%**에만 적용한다. founder/moat/traction/deal_terms가 낮다는 이유만으로 강제 보류하지 않는다.
+- 관측 rating 가중평균은 이 비율을 대신할 수 없다. Missing도 핵심차원 분모에 남는다. 해당 차원 전체가 missing이고 분모가 양수면 문언식 결과는 0%이나 이를 “관측된 기술력이 0점”이라 서술하지 않는다.
+- 전체 또는 어느 차원의 applicable_weight=0은 0/0이다. 임의 0·100점이나 추천을 만들지 않는다. null 표현·오류/보류·집계 계속 여부는 D05 OPEN이며 해당 정책 없는 live는 차단한다. 특히 핵심차원 전부 N/A의 보류 여부는 미정이다.
+- 반올림 전 정확한 수로 비교하고 표시만 소수 둘째 자리로 반올림하는 안이다(D02). Decimal 정밀도/rounding 또는 분수·교차곱 비교를 정책에 고정한다.
 
-| 입력 | 기대 점수 | 결측 비중 | 기대 결과 |
-| --- | --- | --- | --- |
-| 전 항목 rating=5 | 100 | 0 | 투자 우선 검토 / RECOMMEND |
-| 전 항목 rating=4 | 80 | 0 | 투자 우선 검토 / RECOMMEND |
-| 전 항목 rating=3 | 60 | 0 | 보류 / WATCHLIST |
-| 전 항목 rating=2 | 40 | 0 | 저점수 강제 보류 / WATCHLIST |
-| market 전체 missing, 나머지 rating=5 | 70 | 30 | 정보 부족 강제 보류 / WATCHLIST |
-| founder 전체 rating=1, 나머지 rating=5 | 96 | 0 | 저점수 강제 보류 / WATCHLIST |
-| 전 항목 missing | 0 | 100 | 정보 부족 보류; 0점 기업으로 표현 금지 |
+### 설명용 산술 예시 — 구현된 테스트·실제 기업 결과 아님
 
-이 수치는 문서 작성 시 산술 검증 대상이며 실제 평가 결과가 아니다.
+나머지=rating 5, 별도 N/A 표기가 없으면 N/A=0이다. Python 분수 연산으로 수치만 확인했다. 라벨은 양수 분모의 v3 규칙과 아래 소수 구간 제안에 따른 **조건부 기대값**이며 팀 승인이나 런타임 검증이 아니다.
+
+| 입력 | observed_score / applicable_weight | normalized_score | missing_weight / weighted_missing_pct | 조건부 판단 |
+| --- | --- | --- | --- | --- |
+| 전 항목 5 | 100/100 | 100 | 0 / 0% | RECOMMEND_PRIORITY |
+| 전 항목 4 | 80/100 | 80 | 0 / 0% | RECOMMEND_PRIORITY |
+| 전 항목 3 | 60/100 | 60 | 0 / 0% | WATCHLIST |
+| 전 항목 2 | 40/100 | 40 | 0 / 0% | 핵심차원 각 40% → WATCHLIST |
+| market 전체 missing | 70/100 | 70 | 30 / 30% | 결측+market 0% 사유 모두 보존, WATCHLIST |
+| founder 전체 1 | 96/100 | 96 | 0 / 0% | 비핵심 저점수만으로 강제보류하지 않음, RECOMMEND_PRIORITY |
+| 전 항목 missing | 0/100 | 0 | 100 / 100% | WATCHLIST, 정보 부족이며 0점 기업이 아님 |
+| traction 성장률·마진·Rule of 40 N/A(비중 6) | 94/94 | 100 | 0 / 0% | 적용성 승인 전제, RECOMMEND_PRIORITY |
+| 위 N/A 6 + missing 29 | 65/94 | ≈69.148936 | 29 / ≈30.851064% | 원배점 29라도 결측률 ≥30%, WATCHLIST |
+| market.size·growth missing(20), demand=5 | 80/100 | 80 | 20 / 20% | market=10/30=33.333333…%, WATCHLIST |
+
+마지막 행의 market 관측 rating 평균은 5지만 핵심비율은 40% 이하다. 자료 부족에서 생긴 핵심비율 저하와 실제 낮은 rating을 reason/설명에서 구별한다(D02). N/A 6+missing 29 예시는 `technology` 전체 25와 founder.expertise·industry 4를 missing으로 둔 경우다.
+
+핵심차원 N/A 예시(정책상 적용성이 인정됐다고 가정): market.size N/A(10), growth·demand rating=2이면 획득 8 / 적용가능 20 = 40%로 보류다. 모든 항목 N/A 또는 market 전부 N/A 예시는 기대 숫자/label을 만들어 넣지 않고 D05 정책 부재를 검출해야 한다.
 
 ## 4. Coverage와 재조사
 
 **관측 인정 제안:** 해당 criterion을 직접 지원하는 근거가 있고, 필요한 단위·기간·주체가 확인되며, 중요한 상충이 해소되어야 한다. 근거 하나가 여러 criterion을 지원할 수 있지만 각 criterion의 충족 여부를 따로 판단한다. 동일 기사 재배포는 독립 근거가 아니다.
 
-- 사전 Coverage: known criteria로 missing_weight를 계산한다. `missing_weight < 30`이면 연구 진행 준비 상태로 본다.
-- `missing_weight >= 30`이고 재조사 예산이 남으면 비중이 큰 gap부터 조사한다.
-- 평가 노드가 맥락 부족·상충을 발견하면 observed를 missing으로 바꾸고 gap을 반환한다.
-- 사전 Coverage가 충분해도 평가 후 재검사를 수행한다. 최종 판정은 **최종 평가에서 다시 계산한 결측 비중**을 따른다.
-- 예산이 끝나면 missing 그대로 집계한다. 조사량을 늘렸다는 이유로 점수를 보정하지 않는다.
-- `not_applicable`로 비중을 제거하는 정책은 채택하지 않았다. 적용 자체가 불명확한 지표는 missing+applicability_note로 남긴다. 재배분이 필요하면 D14와 정책 버전을 먼저 변경한다.
+- 사전 Coverage도 세 상태와 적용가능 분모를 기록한다. `weighted_missing_pct <30`을 research_ready로 삼는 안과 gap 우선순위는 D05 OPEN이다. 원배점 missing_weight를 %와 비교하지 않는다.
+- Coverage 부족이면 같은 Evidence Research가 부족 근거만 최대 2회 재조사한다(v3 D-2/D-3). 초기 조사 포함 여부와 오류 batch 회차 산정은 D08에서 명시한다.
+- 그 후에는 부족해도 불변 snapshot으로 평가한다. 평가자가 맥락 부족·상충을 발견하면 missing과 gap을 반환할 수 있지만 **평가 후 Research로 돌아가는 loop는 v3 기본 흐름에 없다.**
+- 최종 집계는 여섯 Evaluation에서 적용성·결측률을 다시 계산한다. 사전 Coverage를 덮어써 사전 조사 충족 기록을 조작하지 않으며 최종 판정은 최종 값으로 한다.
+- 조사량을 늘렸다는 이유로 점수를 보정하지 않는다. 분모 0·미정 적용성은 승인 정책의 guard가 필요하다.
 
 재무 지표가 공개되지 않았다는 이유로 도구 실패를 숨기거나 추정 재무제표를 생성하지 않는다. 원문의 SaaS 경험칙·국민연금 인원 기반 추정·기사 반복 노출은 참고 신호이지 직접 재무 관측의 대체물이 아니다. 확인되지 않은 투자액/기업가치/지분율을 서로 다른 라운드에서 섞지 않는다.
 
-**원문 단위 충돌 — 런웨이:** §3 상세 표 L229는 정의에 `보유 현금 ÷ 월 번레이트`, 데이터 칸에는 `현금 ÷ 연간 영업현금유출`을 적고 있다. 월 단위 결과와 연 단위 결과를 그대로 같은 값으로 취급하면 안 된다. D14 rubric 승인 때 사용할 현금소모 지표·기간·부호와 단위 변환을 명시한다. 연간 자료를 월평균으로 환산한다면 원자료·환산식·평균화 가정을 `derivation`에 남기며, 그것을 현재 월 번레이트의 직접 관측값으로 표시하지 않는다. 분모가 0 이하이거나 기간/정의가 맞지 않으면 유한한 개월 수를 임의 생성하지 않고 missing 사유를 기록한다.
+**이전 원문 단위 충돌 — 런웨이:** §3 상세 표 L229는 정의에 `보유 현금 ÷ 월 번레이트`, 데이터 칸에는 `현금 ÷ 연간 영업현금유출`을 적고 있다. 월·연 결과를 같은 값으로 취급하지 않는다. D14 rubric에서 현금소모 지표·기간·부호·단위 변환을 명시한다. 연간→월평균 환산은 원자료·식·평균화 가정을 `derivation`에 남기고 현재 월 번레이트의 직접 관측으로 표시하지 않는다. 분모 0 이하·기간 불일치에서는 유한 개월 수를 만들지 않는다. 지표 적용성 자체가 맞지 않는지(not_applicable), 적용되나 입력이 부족한지(missing)는 D14에서 정하며 non_positive_burn을 자동 N/A로 바꾸지 않는다.
 
-## 5. 판단 우선순위 — D03 제안
+## 5. 판단 규칙과 최종 후보 선택
 
-다음 표는 적격 후보이며 필수 평가 결과가 정상 생성된 경우에만 적용한다. 모든 해당 reason은 남기되, 화면의 대표 grade는 위쪽 행을 우선한다.
+적격이며 5개 branch의 여섯 차원 평가가 정상 생성되고 분모 guard가 해소된 후보에만 적용한다. 보류 예외는 총점보다 우선한다(v3 C-3/C-4). 모든 해당 reason을 보존한다. 여러 보류 사유 중 대표 grade를 정보 부족 우선으로 표시하는 안은 D02 OPEN이며 아래 행 순서 자체가 승인 우선순위는 아니다.
 
-| 우선순위 | 조건 | report_grade | label | 다음 경로 |
-| --- | --- | --- | --- | --- |
-| 1 | missing_weight ≥30 | 보류 (정보 부족) | WATCHLIST | 후보 결과 저장 → 다음 후보 |
-| 2 | 어느 상위 영역이든 관측 rating ≤2 | 보류 (저점수) | WATCHLIST | 후보 결과 저장 → 다음 후보 |
-| 3 | observed_score ≥80 | 투자 우선 검토 | RECOMMEND | 단일 기업 보고서 |
-| 4 | 70 ≤ observed_score <80 | 투자 검토 | RECOMMEND | 단일 기업 보고서 |
-| 5 | 60 ≤ observed_score <70 | 보류 | WATCHLIST | 후보 결과 저장 → 다음 후보 |
-| 6 | observed_score <60 | 투자비추천 | PASS | 후보 결과 저장 → 다음 후보 |
+| 조건 | report_grade | label |
+| --- | --- | --- |
+| weighted_missing_pct ≥30% | 보류 (정보 부족) | WATCHLIST |
+| market 또는 technology의 dimension_score_pct ≤40% | 보류 (핵심차원 비율) | WATCHLIST |
+| 예외 없음, normalized_score ≥80 | 투자 우선 검토 | RECOMMEND_PRIORITY |
+| 예외 없음, 70 ≤ normalized_score <80 | 투자 검토 | RECOMMEND |
+| 예외 없음, 60 ≤ normalized_score <70 | 보류 | WATCHLIST |
+| 예외 없음, normalized_score <60 | 투자비추천 | PASS |
+
+C-4의 `70~79`, `60~69` 정수 표기를 위 연속 구간으로 읽는 것은 D02의 **소수 구간 제안**이다. 반올림 전 비교를 함께 승인한다. 예외 없는 label 함수 직접입력 예: `59.99→PASS`, `60/69.99→WATCHLIST`, `70/79.99/79.996→RECOMMEND`, `80→RECOMMEND_PRIORITY`. 79.996이 표시상 80.00이어도 승인 전 소수 정책을 숨기거나 표시값으로 재판정하지 않는다. 결측 `29.999/30/30.001%`, 핵심비율 `39.999/40/40.001%`를 각 경계 양쪽에서 검사한다. 이 직접입력 예는 정수 rating catalog에서 모두 생성 가능한 조합이라는 주장이 아니다.
 
 `PASS`는 “이 기업에 투자하지 않고 넘어간다”는 의미다. 적격성 통과는 `eligible`, 문서 검증 통과는 `valid`/`pass`로 별도 필드에 둔다.
 
-LLM Investment Decision 노드는 계산된 label·grade를 수정할 수 없다. 설명이 정책과 모순되면 schema/semantic 검증에서 거절한다. 모든 후보 처리 후에는 WATCHLIST/PASS/부적격/정보부족 사유를 구분한 비교 요약을 만든다.
+Investment Decision은 deterministic 노드다. 선택적으로 붙이는 LLM 설명은 label·grade를 수정할 수 없고 모순 시 거절한다. **네 label 모두 결과 저장→다음 후보**이며 첫 추천에서 보고서를 생성하지 않는다. 모든 후보 처리 후 Best Candidate Selector가 승인된 selection policy를 사용한다(D03). label/점수 우선순위·동점·전부 WATCHLIST/PASS·성공 평가 없음의 선택 규칙은 미정이다. 입력 순서나 candidate_id로 임의 tie-break하지 않는다. 부적격/unknown/failed를 추천으로 승격하지 않는다. 적격 후보가 하나도 없으면 selected=None과 사유 있는 종료 보고서는 v3 명시 목표다. 적격 후보가 있었지만 전부 기술 실패한 경우와 이를 구별한다.
 
 ## 6. 최소 정책 테스트
 
 - 비중 합 100, dimension별 합 일치, criterion ID 중복 없음.
-- rating null/1/5 허용; 0/6/소수/NaN 거절.
-- 점수 경계 `59.99/60/69.99/70/79.99/80` 비교; 라벨 함수 테스트에서는 이 값을 직접 입력한다.
-- 결측 `29/30/31`과 상위 rating `2/2.01`에서 우선순위 확인.
+- observed rating 1..5만 허용; missing/not_applicable는 null과 상태별 사유. 0/6/소수/NaN 거절.
+- §3 설명용 예시를 fixture로 구현하고 §5 소수 구간·반올림 전 경계는 주입 정책별 기대값을 검증한다.
+- N/A만 분모 제외, Missing 포함, 원배점과 % 구별; 전체·각 차원 0분모 정책 없으면 live 차단.
+- 핵심비율 40%·결측률 30%의 포함 경계, 여러 reason 보존, 부분/완전 핵심 Missing, 비핵심 저점수 사례 검증.
 - 비중 1인 criterion이 만점일 때 이를 “2점 이하”라고 오판하지 않음.
 - 미상 데이터와 부정적 근거, 부적격과 PASS, branch 실패와 missing 구별.
-- 여섯 번째 투자조건 결과가 없으면 총점 계산 거절.
+- Business & Deal의 traction/deal_terms 중 하나라도 없거나 failure면 branch 성공 및 총점 계산 거절.
 - 서로 다른 후보·세대의 평가 결과를 섞으면 집계 거절.
+- 승인된 selector fixture로 후보 순서 불변·동점·전부 WATCHLIST/PASS·무적격·성공 평가 없음 검증. 임의 기본 정책 없이 OPEN 차단을 테스트한다.

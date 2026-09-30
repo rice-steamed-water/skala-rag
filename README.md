@@ -5,8 +5,11 @@ LangGraph Multi-Agent RAG 프로젝트다. 실제 투자 실행 시스템은 아
 
 현재는 설치 가능한 `src/skala_rag` 패키지 골격과 네트워크 호출 없는
 import 및 공개 의존성 API 호환성 smoke test만 제공한다. 애플리케이션, CLI, live RAG, 평가 및
-보고서 출력은 구현되지 않았다. 설계 결정은 모두 OPEN 상태이며
-정책·모델·provider 기본값을 정하지 않는다.
+보고서 출력은 구현되지 않았다. 새 구현 목표는 사용자 제공
+[설계 v3 보존본](docs/design/design-v3.html)이며, 이전 설계와의 차이 및
+main·미병합 PR 기준은 [v3 정합화 기록](docs/implementation/design-v3-alignment.md)에 있다.
+v3의 명시 목표와 팀의 구현 정책 승인은 별개다. [결정 목록](docs/implementation/decisions.md)은
+모두 OPEN을 유지하며, 미정 정책·최종 모델·provider를 실행 기본값으로 정하지 않는다.
 
 ## 설치
 
