@@ -10,8 +10,9 @@ frozen ``EvaluationSnapshot`` 안의 **허용 근거만** 써서 #10 Technology 
 - 근거 부족은 ``missing``으로 남긴다. N/A 우회·유사도 점수화는 하지 않는다.
 - 결과와 함께 criterion→evidence→retrieval/chunk→snapshot trace를 돌려준다.
 
-fixture 실행과 실제 실행은 ``execution_mode``로 구분한다. 실제 실행은 rubric·
-정책이 승인(D14)되고 #55 Evidence 조사 산출물이 있어야 하므로 지금은 거부한다.
+fixture 실행과 실제 실행은 ``execution_mode``로 구분한다. fixture는 제안·승인
+rubric 모두 허용한다. 실제 실행은 D14 core 승인 rubric이 있어야 하며, 입력
+snapshot은 #55 Evidence 조사 산출물이어야 한다(Market #59와 같은 게이트).
 """
 
 from collections.abc import Mapping
@@ -71,16 +72,16 @@ def _check_mode(
     execution_mode: str, rubric: Mapping[str, object], policy: ScoringPolicy
 ) -> None:
     if execution_mode == "fixture":
-        if rubric.get("status") != "proposed" or policy.status != "draft":
+        if (
+            rubric.get("status") not in ("proposed", "approved")
+            or policy.status != "draft"
+        ):
             raise ValueError(
-                "Technology fixture requires proposed rubric and draft policy"
+                "Technology fixture requires proposed/approved rubric and draft policy"
             )
     elif execution_mode == "real":
-        if rubric.get("status") != "approved" or policy.status == "draft":
-            raise ValueError(
-                "Technology real run requires approved rubric/policy (D14) "
-                "and #55 evidence"
-            )
+        if rubric.get("status") != "approved":
+            raise ValueError("Technology real run requires approved rubric (D14 core)")
     else:
         raise ValueError(f"unknown execution_mode: {execution_mode!r}")
 
