@@ -44,6 +44,17 @@ LLM timeout OPEN 및 retry pending은 이 범위에서만 해소된다.
 기존 model/token/공유 호출·시간·비용 한도와 schema 보정 회계는 유지한다.
 실제 조사 State, 계정 요금·잔여 credit 및 required readiness의 확인은 별도다.
 
+#### #62 API 키 후속 제공·개발 지속 지시
+
+사용자는 “나중에 API 키를 넣어줄테니, 그냥 나만 믿고 진행해.”라고 지시했다.
+계정 잔액 정보를 추가 개발 착수 조건으로 재요청하지 않고, API 호출 없는 구현·
+가상 응답 통합 검증·로컬 사전 점검을 계속한다. 현재 실행에서 실제 LLM 호출은 하지 않는다.
+후속 component CLI는 키 제공 후 사용자가 명시적으로 `--live`를 선택해 실행한다.
+계정 잔액 증빙 파일을 별도 입력으로 요구하지 않으며, 잔액 검증 여부는 false로 기록한다.
+공개 요금으로 계산한 요청 상한과 기존 8회/8,000·2,000 token/10분/USD 1/run·
+USD 3/campaign 범위를 유지한다. 실제 비용은 확인 전까지 None이다.
+이 후속 지시로 키 미제공 상태의 호출, 신규 구독·credit 구매, M3 전체 실행을 허용하지 않는다.
+
 아래 **approved 열에 pending인 값은 기본값으로 적용할 수 없다.** D08 기존 제한은 현재 worktree [승인 기록](decisions.md)의 값이며, #35 정합화 후 변경 여부를 재확인한다. M2 adapter smoke/검색 실험 예산이며 M3 전체 runner·보고서/Judge 허용을 뜻하지 않는다.
 
 | 항목 | 승인 요청안(proposed) | 승인된 값(approved) / 범위 |
