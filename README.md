@@ -1,12 +1,12 @@
 # AI Startup Investment Evaluation Agent
 
-Physical AI / Robotics 스타트업의 투자 조사·평가를 위한 **LangGraph Multi-Agent RAG** 프로젝트입니다. 수업용 투자 검토 시스템이며 실제 투자 실행 시스템은 아닙니다.
+Physical AI / Robotics 스타트업의 투자 조사·평가를 위한 **LangGraph Multi-Agent RAG** 프로젝트입니다.
 
 ## Overview
 
 ### Objective
 
-투자 주제에 맞는 스타트업을 조사하고 비상장·Seed~Series C·Exit 미완료 여부를 확인한 뒤, 출처가 있는 근거로 후보를 비교하고 투자 검토 보고서를 생성하는 것을 목표로 합니다.
+투자 주제에 맞는 기업을 조사하고 스타트업 여부를 확인한 뒤, 출처가 있는 근거로 후보를 비교하고 투자 검토 보고서를 생성하는 것을 목표로 합니다.
 
 ### Method
 
@@ -15,44 +15,42 @@ Physical AI / Robotics 스타트업의 투자 조사·평가를 위한 **LangGra
 - **결정적 계산:** 창업자 5 / 시장성 30 / 제품·기술력 25 / 경쟁 우위 20 / 실적 10 / 투자조건 10의 비중을 사용합니다. LLM은 항목별 판단과 근거를 생성하고, 점수·투자 판단·최종 선정은 코드가 계산합니다.
 - **결측·실패 구분:** Missing은 분모에 남기고 정당한 N/A만 제외합니다. 기술 실패를 투자 비추천이나 임의 점수로 바꾸지 않습니다.
 
-> 단일 기업 **Physical Intelligence 로컬 라이브 데모(#180)**는 준비된 실제 자료 검색 → 모델 분석 → 보고서·PDF 생성 경로입니다. 아래 재현 가이드를 따르세요. 임의 기업 탐색·적격성·정량 점수·추천을 포함하는 **전체 live 실행은 미완료**이며, 이 데모로 그 완료를 주장하지 않습니다.
+> 단일 기업 **Physical Intelligence 로컬 라이브 데모(#180)**는 준비된 실제 자료 검색 → 모델 분석 → 보고서·PDF 생성 경로입니다. [아래](#로컬-라이브-데모-재현-180) 재현 가이드를 따르세요. 임의 기업 탐색·적격성·정량 점수·추천을 포함하는 **전체 live 실행은 미완료**이며, 이 데모로 그 완료를 주장하지 않습니다.
 
 ## Features
 
-| 기능 | 현재 상태 | 구현 근거 |
-| --- | --- | --- |
-| 후보 탐색·정규화·적격성 | fixture 흐름과 기업 조사 adapter 구현 | [agents](src/skala_rag/agents/), [company_research.py](src/skala_rag/tools/company_research.py) |
-| 출처 추적형 Evidence | 검색 provenance·승인 corpus gate·근거 수집 구현 | [rag](src/skala_rag/rag/), [evidence_collector.py](src/skala_rag/agents/evidence_collector.py) |
-| PDF 원문 추출 | 페이지·locator 보존 추출 및 로컬 runner 구현; OCR·시각 자료 미지원 | [extraction.md](src/skala_rag/rag/extraction.md) |
-| Coverage·불변 snapshot | 결측 검사·근거 참조 검증·평가 입력 고정 | [coverage_v3.py](src/skala_rag/scoring/coverage_v3.py), [snapshot.py](src/skala_rag/graph/snapshot.py) |
-| 병렬 평가·최종 선정 | v3 fixture controller와 결정적 점수·selector 구현 | [evaluation_v3.py](src/skala_rag/graph/evaluation_v3.py), [selector_v3.py](src/skala_rag/scoring/selector_v3.py) |
-| 외부 호출 제어 | readiness·예산·retry runtime과 structured-output adapter 구현 | [runtime.py](src/skala_rag/tools/runtime.py), [runtime_llm.py](src/skala_rag/tools/runtime_llm.py) |
-| 보고서 생성·검증 | v3 Generator/Judge·한글 HTML/PDF 구현; #180 단일 기업 무점수 live 데모 검증, 전체 투자 평가 통합과 구분 | [reporting](src/skala_rag/reporting/), [로컬 데모](docs/implementation/local-demo.md) |
+| 기능                    | 현재 상태                                                                                               | 구현 근거                                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| 후보 탐색·정규화·적격성 | fixture 흐름과 기업 조사 adapter 구현                                                                   | [agents](src/skala_rag/agents/), [company_research.py](src/skala_rag/tools/company_research.py)                  |
+| 출처 추적형 Evidence    | 검색 provenance·승인 corpus gate·근거 수집 구현                                                         | [rag](src/skala_rag/rag/), [evidence_collector.py](src/skala_rag/agents/evidence_collector.py)                   |
+| PDF 원문 추출           | 페이지·locator 보존 추출 및 로컬 runner 구현; OCR·시각 자료 미지원                                      | [extraction.md](src/skala_rag/rag/extraction.md)                                                                 |
+| Coverage·불변 snapshot  | 결측 검사·근거 참조 검증·평가 입력 고정                                                                 | [coverage_v3.py](src/skala_rag/scoring/coverage_v3.py), [snapshot.py](src/skala_rag/graph/snapshot.py)           |
+| 병렬 평가·최종 선정     | v3 fixture controller와 결정적 점수·selector 구현                                                       | [evaluation_v3.py](src/skala_rag/graph/evaluation_v3.py), [selector_v3.py](src/skala_rag/scoring/selector_v3.py) |
+| 외부 호출 제어          | readiness·예산·retry runtime과 structured-output adapter 구현                                           | [runtime.py](src/skala_rag/tools/runtime.py), [runtime_llm.py](src/skala_rag/tools/runtime_llm.py)               |
+| 보고서 생성·검증        | v3 Generator/Judge·한글 HTML/PDF 구현; #180 단일 기업 무점수 live 데모 검증, 전체 투자 평가 통합과 구분 | [reporting](src/skala_rag/reporting/), [로컬 데모](docs/implementation/local-demo.md)                            |
 
 ## Tech Stack
 
-| 구분 | 기술 및 상태 |
-| --- | --- |
-| Language / Package | Python 3.11+, uv |
-| Framework | LangGraph `StateGraph`, LangChain Core |
-| LLM / Generator | OpenAI `gpt-4.1-mini-2025-04-14` structured-output adapter. #180 무점수 데모에서 실제 보고서 생성 검증; 전체 투자 평가 완료를 뜻하지 않습니다. |
-| LLM / Judge | #180에서 별도 실제 Judge 호출 검증. fixture 테스트는 주입형 stub과 구분합니다. |
-| Retrieval / VectorDB | `GuardedRetriever`와 provenance 검증, #180 로컬 BGE 인덱스 준비·검색 사용. **운영 VectorDB 미선정.** |
-| Retrieval Metrics | **Hit Rate@K: 미실측 / MRR: 미실측.** fixture 결과를 검색 성능으로 표시하지 않습니다. |
-| Embedding | **`BAAI/bge-m3` 선정.** #180은 revision 고정 로컬 인덱스를 사용합니다. 데모 성공을 검색 품질 벤치마크나 E5/KURE 비교 결과로 표시하지 않습니다. |
-| Data / Documents | Pydantic v2, pypdf, langchain-text-splitters |
-| HTTP / Quality | httpx, ruff, pytest |
-
-모델·저장소 결정은 [M2 승인 기록](docs/implementation/m2-live-approval-proposal.md), 정책과 남은 OPEN 항목은 [결정 목록](docs/implementation/decisions.md), 실제 의존성은 [pyproject.toml](pyproject.toml)을 참조합니다.
+| 구분                 | 기술 및 상태                                                                                                                                   |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Language / Package   | Python 3.11+, uv                                                                                                                               |
+| Framework            | LangGraph `StateGraph`, LangChain Core                                                                                                         |
+| LLM / Generator      | OpenAI `gpt-4.1-mini-2025-04-14` structured-output adapter. #180 무점수 데모에서 실제 보고서 생성 검증; 전체 투자 평가 완료를 뜻하지 않습니다. |
+| LLM / Judge          | #180에서 별도 실제 Judge 호출 검증. fixture 테스트는 주입형 stub과 구분합니다.                                                                 |
+| Retrieval / VectorDB | `GuardedRetriever`와 provenance 검증, #180 로컬 BGE 인덱스 준비·검색 사용. **운영 VectorDB 미선정.**                                           |
+| Retrieval Metrics    | **Hit Rate@K: 미실측 / MRR: 미실측.**                                                                                                          |
+| Embedding            | **`BAAI/bge-m3` 선정.** #180은 revision 고정 로컬 인덱스를 사용합니다. 데모 성공을 검색 품질 벤치마크나 E5/KURE 비교 결과로 표시하지 않습니다. |
+| Data / Documents     | Pydantic v2, pypdf, langchain-text-splitters                                                                                                   |
+| HTTP / Quality       | httpx, ruff, pytest                                                                                                                            |
 
 ## Agents
 
-| Agent | 역할 | 주요 데이터 |
-|---|---|---|
-| **1. 스타트업 판별 Agent** | 투자 단계, Exit 여부 등을 확인해 평가 대상인지 판별 | DB + 외부 조회 |
-| **2. 투자 평가 Agent** | 창업자·기술·시장·재무 등의 투자 지표 평가 | **DB + RAG** |
-| **3. 보고서 평가 Agent** | 생성된 투자 보고서의 근거성·일관성·누락 검증 | **DB + RAG + 보고서** |
-| **4. 스타트업 탐색 Agent** | 뉴스/검색 결과에서 기업을 찾아 후보를 추출 | 검색 결과 |
+| Agent                      | 역할                                                | 주요 데이터           |
+| -------------------------- | --------------------------------------------------- | --------------------- |
+| **1. 스타트업 판별 Agent** | 투자 단계, Exit 여부 등을 확인해 평가 대상인지 판별 | DB + 외부 조회        |
+| **2. 투자 평가 Agent**     | 창업자·기술·시장·재무 등의 투자 지표 평가           | **DB + RAG**          |
+| **3. 보고서 평가 Agent**   | 생성된 투자 보고서의 근거성·일관성·누락 검증        | **DB + RAG + 보고서** |
+| **4. 스타트업 탐색 Agent** | 뉴스/검색 결과에서 기업을 찾아 후보를 추출          | 검색 결과             |
 
 ## Architecture
 
@@ -89,7 +87,7 @@ flowchart TD
     JUDGE -. 검증 통과 .-> PDF[PDF 출력 / Layout 검증]
 ```
 
-[v3 후보 controller](src/skala_rag/graph/candidates_v3.py)는 보고서 호환성 공백을 명시합니다. [baseline 보고서 graph](src/skala_rag/graph/report.py)는 별도 fixture 경로입니다. PDF **원문 추출**과 최종 보고서 PDF **렌더링**은 다른 기능입니다. 상세 목표는 [아키텍처 문서](docs/implementation/architecture.md)를 참조합니다.
+상세 목표는 [아키텍처 문서](docs/implementation/architecture.md)를 참조합니다.
 
 ## Directory Structure
 
@@ -131,7 +129,6 @@ uv run pytest
 
 ### 로컬 라이브 데모 재현 (#180)
 
-**지원 환경:** Python 3.11+, uv, POSIX(macOS/Linux), Chromium. Windows 네이티브는 미검증입니다.
 앱·자료·검색은 로컬이지만 모델 분석에는 OpenAI API와 인터넷이 필요합니다.
 최초 실행은 원문·BGE-M3 모델 다운로드가 필요하므로 시연 전에 준비합니다.
 
@@ -172,62 +169,13 @@ uv run pytest
 실패/만료 시 자동 재실행하지 말고 영수증과 승인 상태를 확인합니다.
 오류별 조치·데이터 위치·검증 범위는 [상세 데모 안내](docs/implementation/local-demo.md)를 참조하세요.
 
-검증 기록: 2026-09-30 실제 웹/API 생성 7회 호출, 51.86초, 다운로드 PDF 2페이지 열람을 확인했습니다.
-이는 당시 실행의 기록이며 매번 같은 내용·시간을 보장하지 않습니다. 이후 표시 개선의 재렌더링 검증은
-새 모델 분석과 구분합니다. 테스트 mock 응답을 실제 API 성공으로 표시하지 않습니다.
-
-### 구현된 실행 경로
-
-**최종 실행 인터페이스는 Python 직접 호출입니다(#166).** 신규 CLI·flag·subcommand·console-script 패키징·CLI UX 개발은 중단합니다. 기존 `src/skala_rag/cli.py`의 fixture callable `run(...)`과 parser·테스트는 이미 존재하며 삭제하지 않습니다. 복사해 실행할 Python 코드와 receipt/hash 확인은 [Python 직접 실행 안내](docs/implementation/python-execution.md)를 따릅니다. 반환값은 `Path`이며 `RunResult`가 아닙니다. 전체 live 통합이나 새 `app.py` 구현을 뜻하지 않습니다.
-
-아래 PDF 추출 명령도 **기존 호환 도구 안내**이며 신규 실행 인터페이스 개발 요구가 아닙니다. 기존 옵션 확인:
-
-```bash
-uv run python -m skala_rag.rag.extraction_runner --help
-```
-
-실제 추출에는 승인 manifest·원문·Source·설정 JSON이 필요합니다. [추출 실행 안내](src/skala_rag/rag/extraction.md)에 필수 인자와 종료 코드가 정리되어 있습니다. 원문은 `data/local/`, 결과는 `outputs/`에 두고 커밋하지 않습니다. 이 runner는 embedding이나 최종 투자 보고서를 생성하지 않습니다.
-
-개발·통합 시에는 [구현 가이드](docs/README.md), [공통 데이터 계약](docs/implementation/contracts.md), [Adapter runtime](docs/implementation/adapter-runtime.md), [협업 규칙](CONTRIBUTING.md)을 확인합니다. API key·`.env`·원문·생성 index는 커밋하지 않습니다.
-
 ## Contributors
 
-닫힌 이슈 담당·PR 작성 기록 기준 개인별 수행 역할(D10: 실명 매핑은 제출 전 팀 확인, PM/PL 역할 제외).
-
-| GitHub | 수행 역할 |
-| --- | --- |
-| luk0715 (박태준) | 협업 규칙·프로젝트 초기 설정(#1, #4), 입력·후보·근거 DTO(#5), v3 설계 정합화·v3 DTO·운영 정책(#35, #73, #82), Coverage(#20), Graph 골격·병렬 평가 단계(#23, #24), 기준일 판정 수정(#99), M2 provider·RAG 실험 승인(#43) |
-| xxhigh (김근홍) | M0 정책 결정 승인(#3), 평가·점수·보고서 DTO와 결정적 ID(#6), RAG 코퍼스·페이지 산정(#13), 보고서 목차·인용 계약(#14), 평가 snapshot 고정(#21) |
-| heojiwon2 (허지원) | InvestmentState(#7), Tool·LLM·clock 주입 인터페이스(#8), 후보 탐색·적격성(#17, #18), retrieve·Evidence Collector(#19), 재조사 loop(#25), 보고서 생성·수정 loop(#28), 코퍼스 manifest gate(#44, #91), 안전한 외부 fetch(#46) |
-| wjd990819-ops (정순욱) | criterion catalog·정책 fixture(#9), 공통 가상 fixture(#12), State reducer(#15), retrieve·Evidence Collector(#19) |
-| XXXXXim (심혁) | 23개 criterion rubric·재무 단위 규칙(#10, #11), 점수 집계·투자 판단과 DTO 어댑터(#16, #68), 영역 평가 wrapper(#22), ReportContext(#26), Structural Validator(#27), 재무 Evidence 단위·기간 검증(#53) |
-| hanyujin2002 (한유진) | 데이터·RAG 설계 및 문서화, 문서 유형별 Chunking·Embedding 전략 정리, DB/RAG 데이터 흐름 및 평가 Agent 연계 구조 설계 |
-
-## Fixture 실행 — Python 직접 호출 (#166)
-
-저장소 루트의 설치된 환경에서 [정식 실행 예제](docs/implementation/python-execution.md#저장소-루트에서-실행하는-offline-fixture)를 실행한다. `from skala_rag.cli import run`은 기존 callable 재사용이며 argparse를 실행하지 않는다. 아래는 삭제하지 않고 보존하는 **legacy/호환 CLI** 예시일 뿐 새 표준 실행 방식이 아니다.
-
-```bash
-uv run python -m skala_rag.cli --theme 'Physical AI robotics' --config tests/fixtures/cli-input.json
-```
-
-고정된 가상 후보 두 개를 v3 controller와 다섯 병렬 평가 branch로 처리한다.
-입력 주제는 manifest에 기록하며, 실제 검색이나 주제별 기업 발견은 수행하지 않는다.
-`outputs/<run_id>/`에 `candidate-result.json`, `trace.json`, `draft.md`,
-`manifest.json`을 저장한다. 점수는 반올림 없이 decimal 문자열로 보존한다.
-산출물은 가상 데이터이고 외부 호출·유료 LLM·모델 다운로드는 없다.
-
-병합된 #94 v3 고정 context·다섯 섹션 Generator/Judge 경로를 사용한다.
-Generator와 Judge 응답은 deterministic fixture stub이며 실모델 사실성 검증이 아니다.
-#95 renderer로 실제 fixture PDF를 생성·재검증하고 `report-context.json`,
-`report-draft.json`, `report-pipeline.json`, `validation-results.json`과 PDF도 저장한다.
-정상 fixture는 `completed`/`acceptance=fixture_only`, 공유 수정 2회 소진은
-`completed`+Warning/`acceptance=warning`, fatal은 `failed`/`acceptance=rejected`다.
-반환 디렉터리의 `run-result.json`에서 상태·warnings·acceptance·publication_allowed를 확인한다.
-Python 프로세스 exit 0은 보고서 성공을 보장하지 않는다. 기존 receipt `exit_code`와
-CLI 0/2/1 매핑은 [호환 안내](docs/implementation/fixture-cli.md#기존-exit-code-매핑)에 보존한다.
-모든 fixture 출력은 `publication_allowed=false`이며 `report.md`나 제출용 final을
-발행하지 않는다. PDF가 검증되어도 실제 투자 조사·M3 성공 증거로 표시하지 않는다.
-직접 호출은 `pdf_profile` 인자로 승인된 PDF 설정 경로를 전달한다. 기존 CLI의
-`--pdf-profile`·`--mode`는 호환 옵션이다. fixture callable도 live 설정을 거절한다.
-전체 live runner는 #96 범위이며 신규 CLI 개발을 그 완료 조건으로 요구하지 않는다.
+| GitHub                 | 수행 역할                                                                                                                                                                                                                   |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| luk0715 (박태준)       | 협업 규칙·프로젝트 초기 설정(#1, #4), 입력·후보·근거 DTO(#5), v3 설계 정합화·v3 DTO·운영 정책(#35, #73, #82), Coverage(#20), Graph 골격·병렬 평가 단계(#23, #24), 기준일 판정 수정(#99), M2 provider·RAG 실험 승인(#43)     |
+| xxhigh (김근홍)        | M0 정책 결정 승인(#3), 평가·점수·보고서 DTO와 결정적 ID(#6), RAG 코퍼스·페이지 산정(#13), 보고서 목차·인용 계약(#14), 평가 snapshot 고정(#21)                                                                               |
+| heojiwon2 (허지원)     | InvestmentState(#7), Tool·LLM·clock 주입 인터페이스(#8), 후보 탐색·적격성(#17, #18), retrieve·Evidence Collector(#19), 재조사 loop(#25), 보고서 생성·수정 loop(#28), 코퍼스 manifest gate(#44, #91), 안전한 외부 fetch(#46) |
+| wjd990819-ops (정순욱) | criterion catalog·정책 fixture(#9), 공통 가상 fixture(#12), State reducer(#15), retrieve·Evidence Collector(#19)                                                                                                            |
+| XXXXXim (심혁)         | 23개 criterion rubric·재무 단위 규칙(#10, #11), 점수 집계·투자 판단과 DTO 어댑터(#16, #68), 영역 평가 wrapper(#22), ReportContext(#26), Structural Validator(#27), 재무 Evidence 단위·기간 검증(#53)                        |
+| hanyujin2002 (한유진)  | 데이터·RAG 설계 및 문서화, 문서 유형별 Chunking·Embedding 전략 정리, DB/RAG 데이터 흐름 및 평가 Agent 연계 구조 설계                                                                                                        |
