@@ -14,6 +14,120 @@
 - JSON에 직렬화되지 않는 모델 객체, API client, DB connection, API key는 State에 넣지 않는다.
 - `candidate_id`, `source_id`, `evidence_id`, `criterion_id`는 서로 다른 식별자다. 회사 이름 문자열로 join하지 않는다.
 
+### #5 구조 DTO 구현 범위 — 정책 승인이 아님
+
+`skala_rag.contracts`에서 §§2–4의 `RunInput`, `Candidate`, `StageInfo`,
+`CompanyProfile`, `EligibilityResult`, `Source`, `Chunk`, `Evidence`,
+`EvidenceProvenance`, `DiscoveryBundle`, `RetrievalRequest`, `RetrievalBundle`,
+`RetrievalRecord`, `ResearchGap`, `CoverageResult`와 보조 `MonetaryObservation`을
+import할 수 있다. 이는 이 문서의 **구현 제안에 대한 구조 검증**이며 D01–D14는
+모두 OPEN이다. `eligible`, `research_ready`, 단계·bucket·confidence·status는
+호출자가 공급한 관측을 저장할 뿐, 서로를 계산하거나 정당화하지 않는다.
+`execution_mode="live"`의 schema 통과도 정책·예산·도구 readiness 승인과 무관하다.
+State, reducer, stable ID 생성, snapshot/controller 참조 검증, 평가·점수·보고서·
+manifest, 수집·환율·근거 병합 함수는 이 구현에 포함하지 않는다.
+
+**타입과 결측**
+
+- 모든 DTO와 중첩 DTO의 `schema_version`은 호출자가 명시하는 필수 nonblank
+  문자열이다. 기본 버전은 없고 미지 필드는 거절한다. 필수 텍스트·ID·컬렉션
+  안의 ID는 strict 문자열이며 공백만 있는 값과 문자열 아닌 값은
+  `pydantic.ValidationError`다. 유효한 문자열의 앞뒤 공백·대소문자를 정규화하지
+  않는다. optional 텍스트는 `None` 또는 nonblank 문자열이다.
+- `?` 관측과 `Evidence`의 수치·맥락, `Source.published_at`, profile의 세 boolean,
+  `ResearchGap.priority_weight`, Coverage의 `missing_weight/coverage_pct/research_ready`는
+  생략 시 `None`이다. 관측 boolean은 strict `true/false/null`; 문자열·정수에서
+  변환하지 않는다. 필수 list/map은 호출자가 명시하며 빈 list/map은 허용한다.
+- 수치는 strict 정수 또는 유한 실수다. 실제 0과 음수 측정은 유지한다.
+  `evidence_revision`, `top_k`, `page_start/page_end`는 0 이상 strict 정수,
+  `priority_weight/missing_weight`는 알려진 경우 0 이상,
+  `coverage_pct`는 알려진 경우 0..100이다. weight 단위·합·threshold·priority·
+  page 구간 순서·시작/종료 시각 순서·정책 관계는 추론하거나 강제하지 않는다.
+  문서의 literal enum만 허용하고 enum 간 round/bucket/eligibility 관계를 만들지 않는다.
+- `as_of`, `last_round_date`, `event_date`, 금액 기준일은 Python `date` 또는 정확한
+  `YYYY-MM-DD` 문자열이다. timestamp·epoch 숫자를 date로 바꾸지 않는다.
+  `retrieved_at/started_at/finished_at`은 timezone-aware `datetime` 또는 `T`와
+  시간대를 포함한 ISO timestamp다. naive timestamp·epoch 숫자/숫자 문자열은
+  거절한다. `Source.published_at`은 `date | aware datetime | None`: 알려진
+  날짜만 있으면 date로 보존하고 임의 자정·시간대·수집시각을 발행시각으로 넣지 않는다.
+  JSON roundtrip은 date/date-time 구분과 실제 offset을 보존한다.
+
+**금액의 손실 없는 맥락**
+
+- `MonetaryObservation`은 `schema_version`, `value`, `currency`, `unit`, `as_of`를
+  모두 필수로 가진다. `value`는 유한 수치이며 통화·단위는 관측 그대로의 nonblank
+  문자열이다. 임의 ISO 통화 목록이나 환산 규칙은 도입하지 않는다.
+- 기존 이름 `StageInfo.cumulative_funding_krw`는 유지하되 타입을
+  `MonetaryObservation | None`으로 구체화했다. 이 필드의 currency는 이름과
+  일치하는 정확한 `KRW`여야 한다. KRW payload 검증은 환율 변환의 정확성 증명이
+  아니다. 맥락 없는 scalar를 받아 기준일·단위·환율을 보충하지 않는다.
+  `RetrievalRecord.cost`도 같은 neutral observation 또는 `None`이다.
+- `Evidence.value/unit/currency`의 원래 이름을 보존한다. **추가 optional 필드
+  `value_as_of: date | None`**는 금액 자체의 기준일이다. currency를 공급하면
+  value·unit·value_as_of가 모두 필요하고, value_as_of를 공급하면 currency도
+  필요하다. currency가 없는 수치는 비금액 관측으로 보존하며 통화를 추정하지
+  않는다. 금액 미상은 관련 필드를 모두 `None`으로 전달한다. event_date·period·
+  published_at·retrieved_at로 금액 기준일을 대신하지 않는다. `value_as_of`는
+  금액 해석의 식별 core에 추가되는 맥락이며, 이후 merger 구현에서도 차이를
+  조용히 제거하면 안 된다. 이 DTO는 계산·환율 provenance를 생성하지 않는다.
+
+**컬렉션과 별도 필드**
+
+| 필드 묶음 | 구현 shape |
+| --- | --- |
+| countries, languages, aliases, 각종 `*_ids`, reason_codes, missing_fields, suggested_queries, limitations, conflicts_with | `list[nonblank str]` |
+| Candidate.legal_identifiers | `dict[nonblank str, nonblank str]`: 관측 식별체계 → 원래 식별자 |
+| CompanyProfile.field_evidence_ids | `dict[nonblank str, list[nonblank str]]`: 필드 → Evidence ID 목록 |
+| Source.bibliographic_metadata, EligibilityResult.checks, RetrievalRecord.arguments_without_secrets | `dict[nonblank str, JSON value]`; nested JSON key도 문자열 |
+| Evidence.provenance | 실제 `EvidenceProvenance` payload의 list |
+| DiscoveryBundle.sources, RetrievalBundle.sources | `dict[nonblank source_id, Source]`: ID가 아닌 실제 payload |
+| CoverageResult.unresolved_conflicts | 충돌 관련 Evidence ID의 `list[nonblank str]`; 정책 판정 없음 |
+
+JSON value는 null/boolean/string/유한 number/list/string-keyed object만 허용한다.
+Python client·connection·date·tuple·set·비유한 nested 수치는 metadata로 넣을 수
+없다. 이 검증은 비밀 탐지나 redaction 기능이 아니므로 호출자는 비밀을 제거한
+arguments만 전달해야 한다. fixture에는 credentials가 없다.
+`RetrievalRecord.query`는 별도의 optional nonblank 문자열,
+`arguments_without_secrets`는 별도의 필수 JSON map이다. 검색문 없는 API 기록도
+query를 `None`으로 보존하며 검색문을 arguments에서 만들어 넣지 않는다.
+`Evidence.derivation`은 optional nonblank 설명 문자열이고 `supersedes`는
+optional 이전 Evidence ID다. `Source.publisher`와 `author`는 별도의 optional
+nonblank 문자열이며 알려지지 않은 저자/기관은 생성하지 않는다.
+`ResearchGap.criterion_id`와 `eligibility_field`는 별도의 optional nonblank
+문자열로 구현하고 정확히 하나만 공급한다. eligibility 필드 catalog·우선순위·
+재시도 횟수는 결정하지 않는다.
+
+**출처·locator·중첩 검증**
+
+- Source에는 nonblank `url` 또는 `local_path`가 하나 이상 필요하다. 둘 다
+  허용하며 optional locator를 빈 문자열로 표시하면 거절한다. locator는 원문
+  문자열을 유지한다. URL 접근·파일 읽기·domain allowlist·content_hash 실제
+  계산/검증·embedding 선택은 하지 않는다. Chunk의 embedding 필드는 호출자가
+  기록한 nonblank 이름/revision이며 product 기본값이 아니다.
+- `fixture://`는 Source url/local_path, Chunk/Evidence locator,
+  Candidate.homepage_url에서 명시적 `context={"execution_mode": "fixture"}`일
+  때만 허용한다. validation context는 DTO 필드나 기본 실행모드가 아니다.
+  `Model.model_validate(payload, context=...)`와
+  `Model.model_validate_json(json, context=...)`를 사용하면 Pydantic이 nested
+  Source/Chunk/Evidence 검증에도 같은 context를 전달한다. context 없는 생성이나
+  live context는 fixture URI를 거절한다. context 허용은 live 출처의 승인 증거가 아니다.
+- nested DTO instance도 `revalidate_instances="always"`로 다시 검증하므로 이전
+  fixture context에서 만든 Source나 수정된 instance가 현재 검증을 우회하지 않는다.
+  DTO는 immutable snapshot이 아니며 schema 검증 후의 무결성·freeze는 controller 책임이다.
+- RAG provenance는 nonblank chunk_id가 필수다. web/api/manual의 optional
+  chunk_id는 그대로 유지하며 자동 생성하지 않는다. 실제 반환 record/source/locator
+  일치 및 RAG 사용 증명은 #21/controller의 snapshot 범위다.
+- DiscoveryBundle은 모든 candidate.discovery_source_ids의 Source payload를,
+  RetrievalBundle은 모든 chunk.source_id의 Source payload를 포함해야 한다.
+  sources map key와 Source.source_id가 일치해야 하며 존재하는 문자열만으로
+  closure를 충족할 수 없다. 빈 성공 bundle과 참조되지 않은 유효한 Source는
+  허용한다. 후보 동일성·출처 승인·검색 cutoff 등은 schema 밖의 책임이다.
+
+가상 예제는 `tests/fixtures/contracts.json`, 구조·거절·JSON roundtrip 검증은
+`tests/contract/`에 있다. `fixture.invalid`/`fixture://`, synthetic hash/model/version은
+실제 수집·hash 계산·모델 선택·정책 승인 또는 실측 결과가 아니다. 아래 §3의
+JSON 설명 예제는 명시적 fixture validation context로 검증한다.
+
 ## 2. 입력과 후보
 
 | DTO | 필드 계약 | 검증 |
@@ -48,7 +162,8 @@ Source의 bibliographic metadata에는 논문 학술지·권호·페이지 등 �
 | `scope` | `company` / `industry`; 산업 근거를 기업의 실적으로 인용하지 않음 |
 | `criterion_ids` | 이 근거가 지원할 수 있는 세부항목 ID 목록 |
 | `claim` | 원문을 벗어나지 않은 주장 |
-| `value`, `unit`, `currency` | 숫자가 있을 때만 사용. 값 미상은 null |
+| `value`, `unit`, `currency` | 숫자가 있을 때만 사용. 값 미상은 null. currency를 공급하면 value·unit·value_as_of가 모두 필요 |
+| `value_as_of` | optional ISO 날짜 (`YYYY-MM-DD`); 금액 자체의 기준일. 미상은 null. 공급하면 currency도 필요하며 event_date·period·published_at·retrieved_at로 대신하지 않음 |
 | `period`, `geography`, `event_date` | 지표 해석에 필요한 맥락; 없는 필드는 null |
 | `source_id` | 원문 Source snapshot ID 필수 |
 | `locator`, `excerpt` | 원문으로 되돌아갈 위치와 필요한 최소 발췌 |
@@ -68,7 +183,7 @@ Source의 bibliographic metadata에는 논문 학술지·권호·페이지 등 �
 
 | 종류 | 필드 | 동일 evidence_id 재발견 시 |
 | --- | --- | --- |
-| 식별 core | source_id, locator, 정규화 claim, candidate_id, scope, value, unit, currency, period, geography, event_date, evidence_kind, supporting_evidence_ids, derivation, supersedes | 모두 같아야 함. 다르면 ID 충돌 오류 |
+| 식별 core | source_id, locator, 정규화 claim, candidate_id, scope, value, unit, currency, value_as_of, period, geography, event_date, evidence_kind, supporting_evidence_ids, derivation, supersedes | 모두 같아야 함. 다르면 ID 충돌 오류 |
 | 수집 경로 | provenance, excerpt | provenance는 `(retrieval_id, method, chunk_id)` key 집합 합. excerpt는 같은 locator의 원문 발췌여야 하며 최초 값 유지 |
 | 해석 | criterion_ids, conflicts_with, confidence, limitations | criterion_ids·conflicts_with·limitations는 합집합, confidence는 더 낮은 값. 값이 바뀌면 evidence_revision 증가 |
 
@@ -101,6 +216,7 @@ Web으로 먼저 얻은 근거를 RAG로 재검색해도 근거는 하나이고 
   "excerpt": "센서 → 제어 소프트웨어 → 로봇 하드웨어",
   "provenance": [
     {
+      "schema_version": "draft-2",
       "retrieval_id": "retrieval-fixture-001",
       "method": "rag",
       "chunk_id": "chunk-fixture-001-p3"
@@ -250,4 +366,4 @@ render_pdf(draft, template) -> RenderResult
 
 ToolResult는 `status`, typed `data`, `retrieval_records`, `errors`를 가진다. Discovery controller는 `DiscoveryBundle.sources`를 먼저 검증·저장하고 각 후보의 discovery_source_ids가 모두 해소되는지 확인한 뒤 Normalize로 넘긴다. Company Research가 실패해도 발견 출처는 남아야 한다. 검색은 `RetrievalRequest.as_of`를 반드시 사용하고, query·기업·corpus/index·allowed_source_ids·as_of를 모두 cache key에 포함한다. returned Chunk가 요청 밖의 기업/출처/기준일을 위반하면 반환을 거절한다. `CompanyResearchBundle`은 profile+sources+evidence, `EvidenceBundle`은 sources+evidence, `DecisionPolicyResult`는 label+grade+reason_codes, `RenderResult`는 artifact_path+page_count+layout_measurements+errors를 가진다.
 
-이름은 설계 계약이지 사용 가능한 import가 아니다. M0에서 schema와 fixture, M1에서 adapter stub, M2 이후 실제 구현을 연결한다. 각 기능은 주입된 Tool/LLM/clock을 사용해 외부 호출 없이 테스트할 수 있어야 한다.
+위 #5 구조 DTO 구현 범위에 명시한 import 외의 이름과 함수는 설계 계약이지 사용 가능한 API가 아니다. M0에서 schema와 fixture, M1에서 adapter stub, M2 이후 실제 구현을 연결한다. 각 기능은 주입된 Tool/LLM/clock을 사용해 외부 호출 없이 테스트할 수 있어야 한다.
