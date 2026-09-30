@@ -1,0 +1,443 @@
+"""All-candidate fixture v3 controller using #20 coverage and #24 LangGraph.
+
+This is deliberately separate from baseline candidates.py and ReportInput. It does
+not implement discovery policy, research retry, reporting, CLI or live providers.
+"""
+
+from collections.abc import Callable, Collection, Mapping, Sequence
+from copy import deepcopy
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
+
+from skala_rag.contracts.candidates import Candidate, EligibilityResult
+from skala_rag.contracts.errors import WorkflowError
+from skala_rag.contracts.evaluation import EvaluationSnapshot
+from skala_rag.contracts.evidence import Evidence
+from skala_rag.contracts.ids import evaluation_key
+from skala_rag.contracts.reports import CandidateOutcome
+from skala_rag.contracts.v3 import (
+    Evaluation,
+    InvestmentDecision,
+    ScoreSummary,
+)
+from skala_rag.graph.evaluation_v3 import build_evaluation_graph_v3
+from skala_rag.scoring.aggregate_v3 import (
+    ApplicabilityVerifier,
+    ZeroDenominatorV3,
+    aggregate_scores_v3,
+)
+from skala_rag.scoring.catalog import ScoringPolicy
+from skala_rag.scoring.coverage_v3 import ApplicabilityCheck, check_coverage_v3
+from skala_rag.scoring.decision_v3 import decide_v3
+from skala_rag.scoring.selector_v3 import SelectionResultV3, select_best_v3
+from skala_rag.scoring.v3_policy import V3Policy
+
+
+@dataclass(frozen=True)
+class CandidateStagesV3:
+    """Externally injected stages; no default source, model or random selection."""
+
+    discover: Callable[[], Sequence[Candidate | dict]]
+    normalize: Callable[[Sequence[dict]], Sequence[Candidate | dict]]
+    research: Callable[[dict], object]
+    eligibility: Callable[[dict, object], EligibilityResult | dict]
+    collect: Callable[[dict, object], Sequence[Evidence | dict]]
+    freeze: Callable[[dict, EligibilityResult, object], EvaluationSnapshot | dict]
+
+
+@dataclass(frozen=True)
+class CandidateRunV3:
+    schema_version: str
+    run_id: str
+    policy_version: str
+    status: str
+    candidate_index: int
+    outcomes: dict[str, CandidateOutcome]
+    scores: dict[str, ScoreSummary]
+    decisions: dict[str, InvestmentDecision]
+    selection: SelectionResultV3
+    errors: tuple[WorkflowError, ...]
+    baseline_report_input: None = None
+    reporting_gap: str = (
+        "V3 SelectionResult and ScoreSummary require a versioned v3 ReportInput/"
+        "context adapter; baseline ReportInput/report graph is incompatible."
+    )
+
+
+def run_candidates_v3(
+    stages: CandidateStagesV3,
+    evaluators: Mapping[str, Callable],
+    *,
+    policy: V3Policy,
+    catalog: ScoringPolicy,
+    catalog_policy_version: str,
+    run_id: str,
+    schema_version: str,
+    support_check: Callable,
+    applicability_assessments: Callable,
+    applicability_check: ApplicabilityCheck,
+    applicability_verifier: ApplicabilityVerifier | None,
+    industry_evidence_dimensions: Collection[str],
+    clock: Callable[[], datetime],
+) -> CandidateRunV3:
+    """Process every normalized candidate; #24 graph performs the five-way barrier.
+
+    An unsuccessful candidate advances once. Only terminal successful six-dimension
+    promotions reach scoring. Callbacks are fixture-bound and receive detached data.
+    """
+    if not isinstance(policy, V3Policy) or policy.execution_mode != "fixture":
+        raise ValueError("fixture V3Policy required")
+    if not run_id.strip() or not schema_version.strip():
+        raise ValueError("run/schema required")
+    if (
+        catalog.policy_version != catalog_policy_version
+        or {c.criterion_id: (c.dimension, c.weight) for c in catalog.criteria}
+        != {c.criterion_id: (c.dimension, c.weight) for c in policy.criteria}
+        or catalog.dimension_weights
+        != {w.dimension: w.weight for w in policy.dimension_weights}
+    ):
+        raise ValueError("coverage catalog differs from v3 approved catalog")
+    graph = build_evaluation_graph_v3(
+        evaluators,
+        criteria=policy.criteria,
+        policy_version=policy.policy_version,
+        run_id=run_id,
+        schema_version=schema_version,
+        industry_evidence_dimensions=industry_evidence_dimensions,
+        applicability_validator=applicability_verifier,
+        clock=clock,
+    ).compile()
+    outcomes: dict[str, CandidateOutcome] = {}
+    scores: dict[str, ScoreSummary] = {}
+    decisions: dict[str, InvestmentDecision] = {}
+    errors: list[WorkflowError] = []
+    index = 0
+
+    def error(
+        stage: str,
+        cid: str | None,
+        message: str = "Invalid v3 candidate stage",
+        error_code: str = "UPSTREAM_INVALID",
+    ) -> WorkflowError:
+        return WorkflowError(
+            schema_version=schema_version,
+            error_id=f"v3:{run_id}:{index}:{stage}",
+            run_id=run_id,
+            candidate_id=cid,
+            node=stage,
+            error_code=error_code,
+            message_redacted=message,
+            retryable=False,
+            attempt=1,
+            timestamp=clock(),
+        )
+
+    def finish(
+        status: str,
+        candidate_id: str,
+        eligible: EligibilityResult | None = None,
+        decision: InvestmentDecision | None = None,
+        failures: Sequence[WorkflowError] = (),
+    ) -> None:
+        if candidate_id in outcomes:
+            raise ValueError("candidate archive conflict")
+        outcomes[candidate_id] = CandidateOutcome(
+            schema_version=schema_version,
+            candidate_id=candidate_id,
+            status=status,
+            eligibility_result_id=eligible.eligibility_result_id
+            if eligible and not failures
+            else None,
+            decision_id=decision.decision_id if decision else None,
+            failure_ids=[e.error_id for e in failures],
+            summary_reason="; ".join(decision.reason_codes) if decision else status,
+        )
+
+    try:
+        discovered = [
+            Candidate.model_validate(
+                c, context={"execution_mode": "fixture"}
+            ).model_dump(mode="json")
+            for c in stages.discover()
+        ]
+        candidates = [
+            Candidate.model_validate(
+                c, context={"execution_mode": "fixture"}
+            ).model_dump(mode="json")
+            for c in stages.normalize(deepcopy(discovered))
+        ]
+        if len({c["candidate_id"] for c in candidates}) != len(candidates):
+            raise ValueError("duplicate normalized candidate")
+        if not {c["candidate_id"] for c in candidates} <= {
+            c["candidate_id"] for c in discovered
+        }:
+            raise ValueError("normalize introduced unknown candidate")
+    except Exception:
+        failure = error("discovery_normalize", None)
+        errors.append(failure)
+        selection = select_best_v3(
+            [], policy, run_id=run_id, schema_version=schema_version
+        )
+        return CandidateRunV3(
+            schema_version,
+            run_id,
+            policy.policy_version,
+            "discovery_failed",
+            0,
+            outcomes,
+            scores,
+            decisions,
+            selection,
+            tuple(errors),
+        )
+
+    for candidate in candidates:
+        cid = candidate["candidate_id"]
+        eligibility = None
+        stage = "research"
+        try:
+            research = stages.research(deepcopy(candidate))
+            stage = "eligibility"
+            eligibility = EligibilityResult.model_validate(
+                stages.eligibility(deepcopy(candidate), deepcopy(research))
+            )
+            if (
+                eligibility.run_id != run_id
+                or eligibility.schema_version != schema_version
+                or eligibility.candidate_id != cid
+                or eligibility.policy_version != policy.policy_version
+            ):
+                raise ValueError("eligibility generation mismatch")
+            if eligibility.status != "eligible":
+                finish(
+                    "ineligible"
+                    if eligibility.status == "ineligible"
+                    else "eligibility_unknown",
+                    cid,
+                    eligibility,
+                )
+                index += 1
+                continue
+            stage = "collect"
+            evidence = [
+                Evidence.model_validate(item, context={"execution_mode": "fixture"})
+                for item in stages.collect(deepcopy(candidate), deepcopy(research))
+            ]
+            collected = {
+                item.evidence_id: item.model_dump(mode="json") for item in evidence
+            }
+            if len(collected) != len(evidence) or any(
+                item.schema_version != schema_version
+                or not (
+                    (item.scope == "company" and item.candidate_id == cid)
+                    or (item.scope == "industry" and item.candidate_id is None)
+                )
+                for item in evidence
+            ):
+                raise ValueError("invalid collected Evidence identity")
+            stage = "coverage"
+            coverage = check_coverage_v3(
+                cid,
+                evidence,
+                catalog,
+                evidence_revision=eligibility.evidence_revision,
+                schema_version=schema_version,
+                execution_mode="fixture",
+                policy_version=policy.policy_version,
+                support_check=support_check,
+                applicability_assessments=applicability_assessments(cid),
+                applicability_check=applicability_check,
+                unresolved_conflict_ids=[],
+            )
+            stage = "freeze"
+            snapshot = EvaluationSnapshot.model_validate(
+                stages.freeze(
+                    deepcopy(candidate), eligibility.model_copy(deep=True), coverage
+                ),
+                context={"execution_mode": "fixture"},
+            )
+            if (
+                snapshot.run_id != run_id
+                or snapshot.candidate_id != cid
+                or snapshot.schema_version != schema_version
+                or snapshot.policy_version != policy.policy_version
+                or snapshot.evidence_revision != coverage.evidence_revision
+                or snapshot.evaluation_round < 1
+            ):
+                raise ValueError("frozen snapshot generation mismatch")
+            stage = "freeze_admission"
+            if any(
+                key not in collected or item.model_dump(mode="json") != collected[key]
+                for key, item in snapshot.evidence.items()
+            ):
+                raise ValueError("snapshot Evidence not admitted by collector")
+            for item in snapshot.evidence.values():
+                if item.source_id not in snapshot.sources:
+                    raise ValueError("snapshot missing Evidence Source")
+                if any(
+                    dep not in snapshot.evidence
+                    for dep in (*item.supporting_evidence_ids, *item.conflicts_with)
+                ):
+                    raise ValueError("snapshot missing related Evidence")
+                for path in item.provenance:
+                    record = snapshot.retrieval_records.get(path.retrieval_id)
+                    if (
+                        record is None
+                        or record.run_id != run_id
+                        or record.candidate_id not in (None, cid)
+                        or record.status != "ok"
+                        or record.started_at > record.finished_at
+                        or item.source_id not in record.source_ids
+                        or item.evidence_id not in record.evidence_ids
+                        or (
+                            path.chunk_id is not None
+                            and path.chunk_id not in record.chunk_ids
+                        )
+                    ):
+                        raise ValueError(
+                            "snapshot RetrievalRecord attribution mismatch"
+                        )
+                    if path.chunk_id is not None:
+                        chunk = snapshot.chunks.get(path.chunk_id)
+                        if (
+                            chunk is None
+                            or chunk.source_id != item.source_id
+                            or chunk.corpus_version != snapshot.corpus_version
+                            or chunk.locator != item.locator
+                            or chunk.scope != item.scope
+                            or item.excerpt not in chunk.text
+                            or (
+                                item.scope == "company"
+                                and cid not in chunk.candidate_ids
+                            )
+                        ):
+                            raise ValueError("snapshot Chunk attribution mismatch")
+            stage = "evaluate"
+            frozen = snapshot.model_dump(mode="json")
+            graph_state = dict(
+                snapshot_v3=frozen,
+                current_candidate_id=cid,
+                evaluation_rounds={cid: snapshot.evaluation_round},
+                evidence_revisions={cid: snapshot.evidence_revision},
+                run_input={
+                    "execution_mode": "fixture",
+                    "policy_version": policy.policy_version,
+                },
+                snapshots={snapshot.snapshot_id: frozen},
+                candidates=candidates,
+                candidate_index=index,
+                candidate_outcomes={},
+                candidate_status={},
+                errors=[],
+            )
+            evaluated = graph.invoke(graph_state)
+            if evaluated["evaluation_status_v3"] != "success":
+                failure_ids = set(evaluated["evaluation_failure_ids_v3"])
+                failures = [
+                    WorkflowError.model_validate(e)
+                    for e in evaluated["errors"]
+                    if e["error_id"] in failure_ids and e.get("candidate_id") == cid
+                ]
+                if not failures or evaluated["candidate_index"] != index + 1:
+                    raise ValueError("evaluation failure did not archive/advance once")
+                errors.extend(failures)
+                finish("failed", cid, failures=failures)
+                index += 1
+                continue
+            if (
+                evaluated["candidate_index"] != index
+                or len(evaluated["evaluations_v3"]) != 6
+            ):
+                raise ValueError("evaluation advanced or promoted partial dimensions")
+            dims = []
+            for dimension in (
+                "founder",
+                "market",
+                "technology",
+                "moat",
+                "traction",
+                "deal_terms",
+            ):
+                key = evaluation_key(cid, snapshot.evaluation_round, dimension)
+                dims.append(Evaluation.model_validate(evaluated["evaluations_v3"][key]))
+            stage = "score"
+            summary = aggregate_scores_v3(
+                dims,
+                policy,
+                applicability_verifier=applicability_verifier,
+                snapshot=snapshot,
+            )
+            decision = decide_v3(summary, policy)
+            scores[cid] = summary
+            decisions[cid] = decision
+            finish(
+                "recommend"
+                if decision.label.startswith("RECOMMEND")
+                else decision.label.lower(),
+                cid,
+                eligibility,
+                decision,
+            )
+        except ZeroDenominatorV3 as exc:
+            failure = error(
+                stage,
+                cid,
+                f"Zero applicable denominator: {exc.dimension or 'total'}",
+                error_code="ZERO_APPLICABLE_DENOMINATOR",
+            )
+            errors.append(failure)
+            finish("failed", cid, failures=[failure])
+        except Exception:
+            failure = error(
+                stage,
+                cid,
+                error_code="SNAPSHOT_INVALID"
+                if stage in ("freeze", "freeze_admission")
+                else "UPSTREAM_INVALID",
+            )
+            errors.append(failure)
+            finish("failed", cid, failures=[failure])
+        index += 1
+
+    rows: list[dict[str, Any]] = []
+    for cid in sorted(outcomes):
+        summary = scores.get(cid)
+        decision = decisions.get(cid)
+        rows.append(
+            dict(
+                candidate_id=cid,
+                eligibility_status="eligible" if summary else "unknown",
+                status="evaluated" if summary else outcomes[cid].status,
+                label=decision.label if decision else None,
+                normalized_score=summary.normalized_score if summary else None,
+                weighted_missing_pct=summary.weighted_missing_pct if summary else None,
+                applicable_weight=summary.applicable_weight if summary else None,
+                score_summary_id=summary.score_summary_id if summary else None,
+            )
+        )
+    selection = select_best_v3(
+        rows, policy, run_id=run_id, schema_version=schema_version
+    )
+    if not candidates:
+        status = "no_candidates"
+    elif scores:
+        status = "ready_for_v3_reporting"
+    elif all(outcome.status == "failed" for outcome in outcomes.values()):
+        status = "all_eligible_failed"
+    elif any(outcome.status == "failed" for outcome in outcomes.values()):
+        status = "eligible_failed_no_success"
+    else:
+        status = "no_eligible_candidates"
+    return CandidateRunV3(
+        schema_version,
+        run_id,
+        policy.policy_version,
+        status,
+        index,
+        outcomes,
+        scores,
+        decisions,
+        selection,
+        tuple(errors),
+    )
