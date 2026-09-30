@@ -1,8 +1,12 @@
-# 보고서 목차·인용·구조 검증 계약 — D09 부분 승인
+# 보고서 목차·인용·구조 검증 계약 — D09 승인 기록
 
 **현재 구현 방향 — v3 전환 승인:** [사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)에 따라 새 작업은 기존 baseline의 계속 구현이 아니라 v3에 정합화한다. baseline 코드·승인 기록은 호환성과 이력으로 보존하며 새 구현의 우선 방향이 아니다. 방향 승인에 이어 #82 및 #35 comment 5903505208에서 N/A·0분모·최종 selector·재조사 회계·Warning 종료의 운영 규칙을 별도 승인했다. #35 comment 5903574761의 무작위 선정은 평가 전 조사·평가 대상 집합에만 적용하며 최종 selector는 무작위가 아니다. 승인과 구현 완료는 별개이며 rubric 상세·provider·corpus·시간/비용 예산 등 남은 세부 선택만 [결정 목록](decisions.md)의 OPEN gate를 따른다.
 
 **보존 본문의 범위 — 역사·호환성:** 아래 본문은 기존 baseline D09 부분 승인 계약을 그대로 보존한다. 본문 안의 “현재 baseline”, “v3 승인 전/대체 승인 시”, 과거 PR 상태와 고정100·N/A 미채택·첫 추천·7개 섹션은 작성 당시 맥락이며 새 구현 지시가 아니다. 새 구현은 [scoring](scoring.md)·[delivery](delivery.md)의 승인된 v3 방향을 따른다. #82의 N/A 사유·승인 rule·근거 요건, 0분모 오류, 최종 순위·재시도·completed Warning/CLI2는 후속 승인이다. 실제 rubric 숫자/rule 목록·품질, 보고서 mode별 섹션 예외·검증 상세·PDF는 OPEN이다. 평가 전 무작위 집합 선정은 최종 selector와 별개다.
+
+**PDF 후속 승인(#95, 2026-09-30):** renderer·A4/한글 폰트/여백·SUMMARY 측정·layout 회계는
+[pdf-rendering](pdf-rendering.md)과 decisions의 D09 PDF 승인 기록을 따른다.
+아래 본문의 PDF OPEN은 해당 승인 이전의 역사 기록이다.
 
 [문서 홈](../README.md) · [공통 계약](contracts.md#5-보고서와-오류) · [검증 계획](delivery.md#5-보고서-계약과-pdf-검증) · [결정 목록](decisions.md)
 
@@ -143,3 +147,10 @@ REFERENCE 바깥 본문에서 추출한 인용 ID 집합을 C라 한다. ReportD
 구조 검증 → 같은 context의 Semantic Judge → PDF 렌더링 → 페이지/레이아웃 측정 → 사람 시각 검토 순서를 따른다. 수정하면 해당 draft의 구조·의미·PDF 검증을 다시 수행한다(D08의 공유 수정 예산).
 PDF 전체 5페이지와 SUMMARY 반 페이지 제한은 유지한다. A4·폰트·여백·렌더러·SUMMARY 측정 기준·인용 token 화면 변환은 M3에서 별도 승인한다. 이번 문서로 렌더러를 선택하거나 페이지 준수를 인증하지 않는다.
 D09는 목차/인용/구조 검증과 PDF 구현 선택을 나눠 기록한다. 목차·인용·구조 검증은 승인되었으며 PDF 선택의 OPEN 상태는 남는다.
+
+## #94 후속 v3 보고서 경로
+
+2026-09-30 사용자 승인의 두 mode 다섯 섹션·Generator/Judge 모델 주입과
+v3 결과/context·구조/의미/PDF 공유 수정 경로는
+[reporting-v3-pipeline](reporting-v3-pipeline.md)을 따른다.
+위 baseline 7개 섹션과 baseline ReportContext는 호환성 이력이며 새 경로를 규정하지 않는다.

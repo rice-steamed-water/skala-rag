@@ -4,10 +4,13 @@ The injected transport must honor its timeout and perform exactly one request.
 Provider response parsing and schema correction belong to the adapter/wrapper.
 """
 
+import re
 from collections.abc import Callable
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal, localcontext
-from math import isfinite
+from email.utils import parsedate_to_datetime
+from math import inf, isfinite, nextafter
 from threading import Lock
 from typing import Annotated, Generic, Literal, Protocol, Self, TypeVar
 from uuid import uuid4
@@ -133,19 +136,127 @@ class AttemptResponse(_Frozen, Generic[DataT]):
         return self
 
 
+@dataclass(frozen=True)
+class RetryAfter:
+    """Captured provider minimum, with no raw header or response retained."""
+
+    seconds: float
+    captured_at: datetime
+
+    def __post_init__(self) -> None:
+        if type(self.seconds) not in (int, float):
+            raise ValueError("retry-after requires numeric seconds")
+        try:
+            valid = isfinite(self.seconds) and self.seconds >= 0
+        except OverflowError:
+            valid = False
+        if not valid:
+            raise ValueError("retry-after requires finite nonnegative seconds")
+        seconds = float(self.seconds)
+        if seconds < self.seconds:
+            seconds = nextafter(seconds, inf)
+        object.__setattr__(self, "seconds", seconds)
+        if (
+            not isinstance(self.captured_at, datetime)
+            or self.captured_at.utcoffset() is None
+        ):
+            raise ValueError("retry-after requires an aware capture time")
+
+    def remaining(self, now: datetime) -> float:
+        return max(0.0, self.seconds - (now - self.captured_at).total_seconds())
+
+
+class InvalidRetryAfter(ValueError):
+    """Redacted malformed-header signal, never a retryable provider error."""
+
+
+def parse_retry_after(value: str | None, *, clock: Clock) -> RetryAfter | None:
+    """RFC 9110 §§5.6.7, 10.2.3; malformed values raise a redacted ValueError."""
+    if value is None:
+        return None
+    captured = clock.now()
+    # Validate the clock even when the header is a delta rather than a date.
+    RetryAfter(0, captured)
+    try:
+        if type(value) is not str:
+            raise ValueError
+        value = value.strip(" \t")
+        if re.fullmatch(r"[0-9]+", value):
+            return RetryAfter(int(value), captured)
+        day = r"(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)"
+        long_day = r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)"
+        month = r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)"
+        time = r"[0-9]{2}:[0-9]{2}:[0-9]{2}"
+        imf = rf"{day}, [0-9]{{2}} {month} [0-9]{{4}} {time} GMT"
+        obsolete = rf"{long_day}, [0-9]{{2}}-{month}-[0-9]{{2}} {time} GMT"
+        asctime = rf"{day} {month} (?:[0-9]{{2}}| [0-9]) {time} [0-9]{{4}}"
+        if not any(
+            re.fullmatch(pattern, value) for pattern in (imf, obsolete, asctime)
+        ):
+            raise ValueError
+        # datetime cannot represent second 60; retain its extra second in the delay.
+        leap_second = bool(re.search(r"23:59:60", value))
+        date = parsedate_to_datetime(
+            value.replace("23:59:60", "23:59:59") if leap_second else value
+        )
+        if date.tzinfo is None:
+            date = date.replace(tzinfo=UTC)  # asctime is UTC in HTTP, not local time.
+        if re.fullmatch(obsolete, value):
+            now = captured.astimezone(UTC)
+            year = (now.year + 50) // 100 * 100 + int(value.split("-")[2][:2])
+            future = (
+                year,
+                date.month,
+                date.day,
+                date.hour,
+                date.minute,
+                date.second,
+            )
+            boundary = (
+                now.year + 50,
+                now.month,
+                now.day,
+                now.hour,
+                now.minute,
+                now.second,
+            )
+            if future > boundary:
+                year -= 100
+            date = date.replace(year=year)
+        return RetryAfter(
+            max(0.0, (date - captured).total_seconds() + int(leap_second)), captured
+        )
+    except (ValueError, TypeError, OverflowError):
+        raise InvalidRetryAfter("invalid retry-after metadata") from None
+
+
 class TransportFailure(Exception):
     """Only a tool ErrorCode and optional observed usage; raw messages discarded."""
 
-    def __init__(self, code: ErrorCode, *, usage: Usage | None = None) -> None:
+    def __init__(
+        self,
+        code: ErrorCode,
+        *,
+        usage: Usage | None = None,
+        retry_after: RetryAfter | None = None,
+    ) -> None:
         code = ErrorCode(code)
         if ERROR_SPECS[code].tool_status is None:
             raise ValueError("transport requires a tool error code")
         super().__init__(code.value)
         self.code = code
         self.usage = usage
+        if retry_after is not None and type(retry_after) is not RetryAfter:
+            raise ValueError("retry-after requires normalized metadata")
+        self.retry_after = retry_after
 
 
-def http_failure(status_code: int, *, usage: Usage | None = None) -> TransportFailure:
+def http_failure(
+    status_code: int,
+    *,
+    usage: Usage | None = None,
+    retry_after: RetryAfter | None = None,
+) -> TransportFailure:
     """Map HTTP failures without retaining headers/body/URL or provider messages."""
     if type(status_code) is not int or not 400 <= status_code <= 599:
         raise ValueError("expected an HTTP error status")
@@ -157,7 +268,7 @@ def http_failure(status_code: int, *, usage: Usage | None = None) -> TransportFa
         code = ErrorCode.TOOL_UNAVAILABLE
     else:
         code = ErrorCode.TOOL_FAILED
-    return TransportFailure(code, usage=usage)
+    return TransportFailure(code, usage=usage, retry_after=retry_after)
 
 
 class SingleAttempt(Protocol[DataT]):
@@ -367,6 +478,7 @@ class AdapterRuntime:
             response = None
             usage = None
             code = None
+            retry_after = None
             try:
                 response = transport(timeout_seconds=timeout)
                 if not isinstance(response, AttemptResponse):
@@ -377,12 +489,13 @@ class AdapterRuntime:
                 usage = response.usage
             except TransportFailure as exc:
                 code, usage = exc.code, exc.usage
+                retry_after = exc.retry_after
                 if usage is not None:
                     try:
                         usage = Usage.model_validate(usage)
                     except ValidationError:
                         code, usage = ErrorCode.TOOL_RESPONSE_INVALID, None
-            except ValidationError:
+            except (ValidationError, InvalidRetryAfter):
                 code = ErrorCode.TOOL_RESPONSE_INVALID
             except httpx.HTTPStatusError as exc:
                 status_code = exc.response.status_code
@@ -391,6 +504,13 @@ class AdapterRuntime:
                     if 400 <= status_code <= 599
                     else ErrorCode.TOOL_RESPONSE_INVALID
                 )
+                if ERROR_SPECS[code].retryable:
+                    try:
+                        retry_after = parse_retry_after(
+                            exc.response.headers.get("Retry-After"), clock=self.clock
+                        )
+                    except ValueError:
+                        code = ErrorCode.TOOL_RESPONSE_INVALID
             except (TimeoutError, httpx.TimeoutException):
                 code = ErrorCode.TOOL_TIMEOUT
             except (httpx.LocalProtocolError, httpx.UnsupportedProtocol):
@@ -482,7 +602,18 @@ class AdapterRuntime:
                     retrieval_records=records,
                     errors=[error],
                 )
+            snapshot = self.ledger.snapshot()
+            limits = self.ledger.limits
+            if (
+                attempt >= budget.max_calls
+                or snapshot["calls"] >= limits.max_calls
+                or snapshot["tool_calls"].get(call.tool_name, 0)
+                >= limits.tool_max_calls.get(call.tool_name, 0)
+            ):
+                return terminal(ErrorCode.BUDGET_EXHAUSTED, attempt)
             delay = float(self.policy.retry_delays_seconds[attempt - 1])
+            if retry_after is not None:
+                delay = max(delay, retry_after.remaining(self.clock.now()))
             if (
                 budget.deadline is not None
                 and (budget.deadline - self.clock.now()).total_seconds() <= delay
@@ -490,6 +621,11 @@ class AdapterRuntime:
                 return terminal(ErrorCode.BUDGET_EXHAUSTED, attempt)
             try:
                 self.sleep(delay)
+                if (
+                    retry_after is not None
+                    and retry_after.remaining(self.clock.now()) > 0
+                ):
+                    return terminal(ErrorCode.TOOL_FAILED, attempt)
             except Exception:
                 return terminal(ErrorCode.TOOL_FAILED, attempt)
         raise AssertionError("bounded attempt loop must terminate")

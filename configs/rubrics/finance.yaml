@@ -1,11 +1,13 @@
-# Traction·Deal Terms rubric — D14 제안 (팀 승인 전)
+# Traction·Deal Terms rubric — D14 Finance 승인 (#61)
 # 설명 문서: docs/implementation/rubric-finance.md
 # 구간 표기: [min, max) — min 이상, max 미만. null은 무한대.
-# 승인 전에는 fixture·prompt 개발용이며 실제 추천 근거로 표시하지 않는다.
+# 정책 승인은 live 완료가 아니다. #55 실제 조사 통합 gate 유지.
 
 rubric_version: finance-0.1.0
-status: proposed          # proposed | approved
+status: approved          # #61 comment5906253348
 decision_id: D14
+approval_reference: "#61 comment5906253348"
+applicability_requirements: [approved_rule_id, reason, snapshot_evidence]
 scale: {min: 1, max: 5, missing: null}
 comparison: pre_rounding  # 반올림 전 값으로 비교
 
@@ -29,6 +31,7 @@ dimensions:
       traction.revenue_growth:
         name: 매출 성장률
         weight: 3
+        limitations_required: 작은 매출 기저의 성장률 착시; 새 기준액·rating cap 없음
         metric: yoy_revenue_growth_pct
         formula: "(current_revenue - prior_revenue) / prior_revenue * 100"
         minimum_evidence:
@@ -61,7 +64,7 @@ dimensions:
         name: 번레이트
         weight: 1
         metric: burn_trend
-        definition: "net_burn = abs(operating_cash_flow) if operating_cash_flow < 0 else 0; CAPEX 미포함(baseline)"
+        definition: "net_burn = abs(operating_cash_flow) if operating_cash_flow < 0 else 0; CAPEX 미포함"
         minimum_evidence:
           - 두 기간의 영업활동현금흐름과 같은 두 기간 매출
           - 한 기간만 있으면 영업활동현금흐름 >= 0 인 경우에만 rating 5로 관측
@@ -76,13 +79,15 @@ dimensions:
       traction.runway:
         name: 런웨이
         weight: 2
+        applicability_rule_id: "finance-0.1.0:runway-confirmed-nonnegative-ocf"
+        applicability_condition: 같은 기간·주체의 영업활동현금흐름 >= 0 확인
         metric: remaining_runway_months
         formula: "cash / monthly_net_burn - months_between(cash_as_of, run_as_of)"
         unit_rules:
           result_unit: months
           annual_to_monthly: "monthly_net_burn = abs(annual_operating_cash_flow) / 12; evidence_kind=derived; derivation에 annual_to_monthly_average 기록"
           cash: 현금및현금성자산 + 단기금융상품 (같은 기준일)
-          non_positive_denominator: missing(non_positive_burn) + applicability_note operating_cash_flow_non_negative
+          non_positive_denominator: confirmed same-period/entity operating_cash_flow >= 0 is not_applicable; otherwise missing(non_positive_burn)
           post_date_funding: 기준일 이후 조달은 금액·사건일·라운드 확인 시에만 합산하고 derivation에 기록
         minimum_evidence:
           - 같은 재무제표의 기준일 현금과 현금흐름 기간
@@ -112,6 +117,8 @@ dimensions:
       traction.rule_of_40:
         name: Rule of 40
         weight: 1
+        applicability_rule_id: "finance-0.1.0:rule40-confirmed-pre-revenue"
+        applicability_condition: pre-revenue 직접 확인; 미확인은 missing
         metric: rule_of_40
         formula: "yoy_revenue_growth_pct + operating_margin_pct (같은 당기)"
         minimum_evidence:
@@ -160,7 +167,10 @@ dimensions:
           3: 과도/정당화 근거 모두 제한적 (이유 명시)
           4: 직전 대비 상승이 실적 근거로 설명되거나 동종 비교 근거와 비슷한 수준
           5: 4의 두 조건 모두 충족
-        open_questions: [Q2, Q3]
+        comparison_thresholds:
+          previous_round_multiple: 3
+          peer_median_multiple: 2
+          minimum_peer_evidence: 2
 
       deal_terms.ownership:
         name: 지분율
