@@ -153,6 +153,13 @@ Source/Chunk/검색 provenance 폐쇄성·as_of·정정 처리·불변 freeze는
 DTO는 변경 가능한 경계 객체이므로 controller가 검증된 복사본을 고정하여
 운영해야 한다. DTO 자체는 정책·점수·보류 threshold·비용 예산을 생성하지 않는다.
 
+ScoreSummary의 수치는 #16의 Decimal 계산 결과를 손실 없이 보존한다.
+int·float·Decimal 또는 명시적 유한 decimal 문자열을 받아 Decimal로 저장한다.
+bool·객체·NaN/Infinity·공백/underscore가 들어간 문자열은 거절한다. JSON/State
+payload에서는 Decimal을 문자열로 직렬화하고, model_validate/model_validate_json
+모두 해당 문자열을 정확히 복원한다. rating의 strict 정수 규칙과 #5 수치 타입은
+변경하지 않는다. 합산과 표시 반올림은 여전히 #16의 책임이다.
+
 | 필드 묶음 | #6 구현 shape / 구조 검증 |
 | --- | --- |
 | Evaluation.dimension, ScoreSummary dimension map/list | `founder/market/technology/moat/traction/deal_terms` |

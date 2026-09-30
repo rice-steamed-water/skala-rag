@@ -1,14 +1,32 @@
 """Score and decision observations; no arithmetic or policy thresholds."""
 
+import re
+from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import Field
+from pydantic import BeforeValidator, Field
 
-from .common import Contract, Count, Number, Text
-from .coverage import Nonnegative, Percentage
+from .common import Contract, Count, Text
 from .evaluation import Dimension
 
-DimensionRating = Annotated[Number, Field(ge=1, le=5)]
+
+def score_number(value: object) -> object:
+    """Accept exact decimal JSON strings without boolean/object coercion."""
+    if type(value) not in (int, float, Decimal, str):
+        raise ValueError("score requires a finite number or decimal string")
+    if isinstance(value, str) and not re.fullmatch(
+        r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?", value
+    ):
+        raise ValueError("score string must contain an explicit decimal number")
+    return value
+
+
+ScoreNumber = Annotated[
+    Decimal, BeforeValidator(score_number), Field(allow_inf_nan=False)
+]
+ScorePoints = Annotated[ScoreNumber, Field(ge=0)]
+ScorePercentage = Annotated[ScoreNumber, Field(ge=0, le=100)]
+DimensionRating = Annotated[ScoreNumber, Field(ge=1, le=5)]
 
 
 class ScoreSummary(Contract):
@@ -19,11 +37,11 @@ class ScoreSummary(Contract):
     snapshot_id: Text
     evidence_revision: Count
     policy_version: Text
-    criterion_points: dict[Text, Nonnegative | None]
+    criterion_points: dict[Text, ScorePoints | None]
     dimension_ratings: dict[Dimension, DimensionRating | None]
-    observed_score: Nonnegative
-    missing_weight: Nonnegative
-    coverage_pct: Percentage
+    observed_score: ScorePoints
+    missing_weight: ScorePoints
+    coverage_pct: ScorePercentage
     low_score_dimensions: list[Dimension]
     hold_reasons: list[Text]
 

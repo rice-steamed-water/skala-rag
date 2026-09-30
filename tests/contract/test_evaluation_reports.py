@@ -2,6 +2,7 @@
 
 import copy
 import json
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -299,7 +300,7 @@ def test_snapshot_detached_payloads(evaluation_payloads):
     assert instance.evidence["ev-synthetic"].provenance[0].method == "rag"
 
 
-@pytest.mark.parametrize("value", [float("nan"), float("inf"), True, "3", -1])
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), True, "invalid", -1])
 def test_score_numbers(value, evaluation_payloads):
     data = evaluation_payloads["ScoreSummary"]
     data["criterion_points"]["technology.integration"] = value
@@ -314,6 +315,35 @@ def test_missing_scores_keep_null(evaluation_payloads):
     assert instance.criterion_points["technology.integration"] is None
     assert instance.dimension_ratings["technology"] is None
     assert instance.observed_score == 0
+
+
+def test_exact_decimal_scores_survive_state_and_json(evaluation_payloads):
+    data = evaluation_payloads["ScoreSummary"]
+    precise = Decimal("3.666666666666666666666666667")
+    data["dimension_ratings"]["technology"] = precise
+    data["criterion_points"]["technology.integration"] = Decimal("3.00")
+    model = contracts.ScoreSummary.model_validate(data)
+    assert model.dimension_ratings["technology"] == precise
+    assert (
+        model.criterion_points["technology.integration"].as_tuple()
+        == Decimal("3.00").as_tuple()
+    )
+    payload = model.model_dump(mode="json")
+    assert payload["dimension_ratings"]["technology"] == str(precise)
+    for restored in (
+        contracts.ScoreSummary.model_validate(payload),
+        contracts.ScoreSummary.model_validate_json(model.model_dump_json()),
+    ):
+        assert restored == model
+        assert restored.dimension_ratings["technology"] == precise
+
+
+@pytest.mark.parametrize("value", ["NaN", "Infinity", " 3 ", "1_0", object()])
+def test_decimal_score_encoding_rejects_invalid_values(value, evaluation_payloads):
+    data = evaluation_payloads["ScoreSummary"]
+    data["observed_score"] = value
+    with pytest.raises(ValidationError):
+        contracts.ScoreSummary.model_validate(data)
 
 
 @pytest.mark.parametrize(
@@ -339,10 +369,9 @@ def test_score_observation_bounds(field, value, evaluation_payloads):
 def test_dimension_fraction_and_text_preserved(evaluation_payloads):
     data = evaluation_payloads["ScoreSummary"]
     data["dimension_ratings"]["technology"] = 2.01
-    assert (
-        contracts.ScoreSummary.model_validate(data).dimension_ratings["technology"]
-        == 2.01
-    )
+    assert contracts.ScoreSummary.model_validate(data).dimension_ratings[
+        "technology"
+    ] == Decimal("2.01")
     data = evaluation_payloads["CriterionAssessment"]
     data["rationale"] = "  original whitespace  "
     assert (
