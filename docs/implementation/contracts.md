@@ -4,6 +4,13 @@
 
 근거: 원문 §7의 StageInfo, §8의 InvestmentState. 원문은 대부분 타입 이름만 정의하므로, 아래 DTO 필드와 검증 규칙은 **구현 제안**이다. M0에서 schema를 고정한 뒤 각 담당자가 별도로 같은 타입을 재정의하지 않는다.
 
+D01–D06·D08의 정책 의미는 2026-09-30 xxhigh가 승인했다([승인 기록](decisions.md#m0-승인-검토-기록--이슈-3)). DTO의 전체 필드나 모든 구현 선택을 승인한 것은 아니다.
+
+- StageInfo/EligibilityResult: 직접 확인된 Seed~C만 단계 조건 통과. TIPS만으로 Seed 확정 금지, 명시적 프리시드·엔젤은 out_of_scope, 프리·브릿지는 직전 완료 라운드 근거로 판정. 추정/unknown만으로 eligible 처리 금지(D06).
+- CriterionAssessment/ScoreSummary: 1..5 정수 rating 또는 null, 비중 `5/30/25/20/10/10`, 총 분모 100 고정. 상위 영역 관측 가중평균 rating ≤2와 최종 결측 비중 ≥30은 WATCHLIST(D01·D02·D05).
+- EvaluationResult/InvestmentDecision: 다섯 병렬 평가 성공 후 동일 snapshot의 투자조건 직렬 평가까지 여섯 성공 결과를 집계. WATCHLIST/PASS는 다음 후보, 첫 RECOMMEND는 단일 기업 보고서(D03·D04).
+- State count: 후보 최대 5개, 후보별 추가 조사 총 2회, 실행별 보고서 수정 총 2회. 구조·의미·layout 수정은 같은 예산을 공유한다. 도구 batch 호출 8회·추가 재시도 2회·시도별 30초이며 live 총시간·LLM 호출·비용 상한은 별도 승인 전까지 미정(D08).
+
 ## 1. 공통 규칙
 
 - Graph 컨테이너는 원문대로 `InvestmentState(TypedDict, total=False)` 방향을 유지한다. 외부/LLM 경계의 DTO는 Pydantic으로 검증한다.
@@ -20,8 +27,8 @@
 `CompanyProfile`, `EligibilityResult`, `Source`, `Chunk`, `Evidence`,
 `EvidenceProvenance`, `DiscoveryBundle`, `RetrievalRequest`, `RetrievalBundle`,
 `RetrievalRecord`, `ResearchGap`, `CoverageResult`와 보조 `MonetaryObservation`을
-import할 수 있다. 이는 이 문서의 **구현 제안에 대한 구조 검증**이며 D01–D14는
-모두 OPEN이다. `eligible`, `research_ready`, 단계·bucket·confidence·status는
+import할 수 있다. 이는 이 문서의 **구현 제안에 대한 구조 검증**이며 정책 승인
+상태는 [결정 목록](decisions.md)을 따른다. `eligible`, `research_ready`, 단계·bucket·confidence·status는
 호출자가 공급한 관측을 저장할 뿐, 서로를 계산하거나 정당화하지 않는다.
 `execution_mode="live"`의 schema 통과도 정책·예산·도구 readiness 승인과 무관하다.
 State, reducer, stable ID 생성, snapshot/controller 참조 검증, 평가·점수·보고서·
@@ -127,6 +134,74 @@ nonblank 문자열이며 알려지지 않은 저자/기관은 생성하지 않�
 `tests/contract/`에 있다. `fixture.invalid`/`fixture://`, synthetic hash/model/version은
 실제 수집·hash 계산·모델 선택·정책 승인 또는 실측 결과가 아니다. 아래 §3의
 JSON 설명 예제는 명시적 fixture validation context로 검증한다.
+
+### #6 평가 이후 DTO 구현 범위 — 구조 계약
+
+`skala_rag.contracts`에서 `CriterionAssessment`, `EvaluationSnapshot`, `Evaluation`,
+`EvaluationResult`, `ScoreSummary`, `InvestmentDecision`, `CandidateOutcome`,
+`ReportInput`, `ReportContext`, `ReportDraft`, `ValidationResult`, `ReportJudgement`,
+`WorkflowError`, `RunManifest`를 import할 수 있다. 보조 payload인
+`ValidationErrorDetail`, `ReportFinding`, `ArtifactMetadata`도 같은 public API로 제공한다.
+모든 중첩 DTO는 #5의 `Contract`를 사용하여 schema_version을 명시하고, strict
+nonblank 문자열·유한 수치·aware timestamp·ISO date·미지 필드 거절·instance
+재검증·명시적 fixture context 규칙을 공유한다. 앞뒤 공백은 보존한다.
+
+이 구조 검증은 정책 승인, 실제 근거 유효성 또는 snapshot 동결의 증명이 아니다.
+criterion catalog 완전성·중복/영역 귀속·근거 존재/품질은 #22 wrapper,
+Source/Chunk/검색 provenance 폐쇄성·as_of·정정 처리·불변 freeze는 #21,
+최종 세대·판정·점수 참조를 검증하는 context 조립은 #26의 책임이다.
+DTO는 변경 가능한 경계 객체이므로 controller가 검증된 복사본을 고정하여
+운영해야 한다. DTO 자체는 정책·점수·보류 threshold·비용 예산을 생성하지 않는다.
+
+ScoreSummary의 수치는 #16의 Decimal 계산 결과를 손실 없이 보존한다.
+int·float·Decimal 또는 명시적 유한 decimal 문자열을 받아 Decimal로 저장한다.
+bool·객체·NaN/Infinity·공백/underscore가 들어간 문자열은 거절한다. JSON/State
+payload에서는 Decimal을 문자열로 직렬화하고, model_validate/model_validate_json
+모두 해당 문자열을 정확히 복원한다. rating의 strict 정수 규칙과 #5 수치 타입은
+변경하지 않는다. 합산과 표시 반올림은 여전히 #16의 책임이다.
+
+| 필드 묶음 | #6 구현 shape / 구조 검증 |
+| --- | --- |
+| Evaluation.dimension, ScoreSummary dimension map/list | `founder/market/technology/moat/traction/deal_terms` |
+| evaluation_round, evidence_revision, revision, attempt | 0 이상 strict 정수; 실행 세대·재시도 증가는 controller 담당 |
+| EvaluationSnapshot payload maps | `dict[ID, 실제 DTO]`; map key와 payload ID 일치, evidence_ids는 중복 없이 evidence key 집합과 일치 |
+| Evaluation.criteria, research_gaps | `list[CriterionAssessment]`, `list[ResearchGap]`; catalog 완전성이나 조사 우선순위는 계산하지 않음 |
+| EvaluationResult | success는 evaluation 필수·errors 빈 list, failure는 evaluation=null·errors 하나 이상; run/candidate/dimension/round/snapshot/revision/policy가 중첩 Evaluation과 일치; 오류의 run 및 알려진 candidate 일치 |
+| ScoreSummary.criterion_points | `dict[criterion_id, 유한 비음수 수치 또는 null]`; missing 기여를 0으로 바꾸지 않음 |
+| ScoreSummary.dimension_ratings | `dict[dimension, 유한 1..5 수치 또는 null]`; 영역 평균은 소수 허용 |
+| observed_score, missing_weight, coverage_pct | 앞의 두 값은 유한 비음수 수치, coverage는 0..100; 합산·분모·반올림·label은 별도 정책 계산 |
+| InvestmentDecision.report_grade, ReportFinding.severity | 호출자가 공급한 nonblank 문자열; DTO가 grade나 severity를 판단하거나 생성하지 않음 |
+| CandidateOutcome.status | 종료 상태 `ineligible/eligibility_unknown/recommend/watchlist/pass/failed/not_evaluated`; optional 결과 ID와 failure_ids의 해소는 controller 담당 |
+| ReportInput.candidate_outcomes | `list[CandidateOutcome]`, candidate_id 중복 거절; single_candidate는 해당 outcome의 selected ID 필수, no_recommendation은 selected=null |
+| ReportContext | 실제 DTO map; 각각 payload ID와 key 일치, evaluations key는 공통 evaluation_key와 일치, permitted_evidence_ids와 evidence key 집합 일치; 내용 조립/세대 참조는 #26 |
+| ReportDraft.cited_evidence_ids, reference_source_ids | 중복 없는 nonblank ID list; 실제 Markdown 인용/REFERENCE와의 집합 대조는 #27 ([D09 계약](reporting.md#정확한-집합-관계)) |
+| ValidationResult | checks는 JSON map, errors는 `list[ValidationErrorDetail]`; valid=true는 errors 빈 list, false는 오류 하나 이상 |
+| ReportJudgement | findings는 `list[ReportFinding]`, revision_instructions는 nonblank 문자열 list; verdict는 pass/revise/fail. 의미·severity에 따른 verdict 판단은 Judge 담당 |
+
+**RunManifest의 구체적 필드:** 필수 `run_id`, `run_input: RunInput`,
+`uncommitted: strict bool`, `policy_version`, `corpus_version`, `prompt_versions`,
+`model_versions`, `corpus_hash`, `tool_status`, `budgets`, `usage`, `artifacts`,
+`validation_results`, `workflow_status`를 가진다. `code_revision`과 `run_outcome`은
+optional이며 미상 값은 null이다. policy/corpus version은 run_input과 일치해야
+한다. code_revision이 없으면 uncommitted=true가 필요하다. running은
+run_outcome=null, completed/failed는 명시적 RunOutcome을 요구한다.
+workflow_status/RunOutcome 값은 #7 State enum을 재사용한다.
+
+- prompt_versions/model_versions는 `dict[nonblank 이름, nonblank 버전]`이다.
+  실행에 사용하지 않은 모델/prompt는 빈 map으로 명시할 수 있다.
+- tool_status/budgets/usage는 JSON map이다. 도구 상태·예산 단위·실측 값은
+  runner가 공급하며 DTO가 readiness나 예산 준수를 판단하지 않는다.
+- artifacts는 `dict[산출물 이름, ArtifactMetadata]`이고 payload 필드는
+  schema_version·artifact_path·artifact_hash다. 파일 읽기나 실제 hash 계산은
+  runner의 책임이다. synthetic fixture의 hash는 실제 측정 hash가 아니다.
+- validation_results는 `dict[검증 이름, ValidationResult | ReportJudgement]`다.
+  같은 context/실제 artifact hash인지의 대조는 보고서 controller 담당이다.
+- WorkflowError.message_redacted는 호출자가 비밀을 제거한 nonblank 문자열이다.
+  DTO schema 검증은 자동 redaction이나 비밀 탐지가 아니다.
+
+`tests/fixtures/evaluation_contracts.json`은 모두 가상 구조 예제다. 정상·거절·
+공통 회귀·JSON 왕복은 `tests/contract/`에서 검증한다. ID 인코딩은 아래 §4의
+규칙과 `contracts.ids`를 사용한다. DTO는 ID를 자동 생성하거나 재계산하지 않는다.
 
 ## 2. 입력과 후보
 
@@ -284,6 +359,22 @@ ID 생성은 controller의 공통 함수가 소유하며 LLM이 만들지 않는
 
 재실행은 새로운 run_id를 사용한다. 같은 실행·key의 동일 결과 재기록은 idempotent, 다른 결과로 덮어쓰기는 오류다. State의 `eligibility_results`, `score_summaries`, `investment_decisions`는 원문대로 candidate_id → 현재 최종 DTO map을 유지하고, 각 DTO 내부에 위 ID를 넣는다. 보고서 controller가 이 값을 ID → DTO map으로 변환하여 참조를 해소한다. `CandidateOutcome.failure_ids`는 State.errors에 실제 존재하는 error_id만 허용한다.
 
+**#6 ID 문자열 인코딩:** `contracts.ids`의 함수는
+`["skala-rag-id-v1", kind, *key_components]` 배열을 UTF-8 JSON으로 직렬화한다
+(`ensure_ascii=False`, 구분자 `,`와 `:`, 추가 공백 없음). SHA-256 전체 hex를
+`{kind}-v1-{digest}` 형태로 반환한다. kind는 `snapshot/eligibility/score/decision`이다.
+snapshot key는 위 Freeze 튜플, 나머지는 위 표의 튜플을 그대로 사용한다.
+문자열은 공백뿐인 값을 거절하되 입력 자체를 정규화하지 않는다. 세대·revision은
+bool을 제외한 음이 아닌 정수다. 평가 map key는 `{candidate_id}:{evaluation_round}:{dimension}`을
+유지하며 모호한 분리를 막기 위해 candidate_id와 dimension의 `:`를 거절한다.
+이는 식별자 인코딩 규칙이며 OPEN 정책 승인이나 평가 척도 승인에 해당하지 않는다.
+
+**#6 CriterionAssessment 구조 검증:** schema_version은 호출자가 명시한다.
+observed는 1..5의 strict 정수 rating, 공백 아닌 rationale, 중복 없는 근거 ID를
+하나 이상 요구하며 missing_reason을 허용하지 않는다. missing은 rating=null과
+missing_reason을 요구한다. 실제 근거 존재·snapshot 포함 여부와 영역 criterion
+완전성은 평가 wrapper의 책임이며 이 DTO만으로 검증되었다고 표현하지 않는다.
+
 **검증 불변식**
 
 - Evaluation에는 해당 영역의 모든 criterion이 정확히 한 번 나타나야 한다. 누락은 schema 오류이지 자동 결측 처리 아님.
@@ -305,6 +396,16 @@ ID 생성은 controller의 공통 함수가 소유하며 LLM이 만들지 않는
 | `ReportJudgement` | verdict (`pass/revise/fail`), context_id, findings (`severity/claim_location/evidence_ids/reason`), revision_instructions, judged_artifact_hash |
 | `WorkflowError` | error_id, run_id, candidate_id?, node, error_code, message_redacted, retryable, attempt, timestamp |
 | `RunManifest` | 실행 입력, 코드 revision 또는 uncommitted 표시, schema/policy/prompt/model 버전, corpus hash, 도구 상태, 예산/사용량, artifact 경로·hash, 검증 결과, workflow_status, run_outcome |
+
+### #23 후보 Graph 인계
+
+InvestmentState에 nullable `report_input` JSON payload를 추가하며 초기값은 null이다.
+후보 controller가 첫 추천의 single_candidate 또는 정상 후보 소진의
+no_recommendation 입력을 작성한다. 전 후보 기술 실패나 Discovery 실패는
+workflow failed로 종료하며 정상 보고서 입력을 만들지 않는다. 후보 Graph 종료는
+보고서 완료가 아니므로 정상 인계의 workflow_status는 running, report는 null이다.
+failed 후보는 failure_ids만 인계하고 무효 적격성·점수/판정 참조는 포함하지 않는다.
+후속 build_report_context는 이 입력과 State payload의 참조를 검증한다(#26).
 
 ### ReportContext — 보고서 단계에 전달할 실제 내용
 
@@ -332,14 +433,14 @@ ID 생성은 controller의 공통 함수가 소유하며 LLM이 만들지 않는
 | 조사 제어 | coverage_results, research_gaps, research_retry_count, evidence_revisions | coverage/controller만 변경 |
 | 평가 | evaluation_results, evaluations, evaluation_rounds, snapshots | evaluation_results만 병렬 merge; 성공 evaluations는 join/직렬 평가 controller, rounds·snapshots는 Freeze controller |
 | 판정/이력 | score_summaries, investment_decisions, candidate_outcomes | 단계별 단독 writer; 후보 결과 덮어쓰기 금지 |
-| 보고서 | report_context, report_draft, report, report_validation, report_judgement, pdf_validation, report_revision_count | context는 controller가 최초 고정, 나머지는 순차 갱신 |
+| 보고서 | report_input, report_context, report_draft, report, report_validation, report_judgement, pdf_validation, report_revision_count | context는 controller가 최초 고정, 나머지는 순차 갱신 |
 | 오류/종료 | errors, workflow_status, run_outcome | 오류는 ID 병합; 종료 상태는 controller만 변경 |
 
 - 평가 key: `{candidate_id}:{evaluation_round}:{dimension}`. 원문의 `{candidate_id}:{dimension}`을 확장한 이유는 재평가 세대 혼입 방지다. `evaluation_results`도 같은 key를 쓰며 key와 envelope 필드가 일치해야 한다.
 - candidate_status: `discovered/researching/ineligible/eligibility_unknown/evaluating/recommend/watchlist/pass/failed/not_evaluated`.
 - workflow_status는 원문대로 `running/completed/failed`.
 - run_outcome은 `recommended/no_recommendation/no_candidates/insufficient_evidence/technical_failure` 중 하나. 완료와 투자 추천은 별개다.
-- 실행 시작 시 `research_retry_count={}`, `evaluation_rounds={}`, `evidence_revisions={}`, `snapshots={}`와 나머지 map/list를 비운다. `candidate_index=0`, `report_revision_count=0`; current/selected ID, report_context, report_draft, report는 null이다.
+- 실행 시작 시 `research_retry_count={}`, `evaluation_rounds={}`, `evidence_revisions={}`, `snapshots={}`와 나머지 map/list를 비운다. `candidate_index=0`, `report_revision_count=0`; current/selected ID, report_input, report_context, report_draft, report는 null이다.
 - 후보 최초 선택 시 후보별 map인 `research_retry_count`, `evaluation_rounds`, `evidence_revisions`에 각각 `setdefault(candidate_id, 0)`을 적용한다. 다른 후보로 이동해도 기존 후보의 count를 지우지 않는다. Freeze마다 해당 후보 evaluation_round를 증가시키며, 보고서 수정 횟수만 실행 단위 scalar다.
 - 완료 시 검증된 Markdown을 `report`에 넣는다. 실패 시 `report=null`, `report_draft`와 오류를 보존한다.
 - `candidate_index`는 처리 순서이지 기업 ID가 아니다. 후보 변경 시 평가 controller의 현재 세대 참조도 바꾼다.
@@ -366,4 +467,11 @@ render_pdf(draft, template) -> RenderResult
 
 ToolResult는 `status`, typed `data`, `retrieval_records`, `errors`를 가진다. Discovery controller는 `DiscoveryBundle.sources`를 먼저 검증·저장하고 각 후보의 discovery_source_ids가 모두 해소되는지 확인한 뒤 Normalize로 넘긴다. Company Research가 실패해도 발견 출처는 남아야 한다. 검색은 `RetrievalRequest.as_of`를 반드시 사용하고, query·기업·corpus/index·allowed_source_ids·as_of를 모두 cache key에 포함한다. returned Chunk가 요청 밖의 기업/출처/기준일을 위반하면 반환을 거절한다. `CompanyResearchBundle`은 profile+sources+evidence, `EvidenceBundle`은 sources+evidence, `DecisionPolicyResult`는 label+grade+reason_codes, `RenderResult`는 artifact_path+page_count+layout_measurements+errors를 가진다.
 
-위 #5 구조 DTO 구현 범위에 명시한 import 외의 이름과 함수는 설계 계약이지 사용 가능한 API가 아니다. M0에서 schema와 fixture, M1에서 adapter stub, M2 이후 실제 구현을 연결한다. 각 기능은 주입된 Tool/LLM/clock을 사용해 외부 호출 없이 테스트할 수 있어야 한다.
+**#8 구현 범위:** `skala_rag.contracts`의 `ToolResult`·`ToolBudget`·`CompanyResearchBundle`·`EvidenceBundle`·`DecisionPolicyResult`·`RenderResult`, `contracts.error_codes`, `contracts.interfaces`(위 15개 경계와 `Clock`·`StructuredLLM` Protocol), `skala_rag.fakes`(fake Tool/LLM/clock)다.
+
+- ToolResult status: `ok`는 data 필수·errors 없음. `empty`는 조회 성공·0건으로, 빈 bundle을 data로 주고 errors 없음. `unavailable`/`failed`는 data=null·WorkflowError 1개 이상.
+- 도구 오류의 error_code는 `ErrorCode` 도구 코드만 허용하며, 코드별 status와 retryable이 고정된다. 401/403은 `unavailable`+`TOOL_AUTH_FAILED`(재시도 불가), timeout은 `failed`+`TOOL_TIMEOUT`(재시도 가능)이다.
+- `SNAPSHOT_INVALID`·`CONTEXT_INVALID`·`UPSTREAM_INVALID`와 LLM 코드는 controller·wrapper용이라 ToolResult에 쓰지 않는다. 재시도 횟수·backoff는 wrapper가 ToolBudget으로 정한다(M2).
+- 아직 타입이 없는 적격성·보고서 검증 policy와 rubric은 `JSONMap`, PDF template은 `str`로 둔다. 담당 이슈가 타입을 만들면 교체한다.
+
+위 #5·#6·#8 구현 범위에 명시한 import 외의 이름과 함수는 설계 계약이지 사용 가능한 API가 아니다. M0에서 schema와 fixture, M1에서 adapter stub, M2 이후 실제 구현을 연결한다. 각 기능은 주입된 Tool/LLM/clock을 사용해 외부 호출 없이 테스트할 수 있어야 한다.

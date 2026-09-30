@@ -1,6 +1,6 @@
 # 팀 구현 가이드 — Robotics Startup Agentic RAG
 
-> 상태: **구현 준비 초안 / 팀 승인 전** · 작성 기준일: 2026-09-29
+> 상태: **구현 준비 초안 / M0 baseline 일부 승인** · 작성 기준일: 2026-09-29
 > 대상: 기능을 나누어 구현하고 통합할 팀원
 > 원문: [통합 설계 문서](raws/robotics_startup_agentic_rag_notion_integrated.md)
 
@@ -20,7 +20,10 @@
 | 전체 흐름, 노드 책임, 반복과 종료 | [아키텍처](implementation/architecture.md) | Graph / Agent 담당 |
 | State, Evidence, 평가 결과, Tool 경계 | [공통 데이터 계약](implementation/contracts.md) | 전원 |
 | 평가 항목, 가중치, 결측, 판단 라벨 | [점수와 판단 정책](implementation/scoring.md) | 평가 / 지표 담당 |
+| 창업자·시장·기술·경쟁 우위 rubric, missing 조건 | [핵심 영역 rubric](implementation/rubric-core.md) | 평가 / 지표 담당 |
+| 실적·투자조건 rubric, 재무 단위 규칙 | [재무 rubric](implementation/rubric-finance.md) | 평가 / 지표 담당 |
 | 자료 수집, 페이지 예산, 검색, 임베딩 비교 | [데이터와 RAG](implementation/data-rag.md) | 데이터 / RAG 담당 |
+| mode별 보고서 목차, 인용, 구조 검증 | [보고서 계약](implementation/reporting.md) | 보고서 / 검증 담당 |
 | 작업 패키지, 통합 순서, 테스트, 제출 | [작업 분담과 검증](implementation/delivery.md) | 전원 |
 | 원문 충돌, 새 제안, 승인 기록 | [결정 목록](implementation/decisions.md) | 전원, 정책 결정 담당 |
 | 이슈·브랜치·PR 규칙, 폴더 구조, 개발 도구 | [협업 규칙](../CONTRIBUTING.md) | 전원 |
@@ -49,7 +52,7 @@
 | **구현 제안** | 원문을 실행 가능한 계약으로 보완한 초안 | 팀 승인 후 채택; 승인 전 확정안으로 표현하지 않음 |
 | **미결정** | 원문만으로 결론을 낼 수 없는 사항 | 담당자·결정·근거·승인일 기록 |
 
-각 상세 문서의 새 필드, 기본값, 예외 처리, 함수명은 별도 표시가 없어도 **구현 제안**이다. 현재 `approved`로 처리된 결정은 없다. 이 가이드는 원문을 몰래 대체하는 최종 설계가 아니다.
+각 상세 문서의 새 필드, 기본값, 예외 처리, 함수명은 별도 표시가 없어도 **구현 제안**이다. D01–D06·D08은 2026-09-30 xxhigh가 승인했으며, 해당 정책은 아래 제안 표기보다 우선한다([승인 기록](implementation/decisions.md#m0-승인-검토-기록--이슈-3)). D09의 목차·인용·구조 검증도 2026-09-30 xxhigh가 부분 승인했다([보고서 계약](implementation/reporting.md)). D09의 PDF 구현 선택, D07·D10–D14와 기타 구현 세부는 승인 전 제안이다. 이 가이드는 원문을 몰래 대체하는 최종 설계가 아니다.
 
 ## 필수 요구사항과 검증 위치
 
@@ -76,7 +79,7 @@
 
 - 후보는 한 번에 하나씩 평가하고, 한 후보 내부의 5개 평가 노드는 병렬 실행한다.
 - RAG 문서 수집·검색과 출처 추적, 외부 검색 adapter, 공통 Evidence 저장소를 만든다.
-- 재무와 투자조건을 포함한 여섯 영역을 모두 점수에 반영한다. 원문의 5개 노드와 맞추는 방법은 D04에서 결정한다.
+- 재무와 투자조건을 포함한 여섯 영역을 모두 점수에 반영한다. D04 승인에 따라 다섯 병렬 평가 합류 뒤 투자조건을 직렬 평가한다.
 - 정상 추천, 보류, 비추천, 적격성 정보부족, 후보 없음, 도구 실패를 구별한다.
 - CLI 중심으로 시작한다. 보고서 Markdown과 PDF, 실행 manifest를 남긴다.
 
