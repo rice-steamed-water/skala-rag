@@ -6,8 +6,13 @@ This increment is an **offline interface/response-normalization implementation**
 not a live provider integration or proof of M2 completion. Tavily Web is the sole
 approved pilot; supported request scope is KR/US and ko/en. There is no provider
 fallback. #45 shared runtime (PR #100) is merged and reused via `discovery_runtime.py`.
-Every `execution_mode="live"` request is rejected with
-`unavailable / TOOL_NOT_CONFIGURED`, even when other dependencies are supplied.
+Live is now an explicit adapter capability, not observed provider execution.
+`allow_live=False` remains the default. Live requires the actual
+`TavilyRuntimeBridge` (not a callback advertising a version), matching live policy,
+run/schema/tool/discovery context, an explicit extractor and exact approved public
+theme. Shared runtime still requires observed readiness, approval references,
+deadline, priced per-request allowance and bounded campaign ledger before sending.
+No alternate retry or ledger is created.
 No live smoke, provider/paid request, credential read, or model download was run.
 Do not close #48 on the strength of synthetic fixtures.
 
@@ -108,7 +113,10 @@ is logged.
 `ToolResult` forbids `data` on failure. For post-search extractor/policy failure,
 `adapter.observed_sources` is a defensive-copy snapshot receipt resolving the
 failed record's Source IDs. The caller must preserve it beside the failed record;
-this is **not** automatic Graph integration. No shared DTO was changed to smuggle
+`search_with_receipt(adapter, request, budget)` in `discovery_receipt.py` captures
+an invocation's detached `result` (including failed records/errors) and
+`observed_sources` together, before adapter reuse can erase the snapshots.
+This is **not** automatic Graph integration or #55 completion. No shared DTO was changed to smuggle
 failure payloads into a successful bundle.
 
 | Observation | Tool status / code | Distinction |
@@ -145,8 +153,8 @@ Malformed retryable headers fail closed as TOOL_RESPONSE_INVALID without raw
 headers or exception text. Runtime alone waits for the maximum of policy backoff
 and remaining provider minimum, subtracts processing elapsed time, checks deadline
 before/after sleep, and accounts once per physical request. The bridge has no
-sleep or retry loop. Live Discovery is still rejected unconditionally;
-bridge live gates additionally require approvals, deadline, bounded ledger and
+sleep or retry loop. Explicit opt-in Live Discovery inherits runtime gates:
+approvals, deadline, bounded ledger and
 priced allowance. Missing prices/readiness are not supplied by fixtures.
 
 ## Verification and outstanding gates
@@ -163,8 +171,8 @@ uv run --offline ruff format --check src/skala_rag/tools/discovery_live.py src/s
 Tests exercise zero/auth/timeout/transport/unready/live/unsupported/invalid payloads,
 foreign/duplicate IDs, query parameter injection, historical undated snippets,
 Normalize/dedup, injected selection, deterministic receipts and preservation after
-Company Research failure. No test is opt-in live smoke; the live gate is a negative
-test only. Actual final command receipts belong to the parent verification report.
+Company Research failure. MockTransport tests exercise opt-in live admission and post-search failure receipts;
+these are not opt-in provider smoke or readiness observations. Actual final command receipts belong to the parent verification report.
 
 Remaining: separately approved live
 readiness/budget configuration and transport, explicit public-text policy in the

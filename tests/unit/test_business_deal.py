@@ -76,6 +76,25 @@ def run(case, response, *, approve=True):
     return result
 
 
+def test_approved_rubric_disallows_other_na_even_with_true_verifier(case):
+    case[3]["status"] = "approved"
+    output = deepcopy(case[2])
+    c = output["traction"]["criteria"][0]
+    eid = next(
+        e.evidence_id
+        for e in case[0].evidence.values()
+        if c["criterion_id"] in e.criterion_ids
+    )
+    c.update(
+        status="not_applicable",
+        missing_reason=None,
+        applicability_reason="Not disclosed is not N/A",
+        applicability_rule_id="fixture-rule",
+        applicability_evidence_ids=[eid],
+    )
+    assert run(case, output).status == "failure"
+
+
 def test_atomic_missing(case):
     result = run(case, case[2])
     assert result.status == "success"

@@ -295,3 +295,14 @@ single_candidate/no_recommendation 모두 E-1 다섯 섹션을 유지한다.
 인용을 바꾸지 않는다. 실제 API 성공 검증은 #96 최종 live 실행에서 확인한다.
 이 승인은 미확인 credential/요금/예산의 호출, 새 모델 비교·다운로드 승인이나
 M3 품질 완료가 아니다. [구현·검증 경계](reporting-v3-pipeline.md)를 따른다.
+
+## D14 Finance 승인 — #61 (2026-09-30)
+
+Status: APPROVED (Finance 부분만). 사용자 승인 기록: #61 comment5906253348.
+finance-0.1.0 §1–§3의 9개 criterion 구간·최소근거 및 Q1–Q6는
+[rubric-finance 현재 승인](rubric-finance.md)의 범위로 승인되었다. 이전 Finance
+OPEN·개정 제안은 이력이다. Core rubric·다른 정책을 승인하지 않는다.
+N/A는 확인된 pre-revenue Rule40·동일 기간/주체 OCF≥0 runway만 허용;
+rule ID/reason/snapshot evidence 필수, 미확인은 missing, burn5는 실제 재무근거 필요.
+작은 기저 limitations 필수(새 cap/threshold 없음), pre/post 미상은 missing,
+valuation 직전3배/동종중앙값2배, CAPEX 제외. 정책 승인과 #55 live 완료는 별개.

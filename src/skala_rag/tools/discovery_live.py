@@ -1,7 +1,7 @@
 """Offline Tavily response boundary with merged #45 shared-runtime bridge.
 
 No credentials, HTTP client, retry or runtime defaults are provided here.
-The injected runtime MUST be offline. execution_mode=live always fails closed.
+Live requires explicit opt-in and the shared TavilyRuntimeBridge.
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -83,6 +83,7 @@ class TavilyDiscovery:
         max_results: int,
         max_candidates: int,
         limit_policy: CandidateLimitPolicy | None = None,
+        allow_live: bool = False,
     ) -> None:
         if type(max_results) is not int or not 1 <= max_results <= 20:
             raise ValueError("max_results must be 1..20")
@@ -99,6 +100,9 @@ class TavilyDiscovery:
         self.readiness, self.runtime, self.extractor = readiness, runtime, extractor
         self.candidate_id, self.public_theme = candidate_id, public_theme
         self.max_results, self.max_candidates = max_results, max_candidates
+        if type(allow_live) is not bool:
+            raise ValueError("allow_live must be boolean")
+        self.allow_live = allow_live
         self.limit_policy = limit_policy
         self._observed_sources: dict[str, Source] = {}
 
@@ -124,7 +128,7 @@ class TavilyDiscovery:
             "countries": list(request.countries),
             "languages": list(request.languages),
             "as_of": request.as_of.isoformat(),
-            "live_integration": "gated_pending_readiness_and_smoke",
+            "live_integration": "explicit_opt_in_shared_runtime",
         }
         code = self._preflight(request, budget, started)
         if code is not None:
@@ -277,10 +281,28 @@ class TavilyDiscovery:
         return self._result(request, started, args, data=data)
 
     def _preflight(self, request, budget, started):
-        if request.execution_mode != "fixture":
+        # Import locally: bridge reuses ProviderResponse from this module.
+        from skala_rag.tools.discovery_runtime import TavilyRuntimeBridge
+
+        if request.execution_mode == "live":
+            if (
+                not self.allow_live
+                or type(self.runtime) is not TavilyRuntimeBridge
+                or self.extractor is None
+            ):
+                return ErrorCode.TOOL_NOT_CONFIGURED
+        elif request.execution_mode != "fixture":
             return ErrorCode.TOOL_NOT_CONFIGURED
-        if getattr(self.runtime, "bridge_version", None) is not None:
-            if self.runtime.runtime.policy.execution_mode != "fixture":
+        if isinstance(self.runtime, TavilyRuntimeBridge):
+            if self.runtime.runtime.policy.execution_mode != request.execution_mode:
+                return ErrorCode.TOOL_NOT_CONFIGURED
+            if request.execution_mode == "live" and (
+                self.runtime.context.run_id != self.run_id
+                or self.runtime.context.schema_version != self.schema_version
+                or self.runtime.context.tool_name != "tavily"
+                or self.runtime.context.node != "discovery"
+                or self.runtime.context.candidate_id is not None
+            ):
                 return ErrorCode.TOOL_NOT_CONFIGURED
         if (
             not self.api_key_configured
@@ -341,13 +363,17 @@ class TavilyDiscovery:
                 source_kind="web",
                 language="unknown",
                 access_notes=(
-                    "Synthetic/offline Tavily search snippet; "
-                    "not fetched article or Evidence"
+                    (
+                        "Live"
+                        if request.execution_mode == "live"
+                        else "Synthetic/offline"
+                    )
+                    + " Tavily search snippet; not fetched article or Evidence"
                 ),
                 bibliographic_metadata={
                     "provider": "tavily",
                     "representation": "search_snippet",
-                    "execution_mode": "fixture",
+                    "execution_mode": request.execution_mode,
                     "snippet": text,
                 },
             )
@@ -376,7 +402,9 @@ class TavilyDiscovery:
                     run_id=self.run_id,
                     node="discovery",
                     error_code=code.value,
-                    message_redacted=f"offline Tavily boundary: {code.value}",
+                    message_redacted=(
+                        f"{request.execution_mode} Tavily boundary: {code.value}"
+                    ),
                     retryable=spec.retryable,
                     attempt=1,
                     timestamp=started,
@@ -386,7 +414,11 @@ class TavilyDiscovery:
             schema_version=self.schema_version,
             retrieval_id=self.retrieval_id,
             run_id=self.run_id,
-            tool_name=TOOL_NAME,
+            tool_name=(
+                "tavily-search-candidates-live"
+                if request.execution_mode == "live"
+                else TOOL_NAME
+            ),
             query=None,
             arguments_without_secrets=args,
             started_at=started,
