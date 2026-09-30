@@ -3,11 +3,11 @@
 Physical AI / Robotics 스타트업의 투자 조사·평가를 위한 수업용
 LangGraph Multi-Agent RAG 프로젝트다. 실제 투자 실행 시스템은 아니다.
 
-[사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)로 **baseline 계속 구현 대신 v3 전환 방향이 승인되었다**. 새 구현은 v3를 따른다. D01–D06·D08 승인 및 D09 부분 승인 기록과 기존 코드는 호환성·이력으로 보존한다. 전 후보 selector, 5 branch/6 dimension과 atomic Business & Deal, Missing/N/A 규칙, 네 label·market/technology 40%, 두 loop의 최대2회·Warning, 다섯 보고서 섹션은 승인된 방향이다. selector 순위·동점·all-none, 적용성 근거·0분모·부분 결측, eligibility Evidence gate, 재시도 회계, Warning acceptance/workflow/PDF, catalog/schema 버전·rubric·provider·corpus·실행 예산은 여전히 OPEN이다. [결정 목록](docs/implementation/decisions.md)에 방향 승인과 세부 정책의 경계를 기록한다.
+[#35 전환 승인](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)에 따라 새 구현은 **v3**를 따른다. baseline 승인 기록·코드는 호환성/이력으로 보존한다. 후속 [#82 운영 승인](https://github.com/rice-steamed-water/skala-rag/issues/82)은 Missing/N/A·0분모·최종 selector·exact 점수 경계·재조사 회계·completed Warning/CLI2를 확정했다. [사전 선정 승인](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5903574761)은 **평가 전 조사·평가 대상 집합을 무작위로 선정**하는 것이며 단순 순서 shuffle도 최종 selector의 무작위 변경도 아니다. dedup·Eligibility는 유지한다. 새 후보 수·난수/seed·보충 선정, rubric rule/품질·Evidence gate·PDF 상세·provider/corpus/live 예산은 OPEN으로 추적한다. 승인과 구현 가용성은 [결정 목록](docs/implementation/decisions.md)에서 구별한다.
 
 ## 설치
 
-후속 통합 기준 `1f23e09`에는 #6/PR #37의 평가·점수·보고서·manifest DTO와 결정적 ID 함수, #68/PR #69의 `build_score_summary`·`build_investment_decision` adapter도 포함된다. 모두 기존 baseline 경계이며 v3 복합 branch·N/A·네 label 구현과 구별한다.
+pinned 통합 기준 `906312a`에는 baseline DTO/State/reducer/catalog/점수·재무 helper·DTO adapter뿐 아니라 #17 발견/Normalize, #18 fixture 조사·Eligibility, #19 GuardedRetriever/EvidenceCollector, #22 dimension 평가 wrapper, #23 fixture 후보 Graph, #26 ReportContext, #27 baseline Structural Validator 및 #73/PR #74의 독립 `contracts.v3` 구조 DTO가 있다. #23은 baseline 첫 추천 인계이며 v3 전 후보 selector가 아니다. v3 구조 DTO는 계산·selector·0분모/Warning controller·State/Graph 연결을 실행하지 않는다. CLI·보고서 생성/Judge·실 PDF·live RAG는 여전히 목표다.
 
 Python 3.11 이상과 [uv](https://docs.astral.sh/uv/getting-started/installation/)가
 필요하다. 저장소 루트에서 실행한다.
@@ -26,8 +26,8 @@ tutorial의 과거 하한 버전이나 전체 의존성 목록은 복사하지 �
 
 | 직접 의존성 | 용도와 제한 |
 | --- | --- |
-| `langgraph` | 패키지 및 State reducer 통합 테스트; 실제 업무 workflow는 미구현 |
-| `pydantic` | #5·#6 구조 DTO 검증에 사용; 정책 계산·v3 확장 DTO 구현은 아님 |
+| `langgraph` | State reducer 및 fixture 후보 Graph; v3 workflow 연결은 미구현 |
+| `pydantic` | baseline 및 독립 v3 구조 DTO 검증; v3 정책 실행은 아님 |
 | `langchain-core` | 중립적인 Document·message·prompt 인터페이스; 가상 Document·HumanMessage와 ChatPromptTemplate의 변수 포맷팅·invoke 결과를 검증, 모델 client 없음 |
 | `langchain-text-splitters` | 문서 분할 유틸리티; 명시적 테스트 전용 크기·overlap은 운영 chunk 정책 선택이 아님 |
 | `httpx` | HTTP client; MockTransport만 검증하며 특정 API·provider를 선택하지 않음 |
@@ -69,13 +69,13 @@ uv lock --check
 
 ## 구조와 문서
 
-- `src/skala_rag/contracts/`: #5·#6 구조 DTO·결정적 ID와 #7 state factory
+- `src/skala_rag/contracts/`: #5·#6 baseline DTO·결정적 ID·State와 별도 `v3.py` 구조 DTO
 - `src/skala_rag/scoring/catalog.py`, `configs/scoring.draft.json`: #9 fixture 전용 draft catalog 로더·설정; v3 집계·판정 구현 아님
-- `src/skala_rag/graph/reducers.py`: ID 병합·충돌 검증 및 State 연결; 업무 Graph wiring은 미구현
+- `src/skala_rag/graph/reducers.py`: ID 병합·충돌 검증 및 State 연결; `graph/candidates.py`에 baseline fixture 후보 Graph
 - `src/skala_rag/scoring/aggregate.py`, `decide.py`: baseline 집계·판정 순수 함수; v3 계약과 다름
 - `src/skala_rag/scoring/summary.py`: baseline 계산값을 #6 ScoreSummary·InvestmentDecision으로 연결하는 adapter
 - `src/skala_rag/scoring/finance.py`: 재무 파생값·검증 helper; rating/rubric 승인과 별개
-- `agents`, `tools`, `rag`, `reporting`, `prompts`: 업무 흐름 미구현
+- `agents`, `tools`, `rag`, `reporting`: fixture 조사/수집·평가 wrapper·보고서 context/구조 검증; live·생성/Judge·PDF는 미구현
 - `tests/contract/`, `tests/fixtures/contracts.json`: 구조 DTO/state 검증 fixture·tests; 테스트 총수는 실행 결과로만 보고
 - `tests/unit/`, `tests/integration/`: 각 작업의 별도 검증 범위
 - [구현 가이드](docs/README.md): 승인된 v3 방향과 미결정 세부 설계

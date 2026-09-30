@@ -7,11 +7,11 @@
 ## 먼저 할 일
 
 1. 이 문서에서 목표와 필수 요구사항을 확인한다.
-2. [v3 정합화·영향표](implementation/design-v3-alignment.md)와 [결정 목록](implementation/decisions.md)을 읽는다. 특히 **N/A 용어 충돌·0분모, selector 정책, Warning 결과 계약**을 합의한다.
+2. [v3 정합화·영향표](implementation/design-v3-alignment.md)와 [결정 목록](implementation/decisions.md)을 읽는다. 특히 **#82 운영 승인·사전 무작위 선정 승인과 남은 OPEN**을 구별한다.
 3. 모든 구현 담당자가 [공통 데이터 계약](implementation/contracts.md)을 먼저 읽는다.
 4. [작업 분담과 검증](implementation/delivery.md)의 M0 → M1 순서로 시작한다. 외부 API부터 각자 연결하기보다, 같은 fixture로 전체 흐름을 먼저 맞춘다.
 
-통합 기준 `c5a30f3`에는 #5 구조 DTO, #7 State/factory, #9 fixture 전용 draft catalog 외에 #15/PR #42의 ID reducer와 State Annotated 연결, #16/PR #64의 baseline `aggregate_scores`·`decide`, #53/PR #66의 재무 단위·기간·파생값 helper가 있다. 집계는 고정100·observed/missing·여섯 영역 관측 rating 저점수·세 label baseline이며 v3 N/A 분모·핵심차원40%·네 label 구현이 아니다. 업무 Graph wiring·CLI·live RAG·평가 agent·보고서 출력은 여전히 구현 목표다. 설치·검증 명령은 [루트 README](../README.md), 통합 cutoff와 과거 GitHub snapshot은 [정합화 기록](implementation/design-v3-alignment.md)에 있다. 명시한 구현 외의 함수·DTO·정책은 목표/제안이며 v3 HTML과 `raws/`는 수정하지 않는다.
+pinned 통합 기준 `906312a`에는 baseline DTO/State/reducer/catalog/점수·재무 helper·DTO adapter뿐 아니라 #17 발견/Normalize, #18 fixture 조사·Eligibility, #19 GuardedRetriever/EvidenceCollector, #22 dimension 평가 wrapper, #23 fixture 후보 Graph, #26 ReportContext, #27 baseline Structural Validator 및 #73/PR #74의 독립 `contracts.v3` 구조 DTO가 있다. #23은 baseline 첫 추천 인계이며 v3 전 후보 selector가 아니다. v3 구조 DTO는 계산·selector·0분모/Warning controller·State/Graph 연결을 실행하지 않는다. CLI·보고서 생성/Judge·실 PDF·live RAG는 여전히 목표다. 설치·검증 명령은 [루트 README](../README.md), pinned 통합과 historical snapshot은 [정합화 기록](implementation/design-v3-alignment.md)을 따른다.
 
 ## 문서를 읽는 순서
 
@@ -37,7 +37,7 @@
 
 ```text
 투자 주제 + 실행 설정 + 승인된 문서 코퍼스
-→ 후보 발견 / 정규화 / 적격성 확인
+→ 후보 발견 / 정규화·dedup / 조사·평가 대상 집합 무작위 선정 / 적격성 확인
 → Web·API·RAG 근거 수집 / 부족자료 보강
 → 후보별 5개 branch / 6개 점수 차원 평가·판단
 → 모든 후보 처리 완료 / deterministic Best Candidate Selector
@@ -57,9 +57,9 @@
 | **구현 제안** | 원문을 실행 가능한 계약으로 보완한 초안 | 팀 승인 후 채택; 승인 전 확정안으로 표현하지 않음 |
 | **미결정** | 원문만으로 결론을 낼 수 없는 사항 | 담당자·결정·근거·승인일 기록 |
 
-**현재 구현 방향 — v3 전환 승인:** [사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)에 따라 새 작업은 기존 baseline의 계속 구현이 아니라 v3에 정합화한다. baseline 코드·승인 기록은 호환성과 이력으로 보존하며 새 구현의 우선 방향이 아니다. 방향 승인은 상세 정책·DTO 전체 필드·provider·corpus·시간/비용 예산 승인이나 구현 완료가 아니다. 남은 세부 선택만 [결정 목록](implementation/decisions.md)의 OPEN gate를 따른다. 각 상세 문서의 새 필드·예외 처리·함수명은 별도 승인 기록이 없는 한 구현 제안이다. OPEN에 의존하는 선택은 주입된 가상 정책·인터페이스까지만 진행하고 해당 live 실행을 차단한다.
+**현재 구현 방향 — v3 전환 승인:** [사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)에 따라 새 작업은 기존 baseline의 계속 구현이 아니라 v3에 정합화한다. baseline 코드·승인 기록은 호환성과 이력으로 보존하며 새 구현의 우선 방향이 아니다. 방향 승인에 이어 #82 및 #35 comment 5903505208에서 N/A·0분모·최종 selector·재조사 회계·Warning 종료의 운영 규칙을 별도 승인했다. #35 comment 5903574761의 무작위 선정은 평가 전 조사·평가 대상 집합에만 적용하며 최종 selector는 무작위가 아니다. 승인과 구현 완료는 별개이며 rubric 상세·provider·corpus·시간/비용 예산 등 남은 세부 선택만 [결정 목록](implementation/decisions.md)의 OPEN gate를 따른다. 각 상세 문서의 새 필드·예외 처리·함수명은 별도 승인 기록이 없는 한 구현 제안이다. OPEN에 의존하는 선택은 주입된 가상 정책·인터페이스까지만 진행하고 해당 live 실행을 차단한다.
 
-D09의 baseline 목차(single_candidate/no_recommendation 각각 7개 섹션)·인용·서지 미상 표기·SV01–SV09 구조 검증의 2026-09-30 xxhigh 부분 승인은 이력으로 보존한다([보고서 계약](implementation/reporting.md)). 이후 사용자 승인으로 새 구현은 v3 E-1 다섯 목차·전 후보 selector·Warning 방향을 따른다. mode별 예외·구조 검증 상세와 PDF 구현 선택은 OPEN이며 과거 승인이 그 세부를 자동 승인하지 않는다.
+D09의 baseline 목차(single_candidate/no_recommendation 각각 7개 섹션)·인용·서지 미상 표기·SV01–SV09 구조 검증의 2026-09-30 xxhigh 부분 승인은 이력으로 보존한다([보고서 계약](implementation/reporting.md)). 이후 사용자 승인으로 새 구현은 v3 E-1 다섯 목차·전 후보 selector·Warning 방향을 따른다. Warning completed·CLI2·final 금지는 #82 승인이다. mode별 섹션 예외·구조 검증 상세와 PDF 구현 선택은 OPEN이며 과거 승인이 그 세부를 자동 승인하지 않는다.
 
 ## 필수 요구사항과 검증 위치
 
@@ -84,7 +84,7 @@ D09의 baseline 목차(single_candidate/no_recommendation 각각 7개 섹션)·�
 
 **v3 목표 및 이를 위한 구현 제안 — 포함**
 
-- 모든 후보를 순차 검증하고 적격 후보를 평가한 뒤 selector가 최종 보고서 대상을 정한다. 첫 추천에서 종료하지 않는다.
+- 정규화·dedup 후 무작위 선정된 조사 대상 모든 후보를 순차 검증하고 적격 후보를 평가한 뒤 결정적 selector가 최종 보고서 대상을 정한다. 첫 추천에서 종료하지 않는다.
 - 한 후보 내부의 Founder / Market / Technology / Moat / Business & Deal 5개 branch는 병렬이며, 마지막 branch가 traction·deal_terms 두 차원을 함께 반환한다.
 - RAG 문서 수집·검색과 출처 추적, 외부 검색 adapter, 공통 Evidence 저장소를 만든다.
 - 여섯 점수 차원·23개 criterion을 보존한다. branch envelope는 D04 제안이며 부분 성공 집계는 금지한다.

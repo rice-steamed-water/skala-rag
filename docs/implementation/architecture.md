@@ -2,9 +2,9 @@
 
 [문서 홈](../README.md) · [공통 계약](contracts.md) · [결정 목록](decisions.md)
 
-근거: [v3](../design/design-v3.html) B-1, D-1–D-3, E. **Evidence Research 단일 책임, 5 branch/6 dimension과 atomic Business & Deal, 전 후보 처리 후 selector, 재조사·수정 최대 2회와 Warning 반환은 승인된 v3 전환 방향**이다. envelope 필드·오류 controller·Warning acceptance·PDF 경로 등 보완 계약은 D03·D04·D08·D09 세부 제안이다. issue #3 baseline 승인 기록, 새 사용자 방향 승인, 현재 구현 여부는 [정합화 기록](design-v3-alignment.md)에서 구별한다.
+근거: [v3](../design/design-v3.html) B-1, D-1–D-3, E. **Evidence Research 단일 책임, 5 branch/6 dimension과 atomic Business & Deal, 전 후보 처리 후 selector, 재조사·수정 최대 2회와 Warning 반환은 승인된 v3 전환 방향**이다. N/A·0분모·최종 순위·회차·Warning 종료는 #82 운영 승인이다. #74의 독립 v3 envelope 구조와 미구현 controller/State 연결·PDF 상세는 구별한다. issue #3 baseline 승인 기록, 새 사용자 방향 승인, 현재 구현 여부는 [정합화 기록](design-v3-alignment.md)에서 구별한다.
 
-**현재 구현 방향 — v3 전환 승인:** [사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)에 따라 새 작업은 기존 baseline의 계속 구현이 아니라 v3에 정합화한다. baseline 코드·승인 기록은 호환성과 이력으로 보존하며 새 구현의 우선 방향이 아니다. 방향 승인은 상세 정책·DTO 전체 필드·provider·corpus·시간/비용 예산 승인이나 구현 완료가 아니다. 남은 세부 선택만 [결정 목록](decisions.md)의 OPEN gate를 따른다.
+**현재 구현 방향 — v3 전환 승인:** [사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)에 따라 새 작업은 기존 baseline의 계속 구현이 아니라 v3에 정합화한다. baseline 코드·승인 기록은 호환성과 이력으로 보존하며 새 구현의 우선 방향이 아니다. 방향 승인에 이어 #82 및 #35 comment 5903505208에서 N/A·0분모·최종 selector·재조사 회계·Warning 종료의 운영 규칙을 별도 승인했다. #35 comment 5903574761의 무작위 선정은 평가 전 조사·평가 대상 집합에만 적용하며 최종 selector는 무작위가 아니다. 승인과 구현 완료는 별개이며 rubric 상세·provider·corpus·시간/비용 예산 등 남은 세부 선택만 [결정 목록](decisions.md)의 OPEN gate를 따른다.
 
 ## 1. 역할을 나누는 기준
 
@@ -16,13 +16,14 @@
 
 LLM이 산술을 수행하거나 정책 임계값을 변경하지 않는다. 도구 결과의 본문은 분석 대상 데이터이며 에이전트 지시문이 아니다.
 
-## 2. 전체 Graph — 승인된 v3 방향 (D03·D04·D08 세부 정책 OPEN)
+## 2. 전체 Graph — 승인된 v3 방향·운영 규칙의 구현 목표
 
 ```mermaid
 flowchart TD
     START([START]) --> discover[Startup Discovery]
     discover --> normalize[Candidate Normalize]
-    normalize --> left{Candidate left?}
+    normalize --> sample[Random pre-evaluation candidate set selection]
+    sample --> left{Candidate left?}
     left -->|yes| select[Candidate Iterator: current ID]
     left -->|no| best[Best Candidate Selector: policy required]
     select --> research[Company Research]
@@ -45,9 +46,11 @@ flowchart TD
     moat --> join
     business --> join
     join --> evalok{All five successful?}
-    evalok -->|yes: six dimension payloads| aggregate[Score Aggregator]
+    evalok -->|yes: six dimension payloads| aggregate[Score Aggregator: validate denominators]
     evalok -->|no| archive
-    aggregate --> decision[Deterministic Investment Decision]
+    aggregate --> denominator{Valid scored result?}
+    denominator -->|yes| decision[Deterministic Investment Decision]
+    denominator -->|no: no score, candidate error| archive
     decision -->|all four labels| archive
     best --> finalize[SelectionResult + ReportInput]
     finalize --> prepare[Build ReportContext]
@@ -64,7 +67,7 @@ flowchart TD
     judge -->|revise| retry
     judge -->|fail| failed
     retry -->|yes| report
-    retry -->|no| warning[Return current draft + Warning: not validated final]
+    retry -->|no| warning[Completed + Warning + CLI 2: draft, not validated final]
     judge -->|pass| render[Render PDF]
     render --> layout{Pages and layout valid?}
     layout -->|no| layoutpolicy[Layout policy required: D08 / D09]
@@ -76,7 +79,7 @@ flowchart TD
     failed --> END
 ```
 
-오류 처리 공통 규칙은 §6이다. 그림의 v3 방향은 승인되었지만 세부 정책의 승인·주입과 Graph 구현·검증은 별개다. 없는 정책을 노드가 생성하지 않는다. Company Research의 적격성 unknown 보강·최소 Evidence gate와 Evidence Research의 Coverage 재조사는 구별한다(D05·D06·D08 v3-OPEN). 모든 normalize된 후보를 처리하고 적격 후보만 평가한다. 예산/취소 등의 예외 중단을 전 후보 정상 처리로 표시하지 않는다. 별도 Targeted Research나 평가 후 재조사 화살표는 v3 기본 흐름에 없다.
+오류 처리 공통 규칙은 §6이다. 그림의 v3 방향은 승인되었지만 세부 정책의 승인·주입과 Graph 구현·검증은 별개다. 없는 정책을 노드가 생성하지 않는다. Company Research unknown 보강·최소 Evidence gate는 OPEN이며, #82에서 회차가 승인된 Evidence Research Coverage 재조사와 구별한다. 정규화·동일 법인 dedup 뒤 조사·평가할 후보 집합을 무작위 선정한다(#35 comment 5903574761). 상한 초과 시 남길 집합 선정도 포함하며 단순 Iterator 순서 shuffle이 아니다. 선정된 모든 후보를 조사/Eligibility 확인하고 적격 후보만 평가한다. 비선정 모집단은 제외 기록만 남기며 평가한 것으로 표시하지 않는다. 예산/취소 등의 예외 중단을 전 후보 정상 처리로 표시하지 않는다. 별도 Targeted Research나 평가 후 재조사 화살표는 v3 기본 흐름에 없다.
 
 ## 3. 노드별 입출력과 완료 조건
 
@@ -84,6 +87,7 @@ flowchart TD
 | --- | --- | --- |
 | Discovery | theme, 국가/언어 범위, 후보 상한 | DiscoveryBundle의 후보와 Source payload를 저장; discovery_source_ids 참조 확인, 검색 실패와 0건 구별 |
 | Normalize | 원시 후보 | `Candidate[]`; 동일 법인 중복 제거, 동명이인 임의 병합 금지 |
+| 사전 후보 집합 선정 | dedup 후보, 명시 상한·선정 정책 | 조사·평가 대상 집합을 무작위 선정; RNG 주입·선정/제외/replay 기록은 구현 제안. 최종 selector와 별개 |
 | Candidate Iterator | candidates, candidate_index | current_candidate_id, 후보 상태; 리스트 밖 접근 방지. 최종 selected ID를 쓰지 않음 |
 | Company Research | Candidate, 수집 도구 | CompanyProfile, StageInfo, Evidence, RetrievalRecord |
 | Eligibility | CompanyProfile와 관련 Evidence | `eligible/ineligible/unknown`; 각 조건의 이유·근거 |
@@ -93,10 +97,10 @@ flowchart TD
 | Freeze Evidence Revision | 현 후보 근거·평가 정책·Source/Chunk/수집 기록, 최종 EligibilityResult | 세대 증가 후 EvaluationSnapshot payload 복사·참조 검증·저장; 이후 불변. 참조 누락 또는 적격성 근거 무효화는 `SNAPSHOT_INVALID`로 해당 후보 failed → archive → advance |
 | 5 Evaluation Branches | 같은 후보·세대·근거 snapshot | founder/market/technology/moat/business_deal 각각 terminal envelope; 마지막은 traction·deal_terms 둘 다 필수 |
 | Evaluation Join | 해당 세대의 다섯 terminal result | 모두 성공일 때 여섯 dimension Evaluation을 원자적으로 저장. failure/부분 payload면 후보 failed → archive → advance; 누락은 전체 timeout/오류 처리 |
-| Score Aggregator | 여섯 영역, 승인된 정책 | ScoreSummary; 순수 함수로 구현 |
+| Score Aggregator | 여섯 영역, 승인된 정책 | 양수 분모에서 ScoreSummary; 0분모면 점수 없이 명시 후보 오류/archive/advance |
 | Decision Policy + 설명 | ScoreSummary, Eligibility | 정책이 label 결정, LLM은 근거·리스크·한계 서술만 추가 |
 | Candidate Archive / Advance | 판정 또는 적격성·오류 사유 | 후보 결과 보존; index를 정확히 한 번 증가 |
-| Best Candidate Selector | 전 후보 outcome, 적격 후보 판정·점수, 승인 selection policy | deterministic SelectionResult와 selected_candidate_id; 모든 후보 처리 전 호출 금지, 순위·동점 등 D03 v3-OPEN |
+| Best Candidate Selector | 전 후보 outcome, 적격 후보 판정·점수, 승인 selection policy | deterministic SelectionResult와 selected_candidate_id; 모든 후보 처리 전 호출 금지, 순위·동점은 #82 승인; 원본 candidate_id 최종 tie-break |
 | ReportInput controller | SelectionResult, 전 후보 이력 | 적격 후보 없음은 selected=None 및 사유. 전부 WATCHLIST/PASS·평가 실패의 선택/mode는 D03 정책에 따름 |
 | Build ReportContext | ReportInput, 최종 State의 평가/판정·snapshot·출처 | 모든 참조를 해소한 payload context 고정. 불완전/모순이면 CONTEXT_INVALID로 실패 |
 | Report Generator | 검증된 ReportContext, 직전 feedback | ReportDraft; context의 실제 근거·서지정보만 사용 |
@@ -118,7 +122,7 @@ flowchart TD
 **연결 제안 [LG1, LG2]:** 고정 다섯 노드의 합류는 아래 형태로 표현하고, 실제 설치 버전에서 다섯 terminal result 대기·부분실패 처리를 통합 테스트로 검증한다. API 문서 참조나 기존 import smoke test는 이 Graph가 실행됐다는 증거가 아니다.
 
 ```python
-# 연결 형태 설명용: builder와 각 노드는 아직 저장소에 구현되지 않았다.
+# v3 다섯 branch 연결 형태 설명용: 현재 fixture 후보 Graph와 별도인 미구현 wiring.
 builder.add_edge(
     ["founder", "market", "technology", "moat", "business_deal"],
     "evaluation_join",
@@ -129,26 +133,26 @@ builder.add_edge(
 
 ## 5. 반복 예산과 종료 — baseline 승인 기록과 v3 대체안
 
-D08의 baseline `5/2/2`, batch당 8회, 추가 retry 2회, 시도별 30초는 승인 기록으로 보존한다. 새 구현의 최대2회 loop·Warning 방향은 승인되었다. 다만 명시되지 않은 회차 회계·도구 한도·Warning 상태 매핑의 정확한 대체 범위는 여전히 OPEN이며 기존 수치를 임의 폐기하거나 새 기본값으로 확정하지 않는다.
+D08의 baseline `5/2/2`, batch당 8회, 추가 retry 2회, 시도별 30초는 승인 기록으로 보존한다. 새 구현의 최대2회 loop·Warning 방향은 승인되었다. #82에서 최초 제외 추가 조사2회·요청 전 차감·empty/failure 소비 및 최초 제외 구조/의미 공유 수정2회·completed Warning·CLI2를 별도 승인했다. 도구 한도 변경·PDF layout 회계·live 예산은 OPEN이다.
 
 | 설정 | 값의 상태 | 의미 |
 | --- | --- | --- |
-| `max_candidates` | baseline 승인 5; v3 대체값 미정 | 승인 상한으로 확정한 normalize 목록은 모두 처리; 첫 추천 조기종료 금지, 고갈 후 무한 재발견 금지 |
-| `max_research_retries_per_candidate` | baseline 승인 2; v3도 최대 2회 명시 | Coverage 부족 시 동일 Evidence Research가 재조사. 최초 제외 추가 batch 2회 해석·회차 소비 규칙은 OPEN |
+| `max_candidates` | baseline 승인 5; v3 대체값 미정 | 중복 제거 뒤 상한을 적용할 대상 집합은 무작위 선정 승인; 새 수치·알고리즘/seed는 미승인. 선정 집합은 모두 처리; 첫 추천 조기종료 금지, 고갈 후 무한 재발견 금지 |
+| `max_research_retries_per_candidate` | baseline 승인 2; v3도 최대 2회 명시 | Coverage 부족 시 동일 Evidence Research가 재조사. 최초 제외 추가 batch 2회·요청 전 차감·empty/failure 소비 승인 |
 | `max_tool_calls_per_research_batch` | baseline 승인 8; v3 대체 해석 미정 | 도구 retry를 호출 예산에 포함할지 정책으로 고정 |
-| `max_report_revisions` | baseline 승인 2; v3도 최대 2회 명시 | 구조·의미가 공유. 최초 생성 제외 제안; PDF layout 포함 여부는 D08·D09 OPEN |
+| `max_report_revisions` | baseline 승인 2; v3도 최대 2회 명시 | 구조·의미가 공유. 최초 생성 제외 승인; PDF layout 포함 여부는 D08·D09 OPEN |
 | `max_tool_retries` | baseline 승인 2; v3 대체 해석 미정 | 네트워크 retry는 Evidence 재조사와 별도 개념 |
 | `tool_timeout_seconds` | baseline 승인 30초; v3 대체값 미정 | 단일 도구 시도 제한 |
 | `run_timeout_seconds`, `max_llm_calls`, `max_cost` | 미정 | live 실행 전 환경·모델 기준으로 승인·설정. 비어 있으면 live 시작 거절 |
 
-**회차 산정 제안(미승인):** 최초 수집 제외, Coverage retry 요청 **전에** 후보별 count 증가, 빈 결과/오류 batch도 소비하며 rollback하지 않는다. Company Research 적격성 보강은 별도 한도를 두는 안이며 Coverage count와 자동 합산하지 않는다. 네트워크 retry, LLM schema 수정, Evidence 재조사, 보고서 수정은 각각 다른 카운터다. 후보 A에서 B로 이동해도 A count를 지우지 않고 B는 0에서 시작한다. 승인 정책에 횟수·호출·비용·총시간 제한과 소진 경로를 명시한다. live에서는 값/승인/readiness가 비어 있으면 시작을 거절한다.
+**#82 승인 회차 산정:** 최초 수집 제외, Coverage retry 요청 **전에** 후보별 count 증가, 빈 결과/오류 batch도 소비하며 rollback하지 않는다. Company Research 적격성 보강은 별도 한도를 두는 미승인 안이며 Coverage count와 자동 합산하지 않는다. 네트워크 retry, LLM schema 수정, Evidence 재조사, 보고서 수정은 각각 다른 카운터다. 후보 A에서 B로 이동해도 A count를 지우지 않고 B는 0에서 시작한다. 승인 정책에 횟수·호출·비용·총시간 제한과 소진 경로를 명시한다. live에서는 값/승인/readiness가 비어 있으면 시작을 거절한다.
 
 - coverage 부족 + 조사 여유: 부족 항목만 검색.
-- Coverage 부족 + 재조사 2회 소진: missing 유지 후 freeze→평가→최종 결측 재계산으로 진행. 빈 batch 조기 소진 여부는 별도 승인 정책이며 평가 후 research loop를 만들지 않는다.
+- Coverage 부족 + 재조사 2회 소진: missing 유지 후 freeze→평가→최종 결측 재계산으로 진행. #82 승인에 따라 요청한 재조사 batch는 empty/failure여도 각각 1회 소비하며, 평가 후 research loop를 만들지 않는다.
 - `RECOMMEND_PRIORITY/RECOMMEND/WATCHLIST/PASS` 모두 결과 저장 후 다음 후보. index는 한 번만 증가한다.
-- 모든 후보 처리 뒤 selector: label 우선/점수 우선·동점·모두 WATCHLIST/PASS·성공 평가 없음의 선택 규칙은 D03 OPEN이다. candidate_id나 입력 순서 tie-break를 기본값으로 숨기지 않는다. 실패/unknown 후보를 추천으로 승격하지 않는다.
+- 사전 선정된 모든 후보 처리 뒤 selector: 적격·정상 평가 후보 중 RECOMMEND_PRIORITY 우선, 다음 RECOMMEND; 같은 label은 normalized_score 내림차순 → weighted_missing_pct 오름차순 → 원본 candidate_id 오름차순이다. 전부 WATCHLIST/PASS면 선택 없이 비교 보고서를 만든다. 입력 순서는 사용하지 않는다. 실패/unknown 후보를 추천으로 승격하지 않는다.
 - 적격 후보가 한 건도 없으면 selected=None과 “투자 평가 가능한 적격 후보 없음” 사유 보고서를 생성한다(v3 D-3). 후보 0건·전부 부적격·전부 unknown을 구별한다. 적격이었으나 평가 실패한 경우는 “적격 후보 없음”과 다르다.
-- 구조/의미 수정 2회 소진: Warning과 현재 draft/findings를 반환한다. 이는 **검증된 final 아님**이다. workflow_status·run_outcome·CLI/manifest 매핑은 [계약 §5](contracts.md)의 D08 v3-OPEN 경계이며 임의 completed/새 enum으로 정하지 않는다.
+- 구조/의미 수정 2회 소진: Warning과 현재 draft/findings를 반환한다. 이는 **검증된 final 아님**이다. workflow_status=completed와 CLI exit=2는 #82 승인이다. run_outcome/manifest payload 연결·PDF 상세는 [계약 §5](contracts.md)의 후속 범위이며 새 workflow enum은 추가하지 않는다.
 
 Graph 전체 step 제한은 보조 안전장치다. 이를 정상 종료 정책이나 후보별 예산 대신 사용하지 않는다.
 
@@ -174,7 +178,7 @@ Graph 전체 step 제한은 보조 안전장치다. 이를 정상 종료 정책�
 
 ## 공식 기술 참고
 
-아래는 이전 가이드가 2026-09-29에 남긴 참고 위치다. 이번 문서 정합화에서 외부 API 동작을 재검증하지 않았다. 설치 의존성은 lock에 있지만 실제 합류 검증은 M1 업무다.
+아래는 이전 가이드가 2026-09-29에 남긴 참고 위치다. 이번 문서 정합화에서 외부 API 동작을 재검증하지 않았다. 설치 의존성은 lock에 있지만 v3 다섯 branch 실제 합류 검증은 후속 M1 업무다.
 
 ```text
 [LG1] LangChain — Graph API overview, State / Reducers

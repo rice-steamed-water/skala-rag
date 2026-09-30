@@ -1,8 +1,8 @@
 # 보고서 목차·인용·구조 검증 계약 — D09 부분 승인
 
-**현재 구현 방향 — v3 전환 승인:** [사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)에 따라 새 작업은 기존 baseline의 계속 구현이 아니라 v3에 정합화한다. baseline 코드·승인 기록은 호환성과 이력으로 보존하며 새 구현의 우선 방향이 아니다. 방향 승인은 상세 정책·DTO 전체 필드·provider·corpus·시간/비용 예산 승인이나 구현 완료가 아니다. 남은 세부 선택만 [결정 목록](decisions.md)의 OPEN gate를 따른다.
+**현재 구현 방향 — v3 전환 승인:** [사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)에 따라 새 작업은 기존 baseline의 계속 구현이 아니라 v3에 정합화한다. baseline 코드·승인 기록은 호환성과 이력으로 보존하며 새 구현의 우선 방향이 아니다. 방향 승인에 이어 #82 및 #35 comment 5903505208에서 N/A·0분모·최종 selector·재조사 회계·Warning 종료의 운영 규칙을 별도 승인했다. #35 comment 5903574761의 무작위 선정은 평가 전 조사·평가 대상 집합에만 적용하며 최종 selector는 무작위가 아니다. 승인과 구현 완료는 별개이며 rubric 상세·provider·corpus·시간/비용 예산 등 남은 세부 선택만 [결정 목록](decisions.md)의 OPEN gate를 따른다.
 
-**보존 본문의 범위 — 역사·호환성:** 아래 본문은 기존 baseline D09 부분 승인 계약을 그대로 보존한다. 본문 안의 “현재 baseline”, “v3 승인 전/대체 승인 시”, 과거 PR 상태와 고정100·N/A 미채택·첫 추천·7개 섹션은 작성 당시 맥락이며 새 구현 지시가 아니다. 새 구현은 [scoring](scoring.md)·[delivery](delivery.md)의 승인된 v3 방향을 따른다. rubric 숫자·적용성 근거, 보고서 mode별 예외·검증·PDF 등 구체 정책은 여전히 OPEN이며 과거 기록이나 전환 승인만으로 확정하지 않는다.
+**보존 본문의 범위 — 역사·호환성:** 아래 본문은 기존 baseline D09 부분 승인 계약을 그대로 보존한다. 본문 안의 “현재 baseline”, “v3 승인 전/대체 승인 시”, 과거 PR 상태와 고정100·N/A 미채택·첫 추천·7개 섹션은 작성 당시 맥락이며 새 구현 지시가 아니다. 새 구현은 [scoring](scoring.md)·[delivery](delivery.md)의 승인된 v3 방향을 따른다. #82의 N/A 사유·승인 rule·근거 요건, 0분모 오류, 최종 순위·재시도·completed Warning/CLI2는 후속 승인이다. 실제 rubric 숫자/rule 목록·품질, 보고서 mode별 섹션 예외·검증 상세·PDF는 OPEN이다. 평가 전 무작위 집합 선정은 최종 selector와 별개다.
 
 [문서 홈](../README.md) · [공통 계약](contracts.md#5-보고서와-오류) · [검증 계획](delivery.md#5-보고서-계약과-pdf-검증) · [결정 목록](decisions.md)
 

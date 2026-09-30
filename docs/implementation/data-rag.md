@@ -4,7 +4,9 @@
 
 근거: [v3](../design/design-v3.html) B-1–B-3 및 이전 통합 원문 §1.3·§5–§7. Evidence Research 책임·문서 우선순위·BGE-M3 1차 선택과 비교 계획은 **v3 목표**, adapter·페이지 산정·실험 설정의 보완은 **구현 제안**이다. 실제 API 접근·모델 다운로드·라이선스 적합성·성능을 확인 완료로 주장하지 않는다.
 
-**현재 구현 방향 — v3 전환 승인:** [사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)에 따라 새 작업은 기존 baseline의 계속 구현이 아니라 v3에 정합화한다. baseline 코드·승인 기록은 호환성과 이력으로 보존하며 새 구현의 우선 방향이 아니다. 방향 승인은 상세 정책·DTO 전체 필드·provider·corpus·시간/비용 예산 승인이나 구현 완료가 아니다. 남은 세부 선택만 [결정 목록](decisions.md)의 OPEN gate를 따른다.
+**현재 구현 방향 — v3 전환 승인:** [사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)에 따라 새 작업은 기존 baseline의 계속 구현이 아니라 v3에 정합화한다. baseline 코드·승인 기록은 호환성과 이력으로 보존하며 새 구현의 우선 방향이 아니다. 방향 승인에 이어 #82 및 #35 comment 5903505208에서 N/A·0분모·최종 selector·재조사 회계·Warning 종료의 운영 규칙을 별도 승인했다. #35 comment 5903574761의 무작위 선정은 평가 전 조사·평가 대상 집합에만 적용하며 최종 selector는 무작위가 아니다. 승인과 구현 완료는 별개이며 rubric 상세·provider·corpus·시간/비용 예산 등 남은 세부 선택만 [결정 목록](decisions.md)의 OPEN gate를 따른다.
+
+**현재 경계:** pinned `906312a`의 #19는 fixture 검색·GuardedRetriever·EvidenceCollector와 RAG provenance 연결을 제공한다. live 인덱스/embedding·추출·Technology 실평가 완료가 아니다. 조사 대상 기업은 정규화·dedup 후 평가 전에 무작위 선정하고 Company Research/Eligibility를 거친다. 이는 문서 우선순위나 평가 후 최종 selector를 무작위화하는 승인이 아니다. #82의 추가 Evidence 조사2회는 최초 제외·요청 전 차감·empty/failure 소비이며 평가 뒤 재조사는 없다.
 
 ## 1. 첫 번째로 연결할 RAG 경로
 

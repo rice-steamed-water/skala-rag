@@ -27,6 +27,7 @@ NULL_FIELDS = {
     "current_candidate_id",
     "selected_candidate_id",
     "run_manifest",
+    "report_input",
     "report_context",
     "report_draft",
     "report",

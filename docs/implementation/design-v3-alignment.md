@@ -13,15 +13,28 @@
 | 이전 설계·교수 과제 원문 | [통합 원문](../raws/robotics_startup_agentic_rag_notion_integrated.md) 및 `docs/raws/` | 읽기 전용. 이전 제안의 이력과 v3에서 생략한 과제 요구를 보존 |
 | 파생 구현 가이드 | 이 폴더의 architecture/contracts/scoring/data-rag/delivery/decisions | v3 명시 목표와 승인 전 구현 제안을 구별. 원문을 조용히 수정하는 대체본이 아님 |
 
-우선순위는 **사용자가 전환 승인한 v3의 명시 방향 → 남은 세부 정책의 명시적 승인 → 해당 버전의 구현·검증**이다. [승인 근거 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)이 baseline 계속 구현 대신 v3 정합화를 승인했다. 전 후보 selector, 5 branch/6 dimension·atomic Business & Deal, Missing/N/A 규칙, 네 label·market/technology 40%, 두 loop 최대2회·Warning, 다섯 보고서 섹션이 새 구현 방향이다. baseline D01–D06·D08 APPROVED·D09 부분 APPROVED·D14 OPEN 원본 기록과 기존 코드는 역사·호환성으로 보존한다. 전환 승인을 DTO 전체 필드·selector 정렬·0분모·적용성·회계·Warning 상태/PDF·rubric·provider·corpus·실행 예산의 승인으로 확대하지 않는다. 세부 OPEN과 정확한 정책별 대체 범위는 [결정 목록](decisions.md)에서 추적한다. v3의 생략은 과제 요구 폐기가 아니므로 README·실제 역할·제출 파일명·DAY 3 일정은 이전 원문 §10에서 계속 추적한다.
+우선순위는 **사용자가 전환 승인한 v3의 명시 방향 → 남은 세부 정책의 명시적 승인 → 해당 버전의 구현·검증**이다. [승인 근거 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)이 baseline 계속 구현 대신 v3 정합화를 승인했다. 전 후보 selector, 5 branch/6 dimension·atomic Business & Deal, Missing/N/A 규칙, 네 label·market/technology 40%, 두 loop 최대2회·Warning, 다섯 보고서 섹션이 새 구현 방향이다. baseline D01–D06·D08 APPROVED·D09 부분 APPROVED·D14 OPEN 원본 기록과 기존 코드는 역사·호환성으로 보존한다. 전환 승인만으로 상세 승인을 추정하지 않는다. 이후 #82의 명시 운영 승인과 사전 무작위 선정 승인은 아래 최신 snapshot과 결정 목록에 별도로 기록한다. 실제 rubric rule·PDF·provider·corpus·live 예산은 여전히 OPEN이다. 세부 OPEN과 정확한 정책별 대체 범위는 [결정 목록](decisions.md)에서 추적한다. v3의 생략은 과제 요구 폐기가 아니므로 README·실제 역할·제출 파일명·DAY 3 일정은 이전 원문 §10에서 계속 추적한다.
 
 표지의 **울산 4반 2조 / 김근홍·정순욱·허지원·심혁·박태준·한유진**은 v3가 제공한 metadata다. 실제 역할·GitHub 계정 매핑·기여량 또는 달력상 제출일은 제공하지 않는다.
 
 ## 2. 현재 통합 cutoff와 historical GitHub snapshot
 
-### 이번 upstream 통합 기준 — 24eaa36
+### 최신 supplied snapshot 및 pinned 통합 — 906312a
 
-충돌 해소 통합 기준은 `24eaa366f9ef0b3dce64b7d698542426878e45c7`다. 앞선 `c5a30f3`에 #6/PR #37(`b8eef06`)과 #68/PR #69(`1f23e09`), 이어 #8/PR #70·#12/PR #71·#21/PR #72가 추가된 Git 이력·코드를 확인했다. 이 cutoff 이후 main/이슈 상태를 추정하지 않는다. 아래 과거 API snapshot·44개 이슈 표는 그대로 역사 자료이며 현재 열린 작업 수를 뜻하지 않는다.
+현재 충돌 해소 기준은 `906312ae91a1d0473100c2a8a94029d52ac7c9fe`다. 로컬 HEAD `0be6bd0`과의 merge-base는 `24eaa366f9ef0b3dce64b7d698542426878e45c7`이며, 이 문서에서 moving main을 추정하지 않는다. 다음은 부모가 제공한 2026-09-30 후속 API snapshot과 해당 통합 코드 대조다. **열린 이슈는 29개**이며 이전 34개/44개 snapshot과 48개 영향표 행은 historical이다.
+
+- #73/PR #74는 **MERGED 2026-09-30T03:36:34Z**, head `45bef02f3cff8977fdabe383c1b5674f918d83fe`, merge `906312a`다. [#35 병합 가용성 기록 comment 5903578240](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5903578240)과 구별해 실제 `contracts/v3.py`도 확인했다. 독립 namespace의 세 상태·atomic EvaluationBranchResult·Decimal 점수/coverage 관측·네 label 구조다. 기존 public DTO/State/reducer를 대체하지 않으며 계산·selector·0분모 controller·Warning/live 연결은 없다.
+- #17/PR #77은 MERGED, head `077d9ed527c6ac22281e34f2973e74c407cbb38b`다. dedup 후 상한 초과 시 `CandidateLimitPolicy` 주입 경계와 선택 검증만 제공한다. 상한 이내는 모두 유지, 초과·정책 없음은 CandidateLimitUnresolved. **기본 무작위 선정기는 미구현**이다.
+- #22/PR #76은 baseline `evaluate_dimension` wrapper, #18/PR #79는 fixture 조사/Eligibility, #19/PR #80은 fixture 검색·GuardedRetriever/EvidenceCollector, #23/PR #86은 fixture/baseline 후보 Graph와 nullable `report_input` 인계, #26/PR #78은 ReportContext 조립, #27/PR #83은 baseline SV01–SV09 Structural Validator를 제공한다. 후보 Graph의 첫 추천 인계는 현재 호환성 코드이지 새 v3 방향이 아니다. CLI·생성/Judge·실 PDF·live·v3 runtime wiring은 별도다.
+- [#35 comment 5903505208](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5903505208)와 [#82 본문](https://github.com/rice-steamed-water/skala-rag/issues/82)은 추가 운영 규칙의 **명시 승인**이다. 자료 부재=missing, N/A=적용 사유+승인 rule+Evidence; 0분모=점수 미생성+후보 오류/archive/advance; 최종 selector=적격·정상 평가의 RECOMMEND_PRIORITY→RECOMMEND→normalized_score DESC→weighted_missing_pct ASC→원본 candidate_id ASC; all-WATCHLIST/PASS=무선택 비교 보고서다. 최초 제외 추가 Evidence2회·요청 전 차감·empty/failure 소비·평가 후 조사 없음, 최초 제외 구조/의미 공유 수정2회·소진 completed Warning/현재 draft·findings/final 금지/CLI2·context 파손 failed, 23 ID·비중·80/70/60·30%·40%·exact 비교도 승인 범위다.
+- [#35 comment 5903574761](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5903574761)(2026-09-30T03:39:05Z)은 **평가 전 조사·평가 대상 집합의 무작위 선정** 승인이다. 상한 적용 시 남길 집합도 포함하며 단순 처리 순서 shuffle이 아니다. 정규화/dedup·선정 후 Eligibility를 유지하고 최종 selector는 무작위로 바꾸지 않는다. 새 상한·난수 알고리즘/seed·replay·보충 선정은 OPEN, RNG 주입·모집단/선정/제외 기록은 구현 제안이다.
+- #82/PR #85는 **OPEN Draft**, head `05bc4318abee114b4adc85de73a61f04b7e9a778`, mergedAt=null이다. 별도 config/typed loader/fixture 범위이며 runtime 연결 작업이 아니다. 이 통합 기준에 포함되지 않으며 미병합 코드나 API를 가져오지 않는다.
+
+승인 provenance와 정확한 대체 범위는 [V3-OPERATIONS 및 V3-PRE-EVALUATION-RANDOM 기록](decisions.md)에 있다. 실제 rule 목록/rubric 품질·Evidence gate·PDF·provider/corpus/live 예산 등 남은 OPEN은 후속 구현 gate이며 #35 문서 완료를 차단하는 새 구현 과제가 아니다.
+
+### 이전 upstream 통합 기준 — 24eaa36 (historical)
+
+이전 충돌 해소 통합 기준은 `24eaa366f9ef0b3dce64b7d698542426878e45c7`였다. 앞선 `c5a30f3`에 #6/PR #37(`b8eef06`)과 #68/PR #69(`1f23e09`), 이어 #8/PR #70·#12/PR #71·#21/PR #72가 추가된 Git 이력·코드를 확인했다. 이 cutoff 이후 main/이슈 상태를 추정하지 않는다. 아래 과거 API snapshot·44개 이슈 표는 그대로 역사 자료이며 현재 열린 작업 수를 뜻하지 않는다.
 
 | 통합된 PR / 이슈 | 현재 코드·문서 범위 | v3 전환 경계 |
 | --- | --- | --- |
@@ -36,11 +49,11 @@
 
 #5 DTO/#7 State/#9 draft catalog 위에 이 구현이 추가되었다. 업무 Graph·CLI·live RAG·평가 agent·보고서 출력이나 v3 세부 정책 승인이 완료된 것은 아니다. v3 전환 방향의 별도 사용자 승인은 §1과 구별한다. 이 문서 통합은 upstream 코드·tests·configs를 수정하지 않는다. 최종 delivery head·gate·리뷰 결과는 PR 검증 기록에서 별도로 보고한다.
 
-### 후속 승인·작업 snapshot — PR36 Ready 준비 시점
+### 이전 후속 승인·작업 snapshot — 34개 OPEN 당시 (historical)
 
 2026-09-30의 후속 supplied snapshot은 열린 이슈 34개다. 아래 과거 44개 열린 이슈와 48개 영향표 행은 역사 자료로 그대로 보존하며 현재 수량으로 읽지 않는다. #35 comment 5902877317의 2026-09-30T02:29:07Z 사용자 전환 승인은 §1 및 별도 V3-TRANSITION 기록에 반영했다.
 
-- #73 / PR #74: 독립 `skala_rag.contracts.v3` 구조 DTO·atomic branch·offline fixture 후속 작업. snapshot의 PR 상태는 OPEN, head `97ab903c14e1d2635735509fdbbba9e8300b3397`, mergedAt=null이다. 이는 제안/진행 중 계약이지 이 문서의 통합 cutoff에 구현된 public API가 아니다. 기존 baseline DTO·State를 바꾸거나 그 PR의 코드를 가져오지 않는다. 정책 계산·selector·Warning enum·live 예산은 그 구조 작업으로 승인되지 않는다.
+- #73 / PR #74: 독립 `skala_rag.contracts.v3` 구조 DTO·atomic branch·offline fixture 후속 작업. 당시 snapshot의 PR 상태는 OPEN, head `97ab903c14e1d2635735509fdbbba9e8300b3397`, mergedAt=null이다. 이는 당시 제안/진행 중 계약이며 당시 cutoff에는 public API가 아니었다. 현재는 위 906312a 통합 범위가 우선한다. 기존 baseline DTO·State를 바꾸거나 그 PR의 코드를 가져오지 않는다. 정책 계산·selector·Warning enum·live 예산은 그 구조 작업으로 승인되지 않는다.
 - #67: #53의 재무 helper 이후 실제 IR/공시 Evidence를 T21 검증에 연결하는 후속 작업이다. 승인된 자료·#43 provider/예산 gate·#50 추출 연계가 필요하며 재무 rubric 승인을 대신하지 않는다.
 
 ### 이전 API 조회 snapshot — 85fa030 (historical)
@@ -77,16 +90,16 @@
 | 표지 L227–229; A-1 L240; A-2 L256 | Physical AI / Robotics, LangGraph Multi-Agent Agentic RAG; 비상장·Seed~C·Exit 미완료·최소 Evidence 확보 가능 | [문서 홈](../README.md), [scoring §1](scoring.md), delivery §7. 최소 Evidence gate는 Coverage와 별도 D05·D06; 역할·기한 D10·D11 |
 | B-1 L291, 특히 L355–363·482–497 | Evidence Research가 초기/gap RAG·Web/API 수집을 모두 담당; 평가/보고서는 검색 안 함 | 별도 Targeted Research 책임 제거 → architecture §1–§3, contracts §7, data-rag §1. T07/T13 |
 | B-1 L408–423; D-2 L1307–1319 | Founder/Market/Technology/Moat/Business & Deal 다섯 branch; 마지막은 실적+투자조건 | 직렬 Deal Terms 제거 → contracts §4/§6/§7의 atomic 두-dimension payload, architecture §4. D04; T01/T06/T22 |
-| B-1 L442–449; D-3 L1341–1359 | 모든 후보 검증·적격 후보 평가 후 selector. 무적격은 selected=None+사유 보고서 | 첫 추천 조기종료 제거 → architecture §2/§5, contracts SelectionResult/ReportInput, scoring §5. D03 순위·동점·all-WATCHLIST/PASS·성공 평가 없음 OPEN; T08/T09 |
+| B-1 L442–449; D-3 L1341–1359 | 모든 후보 검증·적격 후보 평가 후 selector. 무적격은 selected=None+사유 보고서 | 첫 추천 조기종료 제거 → architecture §2/§5, contracts SelectionResult/ReportInput, scoring §5. D03 순위·원본 candidate_id tie-break·all-WATCHLIST/PASS 무선택은 #82 승인; 성공 평가 없음의 payload는 후속; T08/T09 |
 | B-2 L502–620 | Primary RAG, 문서 우선순위, 전체 200페이지, 문서별 chunk | data-rag §1/§3/§4. 공식 기업자료→논문/공공/시장→기사/인터뷰; 구조·슬라이드·표 맥락·청구항. D13; T11–T13 |
 | B-3 L623–837 | BGE-M3 1차 선택, e5/KURE 비교; 같은 Chunk/Query; Hit Rate@1/3/5·MRR·교차언어; dense 우선/hybrid 필요 시 | data-rag §5, D07. 이전 Jina/OpenAI 비교 중심은 과거 참고로 분리; 실측·라이선스/readiness 완료 주장 없음 |
 | C-1 L843–906 | 23개 criterion, 여섯 비중 5/30/25/20/10/10 | scoring §2 catalog 보존. D01·D14; T02 |
-| C-2 L909–961 | 1..5 비례 환산; 근거 부족을 N/A라고 표기 | scoring §3, contracts CriterionAssessment. C-3 해당 없음과 충돌하여 세 machine status 분리 제안(D05); T01 |
+| C-2 L909–961 | 1..5 비례 환산; 근거 부족을 N/A라고 표기 | scoring §3, contracts CriterionAssessment. C-3 해당 없음과 충돌하여 missing와 정당한 not_applicable 구분은 #82 승인(D05); T01 |
 | C-3 L964–1003 | Missing은 분모 포함; 해당 없음만 제외; 결측률≥30% 보류 | fixed100/N/A 미채택안 제거 → scoring §3/§4, contracts Coverage/ScoreSummary. normalized_score와 observed_score, weighted_missing_pct와 missing_weight 구별; 0분모 D05; T03 |
-| C-4 L1006–1069 | 네 label; market/technology만 적용가능 배점 대비 획득≤40% 보류 | 모든 영역의 관측 rating 평균 규칙 제거 → scoring §5, contracts labels/dimension_scores, delivery T03. 소수 구간·다중 reason D02 |
+| C-4 L1006–1069 | 네 label; market/technology만 적용가능 배점 대비 획득≤40% 보류 | 모든 영역의 관측 rating 평균 규칙 제거 → scoring §5, contracts labels/dimension_scores, delivery T03. exact 80/70/60 경계는 #82 승인; 대표 reason 표시 D02 OPEN |
 | D-1 L1075–1286 | State producer/consumer/reducer, 후보별 retry, workflow_status 세 값 | contracts §6의 단독 writer·branch/dimension key·불변 snapshot·참조 폐쇄성 보완. 새 enum 승인 아님; D04·D08; T05/T25 |
 | D-2 L1290–1335; D-3 L1363–1370 | Coverage 재조사 최대2회 후 부족해도 평가; 다섯 결과 fan-in | architecture §2/§5, delivery T07. 평가 후 Missing Check→research loop 제거; 회차/Company Research/네트워크 retry 계정 D08 |
-| D-3 L1373–1376 | 구조·의미 수정 최대2회 후 Warning과 현재 결과 반환 | 일괄 failed 종료안 수정 → contracts §5, architecture §5/§6, delivery T16. 결과/acceptance/publication 분리, status/CLI/manifest·layout D08/D09 OPEN |
+| D-3 L1373–1376 | 구조·의미 수정 최대2회 후 Warning과 현재 결과 반환 | 일괄 failed 종료안 수정 → contracts §5, architecture §5/§6, delivery T16. 결과/acceptance/publication 분리, completed Warning·CLI2·final 금지는 #82 승인; manifest 연결·layout D08/D09 OPEN |
 | E-1 L1391–1455; E 서문 L1382 | 정확한 다섯 목차, 전체≤5페이지·SUMMARY≤반 페이지 | delivery §5, contracts ReportContext, T14/T17. 실 PDF 측정·hash 일치 유지; 무적격/Warning 예외 D09 |
 | E-2 L1458 이후 | 기관 보고서·논문·웹 Reference, 실제 사용 자료만 | delivery §5, contracts §3/§5. Evidence↔Source↔REFERENCE 양방향 일치; T14/T23 |
 
@@ -99,6 +112,8 @@
 - 실제 PDF 분량·인용 검증, 재배포/200페이지/as_of/권한·비밀 보호, fixture와 실측 구별.
 
 ## 4. historical 열린 이슈 snapshot의 acceptance migration
+
+**즉시 적용할 후속 승인 안내:** 아래 48개 이슈 영향 행은 작성 당시 기록을 그대로 보존한다. 특히 바로 아래 #3 행의 “승인 전 OPEN 유지”는 당시 상태이며 현재 운영 규칙의 OPEN을 뜻하지 않는다. #35 comment 5903505208/#82의 운영 승인과 comment 5903574761의 사전 무작위 집합 선정이 이후 범위를 확정했다. 역사 표의 OPEN·미정·승인 전 표현보다 위 최신 snapshot과 decisions의 두 별도 승인 레코드가 우선한다. #17/#48의 상한 선정 방식은 이제 무작위이고, #29의 수정 소진 workflow/CLI는 completed+Warning/2다. 행 자체를 소급 재작성하거나 다른 담당 작업 완료를 선언하지 않는다.
 
 아래는 refresh 이전의 **28개(#3, #5–#30, #35) historical snapshot**이며, open-issue count/assignee 역시 §2의 과거 API snapshot 범위에 한정된다. 당시 assignee는 #3=`heojiwon2`, #5/#35=`luk0715`, #11=`XXXXXim`; 나머지는 미할당이었다. 이는 실제 수업 역할·실명 매핑이 아니다. 아래는 **필요한 후속 AC 변경**이지 이미 해당 이슈 본문을 수정/승인/완료했다는 기록이 아니다. 알림·PR 통합·read-back은 #35 상위 작업에서 처리한다.
 
@@ -163,7 +178,7 @@
 ## 5. 전환 시 검증과 남은 차단
 
 1. baseline 승인 기록은 보존하되 v3 목표 절에 고정100·모든 영역 저점수·첫 추천 종료·직렬 Deal·N/A 미채택을 섞지 않는다. 새 작업은 #35 사용자 승인에 따라 v3 방향으로 진행한다. 방향 승인을 미명시 세부의 일괄 승인으로 읽지 않으며 관련 PR 통합 시 적용 정책 버전과 정확한 대체 범위를 대조한다.
-2. D02–D06·D08의 남은 질문을 정책/DTO fixture로 구체화하고, 승인되지 않은 선택을 실제 기본값으로 설치하지 않는다. D07/D09/D12/D13의 live·제출 gate도 보존한다.
+2. V3-OPERATIONS의 승인 기대값과 사전 무작위 선정(T24)을 구별하여 검증하고, D02–D06·D08 중 실제로 남은 질문만 정책/DTO fixture로 구체화하며, 승인되지 않은 선택을 실제 기본값으로 설치하지 않는다. D07/D09/D12/D13의 live·제출 gate도 보존한다.
 3. [delivery §4](delivery.md)의 T01–T25는 목표 테스트다. #35의 문서 수치 계산·링크/정합성 검사는 구현 테스트·실 API·RAG 벤치마크·PDF 측정이 아니다.
 4. source hash/바이트 일치, 원 catalog 비중, 설명용 산술을 확인했다. 최종 문서 diff·링크·잔존 옛 지시 검색과 프로젝트 gate·독립 리뷰는 PR 검증란에서 해당 head의 실제 결과를 추적한다.
 5. `docs/raws/`, 보존 HTML, 협업문서, 애플리케이션·테스트·설정·의존성은 이 문서 변경으로 수정하지 않는다. main의 skeleton을 업무 구현으로, Draft PR을 병합/팀 승인으로 표시하지 않는다.

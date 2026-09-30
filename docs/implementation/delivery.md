@@ -2,9 +2,9 @@
 
 [문서 홈](../README.md) · [아키텍처](architecture.md) · [계약](contracts.md) · [결정 목록](decisions.md)
 
-**상태: v3 목표에 맞춘 실행 계획. baseline D01–D06·D08은 승인 기록으로 보존되며 v3 replacement 세부는 별도 승인 전까지 OPEN이다.** [v3](../design/design-v3.html)의 명시 목표·현재 main 구현·OPEN 정책은 [정합화 기록](design-v3-alignment.md)으로 구별한다. 아래 WP는 구현 묶음이지 사람·역할 배정이 아니다. 실제 작업은 GitHub 이슈로 나누고 assignee 규칙을 따른다([협업 규칙](../../CONTRIBUTING.md#이슈로-일하기)).
+**상태: v3 목표에 맞춘 실행 계획. baseline D01–D06·D08은 이력으로 보존한다. #82 운영 규칙과 사전 무작위 선정은 승인되었고 남은 세부만 OPEN이다.** [v3](../design/design-v3.html)의 명시 목표·현재 main 구현·OPEN 정책은 [정합화 기록](design-v3-alignment.md)으로 구별한다. 아래 WP는 구현 묶음이지 사람·역할 배정이 아니다. 실제 작업은 GitHub 이슈로 나누고 assignee 규칙을 따른다([협업 규칙](../../CONTRIBUTING.md#이슈로-일하기)).
 
-**현재 구현 방향 — v3 전환 승인:** [사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)에 따라 새 작업은 기존 baseline의 계속 구현이 아니라 v3에 정합화한다. baseline 코드·승인 기록은 호환성과 이력으로 보존하며 새 구현의 우선 방향이 아니다. 방향 승인은 상세 정책·DTO 전체 필드·provider·corpus·시간/비용 예산 승인이나 구현 완료가 아니다. 남은 세부 선택만 [결정 목록](decisions.md)의 OPEN gate를 따른다.
+**현재 구현 방향 — v3 전환 승인:** [사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)에 따라 새 작업은 기존 baseline의 계속 구현이 아니라 v3에 정합화한다. baseline 코드·승인 기록은 호환성과 이력으로 보존하며 새 구현의 우선 방향이 아니다. 방향 승인에 이어 #82 및 #35 comment 5903505208에서 N/A·0분모·최종 selector·재조사 회계·Warning 종료의 운영 규칙을 별도 승인했다. #35 comment 5903574761의 무작위 선정은 평가 전 조사·평가 대상 집합에만 적용하며 최종 selector는 무작위가 아니다. 승인과 구현 완료는 별개이며 rubric 상세·provider·corpus·시간/비용 예산 등 남은 세부 선택만 [결정 목록](decisions.md)의 OPEN gate를 따른다.
 
 ## 1. 작업 패키지
 
@@ -23,7 +23,7 @@
 
 채택한 디렉터리 구조와 공통 파일 규칙은 [CONTRIBUTING.md](../../CONTRIBUTING.md#폴더-구조)에 있다.
 
-`pyproject.toml`은 Python `>=3.11`과 직접 의존성·uv/ruff/pytest를 명시하고 `uv.lock`이 해석 결과를 고정한다. 통합 기준 `c5a30f3`에는 #5 구조 DTO, #7 State/factory, #9 fixture 전용 draft catalog 외에 #15/PR #42의 ID reducer와 State Annotated 연결, #16/PR #64의 baseline `aggregate_scores`·`decide`, #53/PR #66의 재무 단위·기간·파생값 helper가 있다. 집계는 고정100·observed/missing·여섯 영역 관측 rating 저점수·세 label baseline이며 v3 N/A 분모·핵심차원40%·네 label 구현이 아니다. 업무 Graph wiring·CLI·live RAG·평가 agent·보고서 출력은 여전히 구현 목표다. 설치·검증 명령은 [루트 README](../../README.md), cutoff는 [정합화 기록](design-v3-alignment.md)을 따른다.
+`pyproject.toml`은 Python `>=3.11`과 uv/ruff/pytest를 명시하고 `uv.lock`이 해석 결과를 고정한다. pinned 통합 기준 `906312a`에는 baseline DTO/State/reducer/catalog/점수·재무 helper·DTO adapter뿐 아니라 #17 발견/Normalize, #18 fixture 조사·Eligibility, #19 GuardedRetriever/EvidenceCollector, #22 dimension 평가 wrapper, #23 fixture 후보 Graph, #26 ReportContext, #27 baseline Structural Validator 및 #73/PR #74의 독립 `contracts.v3` 구조 DTO가 있다. #23은 baseline 첫 추천 인계이며 v3 전 후보 selector가 아니다. v3 구조 DTO는 계산·selector·0분모/Warning controller·State/Graph 연결을 실행하지 않는다. CLI·보고서 생성/Judge·실 PDF·live RAG는 여전히 목표다. 실제 API는 [공통 계약](contracts.md), cutoff는 [정합화 기록](design-v3-alignment.md)을 따른다.
 
 #9/PR #38의 `scoring.catalog.load_policy`, `configs/scoring.draft.json`과 계산 fixture도 기준 main에 있다. fixture 전용 draft이며 v3 `aggregate_scores`·`decide` 구현이나 정책 승인으로 보지 않는다.
 
@@ -35,7 +35,7 @@ Vector store, LLM provider/model, 최종 embedding, PDF renderer는 미정이다
 
 ### M0 — 공통 계약과 정책 합의
 
-**선행:** v3 전환 방향은 승인되었다. baseline을 계속 구현하는 대신 새 작업을 v3에 맞춘다. M0에서는 selector 순위·동점, N/A 적용성·0분모, 부분 결측, eligibility Evidence gate, schema/catalog 버전, D14 rubric, 회차 회계와 Warning 상태 매핑 등 남은 세부만 승인한다. D09의 다섯 목차 방향은 승인되었지만 mode 예외·구조 검증 상세는 해당 보고서 fixture 전, renderer는 M3 전 합의한다. D07·D12·D13·provider·corpus·실행 예산은 해당 live 기능 전에 해소한다. 미승인 선택은 가상 정책으로만 검증하고 live 기본값으로 설치하지 않는다.
+**선행:** v3 전환 방향은 승인되었다. baseline을 계속 구현하는 대신 새 작업을 v3에 맞춘다. selector 순위·원본 candidate_id tie-break·missing/정당한 N/A·0분모 오류·exact 경계·추가 조사/수정 회계·completed Warning/CLI2는 #82 승인이다. M0의 남은 항목은 applicability rule/품질·대표 reason 표현·eligibility Evidence gate·runtime schema 연결·D14 rubric·사전 무작위 선정의 새 후보 수/난수/seed·live 예산이다. D09의 다섯 목차 방향은 승인되었지만 mode 예외·구조 검증 상세는 해당 보고서 fixture 전, renderer는 M3 전 합의한다. D07·D12·D13·provider·corpus·실행 예산은 해당 live 기능 전에 해소한다. 미승인 선택은 가상 정책으로만 검증하고 live 기본값으로 설치하지 않는다.
 
 - WP1: schema, catalog interface, mock Tool/LLM, failure 타입, 최소 실행환경 설정.
 - WP4/WP5: 23개 criterion rubric, missing/not_applicable 조건, 정규화·네 label·핵심차원 fixture.
@@ -49,7 +49,8 @@ Vector store, LLM provider/model, 최종 embedding, PDF renderer는 미정이다
 네트워크·유료 모델 없이 다음을 한 번 끝까지 연결한다.
 
 ```text
-모든 fixture 후보 → 후보별 적격성/근거 → Coverage 재조사(최대2회)
+fixture 모집단 → 정규화/dedup → 주입 무작위 정책으로 조사 대상 집합 선정
+→ 선정된 모든 후보의 적격성/근거 → Coverage 재조사(최대2회)
 → 5개 branch(Business & Deal 포함)의 여섯 차원 → 집계/네 label → 다음 후보
 → 후보 소진 → 주입 selection policy → fixture 보고서
 → 구조·의미 검증 stub / 최대2회 수정 → 결과·Warning·검증 기록 구분 저장
@@ -85,20 +86,20 @@ WP1이 예산 제한을 적용한 runner로 통합한다. WP6는 real Report Gen
 | --- | --- | --- | --- |
 | T01 | schema / 관측·결측·해당 없음 | observed의 rating·근거 필수, missing/not_applicable rating=null과 각 사유·적용성 근거, 없는 ID 거절 | WP1/WP4 |
 | T02 | policy / 가중치 | criterion ID 유일, 합 100, 영역 합 일치 | WP5 |
-| T03 | policy / 경계·우선순위 | scoring 설명용 예시를 조건부 fixture로 구현; 정규화와 원배점 분리, 네 label·소수·30%·핵심40%·비핵심 저점수·부분핵심 Missing·0분모 guard | WP5 |
+| T03 | policy / 경계·우선순위 | scoring 승인 운영 규칙의 설명용 예시를 fixture로 구현(N/A는 승인 rule 전제); 정규화와 원배점 분리, 네 label·소수·30%·핵심40%·비핵심 저점수·부분핵심 Missing·0분모 점수 미생성·후보 오류/archive/advance | WP5 |
 | T04 | identity / 회사·단계 | 동명 기업 분리, TIPS/unknown 자동 적격 금지, Exit 제외 | WP2 |
 | T05 | merge / 재실행 | Web→RAG 재발견은 하나의 Evidence와 두 provenance로 병합; confidence·criterion 등 해석 차이는 병합 규칙 적용; 재삽입 멱등, 식별 core 충돌은 오류, 기존 snapshot 불변 | WP1/WP3 |
 | T06 | graph / 병렬 합류 | 다섯 branch terminal result→여섯 dimension 성공 승격, business_deal은 두 payload 필수; 이전 세대·다른 후보 무효 | WP1 |
-| T07 | graph / 재조사 | Coverage→동일 Evidence Research 최대2회 후 평가; 평가 후 gap으로 재진입 없음; 초기 제외/오류회차 등 주입 정책 확인; 후보별 count·이력 격리/보존 | WP1 |
+| T07 | graph / 재조사 | Coverage→동일 Evidence Research 최대2회 후 평가; 평가 후 gap으로 재진입 없음; 최초 수집 제외 추가2회·요청 전 차감·empty/failure 소비 확인; 후보별 count·이력 격리/보존 | WP1 |
 | T08 | graph / 후보 이동 | 네 label 모두 archive/advance; 첫 RECOMMEND 뒤 후속 RECOMMEND_PRIORITY도 처리; index 한 번 증가, selector는 전 후보 소진 후만 실행 | WP1 |
-| T09 | graph / selector·고갈 | 승인/가상 selection policy에 따른 순서 불변·동점·전부 WATCHLIST/PASS·성공 평가 없음. 무적격은 None+사유 보고서; 0건/전부 부적격/unknown/기술실패 구별 | WP1/WP6 |
+| T09 | graph / selector·고갈 | 승인 순위(RECOMMEND_PRIORITY→RECOMMEND, normalized_score DESC, weighted_missing_pct ASC, 원본 candidate_id ASC)·순서 불변·전부 WATCHLIST/PASS 무선택 비교 보고서·성공 평가 없음. 무적격은 None+사유 보고서; 0건/전부 부적격/unknown/기술실패 구별 | WP1/WP6 |
 | T10 | adapter / 실패 | 0건/401·403/timeout 구별, bounded retry, 인증 실패 반복 금지 | WP2/WP3 |
 | T11 | corpus / 페이지 | 전체 200 허용, 201 거절, 미상·미승인·교체 문서 검색 제외 | WP3 |
 | T12 | RAG / 귀속·metadata filter | 같은 query·기업·corpus에 서로 다른 as_of를 전달해 cutoff와 cache 격리 확인; 다른 기업/미허용 Source/날짜 미상 미래 snapshot 제외. schema 확장 후에는 doc_type/year filter, unknown metadata, 1→2→3 priority fallback과 returned Chunk/cache key 격리를 fixture로 확인 | WP3/WP4 |
 | T13 | RAG / 실사용 | 실제 retrieval_id/chunk_id → rag provenance → 평가 snapshot의 Evidence → 기술 평가 → 보고서 citation; 사후 rag 표기만으로 통과 금지 | WP3/WP6 |
 | T14 | report / 인용 | Evidence·Source 연결, 실제 인용과 REFERENCE 정확히 일치 | WP6 |
 | T15 | report / 사실성 | 없는 수치·출처·단위 혼합·추정의 사실화 탐지 | WP5/WP6 |
-| T16 | report / 수정 예산 | 구조+의미 공유2회 후 Warning+현재 draft/findings, 미검증 final 승격 금지; 최초 생성 제외·layout 포함은 주입 정책별 검증, fatal context 오류 별도 | WP1/WP6 |
+| T16 | report / 수정 예산 | 구조+의미 공유2회 후 Warning+현재 draft/findings, 미검증 final 승격 금지; 최초 생성 제외 승인, 소진 workflow=completed·CLI exit=2, context/upstream 파손=failed; layout 포함은 OPEN | WP1/WP6 |
 | T17 | PDF / 형식 | 실제 PDF ≤5페이지, SUMMARY ≤반 페이지, 표·인용 잘림 없음 | WP6 |
 | T18 | security / untrusted content | 문서의 prompt injection 무시, key 누출 없음, private URL fetch 차단 | WP1/WP3 |
 | T19 | reproducibility / 재실행 | lock·설정·corpus·모델·prompt·policy 기록으로 clean run 가능 | 전원 |
@@ -106,10 +107,10 @@ WP1이 예산 제한을 적용한 runner로 통합한다. WP6는 real Report Gen
 | T21 | finance / 런웨이 단위 | 월·연 현금소모 구별, 환산 provenance 필수, 0 이하 분모·기간 불일치에서 임의 개월 수 생성 금지 | WP5 |
 | T22 | graph / 평가 failure | 4 success+1 failure 및 Business & Deal의 traction만/투자조건만 유효한 경우 전부 집계 없이 archive → advance; missing과 구별 | WP1/WP4/WP5 |
 | T23 | report / context 참조 | 누락된 Source·다른 세대 점수·없는 decision ID 거절; 실제 payload만으로 생성/검증 가능, upstream 오류는 fail | WP1/WP6 |
-| T24 | discovery / 출처 전달 | DiscoveryBundle 모든 discovery_source_ids 해소; 후속 Company Research 실패 후에도 발견 Source·이력 보존 | WP1/WP2 |
+| T24 | discovery / 출처 전달 | DiscoveryBundle 출처 해소·dedup 후 무작위로 조사 대상 집합 선정(단순 순서 shuffle 아님), 상한·중복/미지 ID 거절·Eligibility 유지·선정/제외 출처 보존. 주입 RNG의 replay metadata는 제안 fixture로 별도 검사; 기본 random 구현 존재로 오인 금지 | WP1/WP2 |
 | T25 | snapshot / 불변성 | 근거·provenance 추가 후 이전 snapshot 불변, 새 세대에서만 보임; superseded/파생 입력 무효화·참조 폐쇄성 확인; 누락·적격성 근거 무효화는 SNAPSHOT_INVALID로 해당 후보만 archive | WP1/WP3 |
 
-T03의 0분모/소수, T09의 순위·동점, T16의 status/CLI 기대값은 **OPEN 정책별 조건부 테스트**다. 임의 기대값으로 승인하지 않는다. 정책 없는 live를 차단하는 테스트와, 제안 정책이 주입됐을 때의 경로 테스트를 분리한다. 기존 smoke·DTO·baseline 집계·reducer·재무 helper 테스트는 각 구현 범위의 증거이며 이 v3 T01–T25 전체 구현 증거가 아니다.
+T03의 0분모 후보 오류/exact 경계, T09의 최종 순위·원본 candidate_id tie-break·무선택 비교 보고서, T16의 completed Warning/CLI2 기대값은 **#82 승인 정책 테스트**다. T24의 사전 무작위 집합 선정도 승인 범위다. 새 후보 수·구체 난수/seed·rubric rule·PDF/live 예산 등 남은 OPEN의 차단 테스트와 구현 제안 fixture는 별도로 표시한다. 기존 smoke·DTO·baseline 집계·reducer·재무 helper 테스트는 각 구현 범위의 증거이며 이 v3 T01–T25 전체 구현 증거가 아니다.
 
 unit/contract 테스트는 네트워크 없이 실행한다. live integration은 명시적 설정과 예산이 있을 때만 실행하고, 미설정 시 skipped 사유를 남긴다. 외부 LLM 출력의 완전 동일성은 보장하지 않지만, 점수 함수·분기·근거 추적 계약은 동일하게 검증한다.
 
@@ -117,7 +118,7 @@ unit/contract 테스트는 네트워크 없이 실행한다. live integration은
 
 ### 역사적 baseline — D09 부분 승인 보존
 
-[보고서 계약](reporting.md)의 single_candidate/no_recommendation 각각 7개 섹션, 인용 token·서지 미상 표기·SV01–SV09 구조 검증은 2026-09-30 xxhigh가 부분 승인했다. 승인 기록은 [D09](decisions.md)에 보존한다. 아래 v3 다섯 목차·selector·Warning 방향은 #35의 별도 사용자 전환 승인에 근거한다. 과거 D09 승인의 자동 확장이 아니며 mode 예외·구조 검증·Warning 세부는 OPEN이다. PDF 구현 선택은 OPEN이다.
+[보고서 계약](reporting.md)의 single_candidate/no_recommendation 각각 7개 섹션, 인용 token·서지 미상 표기·SV01–SV09 구조 검증은 2026-09-30 xxhigh가 부분 승인했다. 승인 기록은 [D09](decisions.md)에 보존한다. 아래 v3 다섯 목차·selector·Warning 방향은 #35의 별도 사용자 전환 승인에 근거한다. 과거 D09 승인의 자동 확장이 아니며 Warning 종료 운영 규칙은 #82 승인이고 mode별 섹션 예외·구조 검증 상세는 OPEN이다. PDF 구현 선택은 OPEN이다.
 
 ### v3 E-1 다섯 목차 — 승인된 새 구현 방향
 
@@ -145,8 +146,8 @@ v3는 본문 약 4~4.5페이지를 목표로 둔다. 목표 분량 합이나 Mar
 - 점수: 원배점 observed_score·applicable_weight, normalized_score, missing_weight·weighted_missing_pct, N/A 항목·차원별 비율·모든 보류 사유를 구별한다. 네 label은 원 Decision과 일치해야 한다.
 - 모든 수치·기업 사실: Evidence로 되돌아가는 인용을 둔다. LLM의 평가는 사실과 구별한다.
 - 추정값: 방법·입력·가정을 밝히고 직접 관측과 구분한다.
-- 무적격: selected=None과 사유 있는 종료 보고서를 만든다. 회사가 선택된 것처럼 빈 섹션을 채우지 않는다. all-WATCHLIST/PASS의 선택 및 no_recommendation mode는 D03, 무적격/Warning의 E-1 섹션 예외는 D09 OPEN이다. 정책 주입 fixture에서는 전 후보 조사 범위·제외/보류/비추천/오류를 표로 구분하는 안을 검증한다.
-- Warning: 현재 draft·findings·미실행 검사를 명시하고 validated final과 다른 artifact로 반환한다. workflow_status·CLI exit·manifest 매핑을 정하기 전 완료/발행 성공으로 표시하지 않는다.
+- 무적격: selected=None과 사유 있는 종료 보고서를 만든다. 회사가 선택된 것처럼 빈 섹션을 채우지 않는다. all-WATCHLIST/PASS는 선택 없는 비교 보고서가 승인되었다. 구체 mode 연결과 무적격/Warning의 E-1 섹션 예외는 D09에서 구체화한다. 정책 주입 fixture에서는 전 후보 조사 범위·제외/보류/비추천/오류를 표로 구분하는 안을 검증한다.
+- Warning: 현재 draft·findings·미실행 검사를 명시하고 validated final과 다른 artifact로 반환한다. 수정 소진은 workflow_status=completed·CLI exit=2이며 검증/발행 성공은 아니다. manifest 구체 필드 연결은 후속이다.
 - 조사 실패: 시장에서 투자 기회가 없다는 결론으로 바꾸지 않는다.
 
 Reference 양식은 v3 E-2와 이전 원문 §9.3을 따른다.
