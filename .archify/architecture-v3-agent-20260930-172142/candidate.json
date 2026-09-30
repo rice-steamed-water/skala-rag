@@ -1,0 +1,1051 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "LangGraph v3 실행 흐름 — 구현과 목표",
+    "output": ".archify/architecture-v3-agent-20260930-172142/v3-agent.html",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "repository": {
+      "url": "git@github.com:rice-steamed-water/skala-rag.git",
+      "revision": "12d37646bf1d34f0663522567efaf61f122410be",
+      "link_mode": "local-only"
+    }
+  },
+  "components": [
+    {
+      "id": "input",
+      "type": "frontend",
+      "label": "입력 / CLI",
+      "sublabel": "주제 · 정책 · as_of",
+      "tag": "구현 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/cli.py",
+          "line": 31,
+          "end_line": 68
+        }
+      ],
+      "pos": [
+        20,
+        65
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "discover",
+      "type": "backend",
+      "label": "후보 발견",
+      "sublabel": "현재: synthetic 주입",
+      "tag": "구현 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/graph/candidates_v3.py",
+          "line": 201,
+          "end_line": 219
+        }
+      ],
+      "pos": [
+        285,
+        65
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "normalize",
+      "type": "backend",
+      "label": "정규화 / dedup",
+      "sublabel": "별도 Normalize API",
+      "tag": "구현 · 주입 경계",
+      "sources": [
+        {
+          "path": "src/skala_rag/agents/discovery.py",
+          "line": 1,
+          "end_line": 17
+        }
+      ],
+      "pos": [
+        550,
+        65
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "sample",
+      "type": "security",
+      "label": "대상 집합 무작위 선정",
+      "sublabel": "순서 shuffle과 다름",
+      "tag": "목표 · seed/상한 OPEN",
+      "sources": [
+        {
+          "path": "docs/implementation/architecture.md",
+          "line": 82,
+          "end_line": 90
+        }
+      ],
+      "pos": [
+        815,
+        65
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "iterate",
+      "type": "backend",
+      "label": "후보 Iterator",
+      "sublabel": "선정 집합 모두 처리",
+      "tag": "구현 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/graph/candidates_v3.py",
+          "line": 239,
+          "end_line": 265
+        }
+      ],
+      "pos": [
+        815,
+        275
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "company",
+      "type": "backend",
+      "label": "기업 조사",
+      "sublabel": "profile + 적격 근거",
+      "tag": "구현 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/graph/candidates_v3.py",
+          "line": 239,
+          "end_line": 255
+        }
+      ],
+      "pos": [
+        550,
+        275
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "eligible",
+      "type": "security",
+      "label": "Eligibility",
+      "sublabel": "eligible만 평가 진입",
+      "tag": "구현 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/graph/candidates_v3.py",
+          "line": 245,
+          "end_line": 265
+        }
+      ],
+      "pos": [
+        285,
+        275
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "collect",
+      "type": "backend",
+      "label": "Evidence Research",
+      "sublabel": "RAG / Web / API",
+      "tag": "목표 · CLI는 fixture",
+      "sources": [
+        {
+          "path": "docs/implementation/architecture.md",
+          "line": 92,
+          "end_line": 96
+        }
+      ],
+      "pos": [
+        20,
+        275
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "coverage",
+      "type": "security",
+      "label": "Coverage",
+      "sublabel": "covered / missing / N/A",
+      "tag": "구현 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/graph/candidates_v3.py",
+          "line": 266,
+          "end_line": 301
+        }
+      ],
+      "pos": [
+        20,
+        485
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "retry",
+      "type": "messagebus",
+      "label": "부족근거 재조사",
+      "sublabel": "추가 ≤2 · 요청 전 차감",
+      "tag": "목표 · controller 미연결",
+      "sources": [
+        {
+          "path": "docs/implementation/architecture.md",
+          "line": 136,
+          "end_line": 151
+        }
+      ],
+      "pos": [
+        285,
+        385
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "freeze",
+      "type": "database",
+      "label": "Snapshot 동결",
+      "sublabel": "Evidence 참조 폐쇄 검증",
+      "tag": "구현 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/graph/candidates_v3.py",
+          "line": 302,
+          "end_line": 364
+        }
+      ],
+      "pos": [
+        550,
+        485
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "prepare",
+      "type": "security",
+      "label": "세대 검증 / Fan-out",
+      "sublabel": "같은 snapshot 복사본",
+      "tag": "구현 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/graph/evaluation_v3.py",
+          "line": 233,
+          "end_line": 259
+        }
+      ],
+      "pos": [
+        815,
+        485
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "founder",
+      "type": "backend",
+      "label": "Founder",
+      "sublabel": "창업자",
+      "tag": "병렬 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/graph/evaluation_v3.py",
+          "line": 198,
+          "end_line": 225
+        }
+      ],
+      "pos": [
+        20,
+        695
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "market",
+      "type": "backend",
+      "label": "Market",
+      "sublabel": "시장",
+      "tag": "병렬 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/graph/evaluation_v3.py",
+          "line": 198,
+          "end_line": 225
+        }
+      ],
+      "pos": [
+        285,
+        695
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "technology",
+      "type": "backend",
+      "label": "Technology",
+      "sublabel": "기술",
+      "tag": "병렬 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/graph/evaluation_v3.py",
+          "line": 198,
+          "end_line": 225
+        }
+      ],
+      "pos": [
+        550,
+        695
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "moat",
+      "type": "backend",
+      "label": "Moat",
+      "sublabel": "경쟁 우위",
+      "tag": "병렬 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/graph/evaluation_v3.py",
+          "line": 198,
+          "end_line": 225
+        }
+      ],
+      "pos": [
+        815,
+        695
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "business",
+      "type": "backend",
+      "label": "Business & Deal",
+      "sublabel": "traction + deal_terms",
+      "tag": "병렬 · atomic",
+      "sources": [
+        {
+          "path": "src/skala_rag/graph/evaluation_v3.py",
+          "line": 198,
+          "end_line": 225
+        }
+      ],
+      "pos": [
+        1010,
+        695
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "join",
+      "type": "security",
+      "label": "Evaluation Join",
+      "sublabel": "5 성공 → 6차원 함께 승격",
+      "tag": "구현 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/graph/evaluation_v3.py",
+          "line": 104,
+          "end_line": 152
+        }
+      ],
+      "pos": [
+        815,
+        905
+      ],
+      "size": [
+        185,
+        96
+      ]
+    },
+    {
+      "id": "aggregate",
+      "type": "backend",
+      "label": "점수 집계",
+      "sublabel": "missing 포함 · N/A 제외",
+      "tag": "구현 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/graph/candidates_v3.py",
+          "line": 407,
+          "end_line": 429
+        }
+      ],
+      "pos": [
+        550,
+        905
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "decision",
+      "type": "backend",
+      "label": "투자 판정",
+      "sublabel": "4 label · 순수 정책",
+      "tag": "구현 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/graph/candidates_v3.py",
+          "line": 430,
+          "end_line": 445
+        }
+      ],
+      "pos": [
+        285,
+        905
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "archive",
+      "type": "database",
+      "label": "Archive / Advance",
+      "sublabel": "성공·제외·오류 기록",
+      "tag": "구현 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/graph/candidates_v3.py",
+          "line": 180,
+          "end_line": 199
+        }
+      ],
+      "pos": [
+        20,
+        905
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "best",
+      "type": "security",
+      "label": "Best Selector",
+      "sublabel": "전 후보 종료 뒤 결정적 순위",
+      "tag": "구현 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/scoring/selector_v3.py",
+          "line": 34,
+          "end_line": 92
+        }
+      ],
+      "pos": [
+        285,
+        1115
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "context",
+      "type": "database",
+      "label": "ReportContext",
+      "sublabel": "고정 payload / hash",
+      "tag": "구현 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/reporting/v3_context.py",
+          "line": 26,
+          "end_line": 81
+        }
+      ],
+      "pos": [
+        550,
+        1115
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "generate",
+      "type": "backend",
+      "label": "보고서 생성",
+      "sublabel": "고정 context만 사용",
+      "tag": "구현 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/reporting/v3_pipeline.py",
+          "line": 192,
+          "end_line": 213
+        }
+      ],
+      "pos": [
+        815,
+        1115
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "structure",
+      "type": "security",
+      "label": "구조 검증",
+      "sublabel": "인용 · 목차 · 점수 보존",
+      "tag": "구현 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/reporting/v3_pipeline.py",
+          "line": 116,
+          "end_line": 189
+        }
+      ],
+      "pos": [
+        815,
+        1325
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "judge",
+      "type": "security",
+      "label": "Semantic Judge",
+      "sublabel": "현재 CLI는 stub",
+      "tag": "구현 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/reporting/v3_pipeline.py",
+          "line": 271,
+          "end_line": 311
+        }
+      ],
+      "pos": [
+        550,
+        1325
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "pdf",
+      "type": "backend",
+      "label": "PDF 생성 / 검증",
+      "sublabel": "실제 renderer · fixture",
+      "tag": "구현 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/fixture_reporting.py",
+          "line": 156,
+          "end_line": 173
+        }
+      ],
+      "pos": [
+        285,
+        1325
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "revise",
+      "type": "messagebus",
+      "label": "공유 수정 예산",
+      "sublabel": "최초 제외 ≤2회",
+      "tag": "구현 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/reporting/v3_pipeline.py",
+          "line": 330,
+          "end_line": 412
+        }
+      ],
+      "pos": [
+        20,
+        1325
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "warning",
+      "type": "security",
+      "label": "Completed + Warning",
+      "sublabel": "CLI 2 · final 발행 금지",
+      "tag": "구현 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/run_finalization.py",
+          "line": 119,
+          "end_line": 136
+        }
+      ],
+      "pos": [
+        20,
+        1535
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "complete",
+      "type": "database",
+      "label": "검사 통과 / 저장",
+      "sublabel": "CLI 0 · fixture_only",
+      "tag": "구현 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/run_finalization.py",
+          "line": 137,
+          "end_line": 153
+        }
+      ],
+      "pos": [
+        285,
+        1535
+      ],
+      "size": [
+        185,
+        82
+      ]
+    },
+    {
+      "id": "fatal",
+      "type": "security",
+      "label": "Failed / 진단 보존",
+      "sublabel": "context·실행 오류 / CLI 1",
+      "tag": "구현 · fixture",
+      "sources": [
+        {
+          "path": "src/skala_rag/run_finalization.py",
+          "line": 37,
+          "end_line": 108
+        }
+      ],
+      "pos": [
+        815,
+        1535
+      ],
+      "size": [
+        185,
+        82
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "input-discover",
+      "from": "input",
+      "to": "discover",
+      "variant": "default"
+    },
+    {
+      "id": "discover-normalize",
+      "from": "discover",
+      "to": "normalize",
+      "variant": "default"
+    },
+    {
+      "id": "normalize-sample",
+      "from": "normalize",
+      "to": "sample",
+      "variant": "dashed"
+    },
+    {
+      "id": "sample-iterate",
+      "from": "sample",
+      "to": "iterate",
+      "variant": "dashed"
+    },
+    {
+      "id": "iterate-company",
+      "from": "iterate",
+      "to": "company",
+      "variant": "default"
+    },
+    {
+      "id": "company-eligible",
+      "from": "company",
+      "to": "eligible",
+      "variant": "default"
+    },
+    {
+      "id": "eligible-collect",
+      "from": "eligible",
+      "to": "collect",
+      "variant": "default",
+      "label": "eligible"
+    },
+    {
+      "id": "eligible-archive",
+      "from": "eligible",
+      "to": "archive",
+      "variant": "default",
+      "label": "부적격 / unknown"
+    },
+    {
+      "id": "collect-coverage",
+      "from": "collect",
+      "to": "coverage",
+      "variant": "default"
+    },
+    {
+      "id": "coverage-retry",
+      "from": "coverage",
+      "to": "retry",
+      "variant": "dashed",
+      "label": "gap + 예산"
+    },
+    {
+      "id": "retry-collect",
+      "from": "retry",
+      "to": "collect",
+      "variant": "dashed",
+      "label": "추가 조사"
+    },
+    {
+      "id": "coverage-freeze",
+      "from": "coverage",
+      "to": "freeze",
+      "variant": "default",
+      "label": "충분 / 소진"
+    },
+    {
+      "id": "freeze-prepare",
+      "from": "freeze",
+      "to": "prepare",
+      "variant": "default",
+      "label": "valid"
+    },
+    {
+      "id": "freeze-archive",
+      "from": "freeze",
+      "to": "archive",
+      "variant": "security",
+      "label": "invalid"
+    },
+    {
+      "id": "prepare-founder",
+      "from": "prepare",
+      "to": "founder",
+      "variant": "default"
+    },
+    {
+      "id": "founder-join",
+      "from": "founder",
+      "to": "join",
+      "variant": "default"
+    },
+    {
+      "id": "prepare-market",
+      "from": "prepare",
+      "to": "market",
+      "variant": "default"
+    },
+    {
+      "id": "market-join",
+      "from": "market",
+      "to": "join",
+      "variant": "default"
+    },
+    {
+      "id": "prepare-technology",
+      "from": "prepare",
+      "to": "technology",
+      "variant": "default"
+    },
+    {
+      "id": "technology-join",
+      "from": "technology",
+      "to": "join",
+      "variant": "default"
+    },
+    {
+      "id": "prepare-moat",
+      "from": "prepare",
+      "to": "moat",
+      "variant": "default"
+    },
+    {
+      "id": "moat-join",
+      "from": "moat",
+      "to": "join",
+      "variant": "default"
+    },
+    {
+      "id": "prepare-business",
+      "from": "prepare",
+      "to": "business",
+      "variant": "default"
+    },
+    {
+      "id": "business-join",
+      "from": "business",
+      "to": "join",
+      "variant": "default"
+    },
+    {
+      "id": "join-aggregate",
+      "from": "join",
+      "to": "aggregate",
+      "variant": "default",
+      "label": "전부 성공"
+    },
+    {
+      "id": "join-archive",
+      "from": "join",
+      "to": "archive",
+      "variant": "security",
+      "label": "failure"
+    },
+    {
+      "id": "aggregate-decision",
+      "from": "aggregate",
+      "to": "decision",
+      "variant": "default",
+      "label": "양수 분모"
+    },
+    {
+      "id": "aggregate-archive",
+      "from": "aggregate",
+      "to": "archive",
+      "variant": "security",
+      "label": "0분모 / 오류"
+    },
+    {
+      "id": "decision-archive",
+      "from": "decision",
+      "to": "archive",
+      "variant": "default",
+      "label": "모든 label"
+    },
+    {
+      "id": "archive-iterate",
+      "from": "archive",
+      "to": "iterate",
+      "variant": "default",
+      "label": "후보 남음"
+    },
+    {
+      "id": "archive-best",
+      "from": "archive",
+      "to": "best",
+      "variant": "default",
+      "label": "모두 종료"
+    },
+    {
+      "id": "iterate-best",
+      "from": "iterate",
+      "to": "best",
+      "variant": "default",
+      "label": "0건"
+    },
+    {
+      "id": "best-context",
+      "from": "best",
+      "to": "context",
+      "variant": "default"
+    },
+    {
+      "id": "context-generate",
+      "from": "context",
+      "to": "generate",
+      "variant": "default",
+      "label": "valid"
+    },
+    {
+      "id": "context-fatal",
+      "from": "context",
+      "to": "fatal",
+      "variant": "security",
+      "label": "invalid"
+    },
+    {
+      "id": "generate-structure",
+      "from": "generate",
+      "to": "structure",
+      "variant": "default"
+    },
+    {
+      "id": "structure-judge",
+      "from": "structure",
+      "to": "judge",
+      "variant": "default",
+      "label": "pass"
+    },
+    {
+      "id": "judge-pdf",
+      "from": "judge",
+      "to": "pdf",
+      "variant": "default",
+      "label": "pass"
+    },
+    {
+      "id": "structure-revise",
+      "from": "structure",
+      "to": "revise",
+      "variant": "default",
+      "label": "revise"
+    },
+    {
+      "id": "judge-revise",
+      "from": "judge",
+      "to": "revise",
+      "variant": "default",
+      "label": "revise"
+    },
+    {
+      "id": "pdf-revise",
+      "from": "pdf",
+      "to": "revise",
+      "variant": "default",
+      "label": "layout revise"
+    },
+    {
+      "id": "revise-generate",
+      "from": "revise",
+      "to": "generate",
+      "variant": "default",
+      "label": "예산 있음"
+    },
+    {
+      "id": "revise-warning",
+      "from": "revise",
+      "to": "warning",
+      "variant": "default",
+      "label": "소진"
+    },
+    {
+      "id": "pdf-complete",
+      "from": "pdf",
+      "to": "complete",
+      "variant": "default",
+      "label": "PDF pass"
+    },
+    {
+      "id": "judge-fatal",
+      "from": "judge",
+      "to": "fatal",
+      "variant": "security",
+      "label": "fail"
+    },
+    {
+      "id": "pdf-fatal",
+      "from": "pdf",
+      "to": "fatal",
+      "variant": "security",
+      "label": "renderer 오류"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "현재 구현 — pinned 12d3764",
+      "items": [
+        "CLI → synthetic 후보 전수 처리 → 실제 5-way StateGraph → 점수·selector → 보고서 stub → 실제 PDF 경로가 소스에 있다. 이번 작업은 이 runtime을 실행한 증거가 아니다.",
+        "전체 흐름이 단일 LangGraph인 것은 아니다. 후보 controller는 Python 순회, 평가 fan-out/Join은 StateGraph, 보고서는 별도 순차 pipeline이다.",
+        "실선은 fixture 연결 또는 명시된 주입 경계; 무작위 선정·Coverage 재조사 점선은 승인 목표이며 현재 후보 controller에는 연결되지 않았다."
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "State → Evidence → Snapshot → 평가 결과",
+      "items": [
+        "Source/Chunk/RetrievalRecord → Evidence provenance의 참조를 검증한다. 후보별 snapshot은 detached payload이며 현재 mutable State를 평가 branch가 재조회하지 않는다.",
+        "EvaluationStateV3: branch_results_v3는 branch-key envelope, evaluations_v3는 Join이 전부 성공할 때만 승격하는 dimension-key map이다. Business & Deal은 두 차원 원자적 성공/실패다.",
+        "기술 실패를 missing/0점으로 바꾸지 않는다. snapshot 오류·branch 실패·0분모는 후보 archive/advance. 평가 후 재조사 화살표는 없다."
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Selector / ReportContext 경계",
+      "items": [
+        "사전 무작위 대상 집합과 최종 Best 선택은 별개. 최종 순위: label 우선 → exact normalized_score 내림차순 → weighted_missing_pct 오름차순 → 원본 candidate_id 오름차순.",
+        "WATCHLIST/PASS만 있으면 선택 없이 비교한다. selected=None과 실패 사유를 보존하며 기술 실패를 정상 투자 비추천으로 위장하지 않는다.",
+        "ReportContextV3는 결과·snapshot을 검증해 canonical payload/hash로 고정한다. Generator/Validator/Judge는 같은 context를 사용하며 검색·점수 변경을 하지 않는다."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "목표 / OPEN / live 제한",
+      "items": [
+        "현재 CLI는 fixture 전용이고 live를 거절한다. synthetic 평가와 stub Judge는 실제 기업·모델 품질 검증이 아니다. 별도 adapter 모듈 존재를 end-to-end live 완료로 읽지 않는다.",
+        "사전 표본 상한·난수/seed/replay, rubric/applicability 근거 품질·Coverage gate, corpus/provider 및 live 예산은 승인 확인이 필요하다. 과거 문서의 미구현 표기는 이 revision의 소스와 구별한다.",
+        "현재 PDF 경로는 layout revise도 공유 예산을 소비한다. 일반 live PDF 정책 승인과 fixture 구현을 동일시하지 않는다. Viewer 고정 UI와 html lang은 English fallback이다."
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "종료 ≠ 검증 수용 ≠ final 발행",
+      "items": [
+        "동일 context_id + 현재 artifact_hash의 구조·의미·PDF 결과만 인정한다. 수정마다 다시 검증하고 context/upstream 파손·renderer 장애는 fatal이다.",
+        "수정 소진은 completed + Warning, CLI 2, 현재 draft/findings 보존. 미실행·실패 검사를 pass로 바꾸거나 validated final로 승격하지 않는다.",
+        "현재 fixture 통과도 acceptance=fixture_only, publication_allowed=false다. 목표 live final은 모든 검사와 별도 readiness/발행 조건 통과 뒤에만 허용한다."
+      ]
+    }
+  ]
+}
