@@ -75,8 +75,8 @@ Stage는 복사된 State를 읽고 자기 writer 필드의 JSON delta만 반환�
   반환한다. SnapshotInvalid가 발생하면 복사 State의 새 오류를 회수하고
   해당 후보 failed → archive → advance한다. 실패한 적격성·점수 참조는
   ReportInput의 outcome에 포함하지 않는다.
-- evaluate는 #24 병렬 합류로 교체할 자리다. coverage 뒤 즉시 freeze하며
-  #25 재조사 loop를 아직 구현하지 않는다. 테스트는 가상 여섯 평가와 실제
+- evaluate는 #24 병렬 합류로 교체할 자리다. coverage 뒤 재조사 loop는
+  아래 #25 절을 따른다. 테스트는 가상 여섯 평가와 실제
   build_score_summary/decide/build_investment_decision을 사용한다.
 - 설명 callback은 계산된 label/grade/reason을 읽고 Explanation만 반환한다.
   추가 label 필드는 거절하며 설명 단계의 State 수정은 원래 State에 영향을 주지 않는다.
@@ -120,3 +120,38 @@ fixture 실행만 받으며, workflow가 이미 failed면 아무것도 하지 �
 열린 #25 PR과의 충돌을 피하려고 `candidates.py`는 바꾸지 않았다.
 T16은 tests/integration/test_report_graph.py에서 실제 LangGraph로 실행하지만
 Generator·Judge·renderer는 가상이며 실모델 품질·PDF 페이지 준수 증거가 아니다.
+
+## Coverage 재조사 loop — #25
+
+v3 운영 규칙(#82, `configs/scoring.v3.json`의 `research`)을 baseline 후보
+Graph에 연결한다. 횟수는 주입 policy의
+`budgets.max_research_retries_per_candidate`(=2, v3와 같은 값)를 읽는다.
+
+```text
+collect → coverage → research_gate ─(open gap, 한도 미만)→ collect (재조사)
+                          └─(gap 없음 / 한도 소진)→ freeze → evaluate
+```
+
+- 별도 Targeted Research 노드는 없다. 같은 `collect` 단계(v3 Evidence
+  Research)가 `research_gaps[current]`의 open gap을 보고 재조사한다.
+  재조사 여부는 `research_retry_count[current] > 0`으로 알 수 있다.
+- coverage는 매 pass마다 후보의 gap 목록 전체를 반환한다. 후보 gap을 반환하지
+  않으면 gap 없음(`[]`)으로 기록한다.
+- `research_gate`가 count의 단독 controller다. open gap이 있고 한도 미만이면
+  **요청 전에** count를 1 올린다. 한도에 닿으면 open gap을 `exhausted`로 바꾸고
+  missing을 유지한 채 freeze로 진행한다. 최초 수집은 count에 포함하지 않는다.
+- 재조사 중 `StageFailure`(도구 오류)는 오류만 기록한다. count를 되돌리지 않고
+  후보를 실패로 만들지 않은 채 coverage로 돌아간다. 최초 수집 실패와 writer
+  위반·잘못된 payload는 기존처럼 후보 failed → archive다.
+- 후보 A의 사용량은 후보 B의 시작 0에 영향을 주지 않고, 후보 이동 후에도
+  A의 count·검색 이력은 남는다. collect 호출은 후보당 최대 한도 + 1회라서
+  loop는 유한하게 끝난다.
+- 평가 후 gap(EvaluationResult의 `research_gaps`)으로는 재조사하지 않는다(v3
+  `post_evaluation: forbidden`). Company Research 적격성 보강은 별도 한도
+  미승인 안이며 이 count와 합산하지 않는다.
+
+연결하지 않은 것: batch당 도구 호출·retry·timeout 한도(v3 해석 OPEN,
+architecture §5), `scoring.coverage_v3`와 v3 평가 subgraph의 후보 Graph 연결
+(v3 후보 runner 범위), run_timeout·max_cost 등 live 예산(M3).
+T07·T20(fixture 부분)은 `tests/integration/test_candidate_graph.py`에 있으며
+가상 입력 결과다.

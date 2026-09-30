@@ -128,6 +128,11 @@ def build_candidate_graph(
     Stages receive detached State and return JSON deltas restricted to their writers.
     No defaults enable live providers or unresolved v3 policy. Compile/invoke is up
     to the runner; for five candidates use a recursion_limit above the stage count.
+
+    Coverage gaps send the candidate back to the same collect stage (v3 Evidence
+    Research) at most ``max_research_retries_per_candidate`` times. The count is
+    spent before each request and never refunded; once spent, open gaps become
+    exhausted and stay missing. Post-evaluation research is not wired (#82).
     """
 
     def require(condition, message):
@@ -178,7 +183,7 @@ def build_candidate_graph(
             update["candidate_status"] = {**state["candidate_status"], cid: "failed"}
         return update
 
-    def stage(name):
+    def stage(name, recoverable=False):
         callback = getattr(nodes, name)
 
         def call(state):
@@ -267,11 +272,73 @@ def build_candidate_graph(
                 ]
                 return fail(state, name, recorded or None)
             except StageFailure as exc:
-                return fail(state, name, exc.errors)
+                update = fail(state, name, exc.errors)
+                if recoverable:
+                    # A failed research retry is spent; its gaps stay missing.
+                    update.pop("candidate_status", None)
+                return update
             except Exception:
                 return fail(state, name)
 
         return call
+
+    def collect(state):
+        cid = state["current_candidate_id"]
+        return stage("collect", recoverable=state["research_retry_count"][cid] > 0)(
+            state
+        )
+
+    def coverage(state):
+        """Coverage recomputes the candidate's whole gap list on every pass."""
+        delta = stage("coverage")(state)
+        cid = state["current_candidate_id"]
+        if delta.get("candidate_status", {}).get(cid) == "failed":
+            return delta
+        if cid not in delta.get("research_gaps", {}):
+            gaps = delta.get("research_gaps", state["research_gaps"])
+            delta["research_gaps"] = {**gaps, cid: []}
+        return delta
+
+    def research_gate(state):
+        """Spend a retry before research, or mark open gaps exhausted."""
+        try:
+            cid = state["current_candidate_id"]
+            gaps = [
+                ResearchGap.model_validate(gap)
+                for gap in state["research_gaps"].get(cid, [])
+            ]
+            require(all(gap.candidate_id == cid for gap in gaps), "Foreign gap")
+            if not any(gap.status == "open" for gap in gaps):
+                return {}
+            used = state["research_retry_count"][cid]
+            if used < policy.budgets.max_research_retries_per_candidate:
+                return {
+                    "research_retry_count": {
+                        **state["research_retry_count"],
+                        cid: used + 1,
+                    }
+                }
+            exhausted = [
+                gap.model_copy(update={"status": "exhausted"})
+                if gap.status == "open"
+                else gap
+                for gap in gaps
+            ]
+            return {
+                "research_gaps": {
+                    **state["research_gaps"],
+                    cid: [gap.model_dump(mode="json") for gap in exhausted],
+                }
+            }
+        except Exception:
+            return fail(state, "research_gate")
+
+    def after_gate(state):
+        cid = state["current_candidate_id"]
+        if state["candidate_status"][cid] == "failed":
+            return "archive"
+        gaps = state["research_gaps"].get(cid, [])
+        return "collect" if any(g["status"] == "open" for g in gaps) else "freeze"
 
     def validate_candidates(state):
         run = run_input(state)
@@ -557,13 +624,16 @@ def build_candidate_graph(
     for name in _WRITERS:
         graph.add_node(
             name,
-            normalize
-            if name == "normalize"
-            else eligibility
-            if name == "eligibility"
-            else stage(name),
+            {
+                "normalize": normalize,
+                "eligibility": eligibility,
+                "collect": collect,
+                "coverage": coverage,
+            }.get(name)
+            or stage(name),
         )
     for name, function in [
+        ("research_gate", research_gate),
         ("select", select),
         ("archive", archive),
         ("advance", advance),
@@ -596,7 +666,7 @@ def build_candidate_graph(
     )
     for name, following in [
         ("collect", "coverage"),
-        ("coverage", "freeze"),
+        ("coverage", "research_gate"),
         ("freeze", "evaluate"),
         ("evaluate", "aggregate"),
         ("aggregate", "decision"),
@@ -604,6 +674,11 @@ def build_candidate_graph(
         graph.add_conditional_edges(
             name, after_stage, {"archive": "archive", "next": following}
         )
+    graph.add_conditional_edges(
+        "research_gate",
+        after_gate,
+        {"archive": "archive", "collect": "collect", "freeze": "freeze"},
+    )
     graph.add_conditional_edges(
         "decision",
         lambda state: (
