@@ -59,8 +59,33 @@ authenticated approval. Decimal monetary checks reuse `scoring.finance`.
 
 Approved missing results need no receipt. The two approved N/A rules additionally
 require reviewed confirmed zero pre-revenue or typed-period/entity nonnegative
-OCF. Approved observed ratings remain fail-closed even with True callbacks:
-criterion-specific derivation and deterministic anchor correspondence are still
-unimplemented. Receipts alone do not prove rating correctness. All actual modes
-remain blocked before any call; a live policy cannot enter this fixture consumer.
-Tests are offline synthetic inputs, not provider or authenticated review evidence.
+OCF. Approved observed results now check deterministic correspondence from the
+criterion's own cited reviewed facts (or exactly validated derived citations):
+
+- `traction.revenue_growth`: two consecutive annual revenue periods, Decimal YoY.
+- `traction.gross_margin`: same-period revenue and cost of revenue.
+- `traction.runway`: dated cash, same-statement OCF period and optionally reviewed,
+  dated post-cash funding; existing helper subtracts elapsed months.
+- `traction.concentration`: explicitly reviewed `top1_customer_revenue_share`
+  percent only; generic customer revenue does not establish top-1 status.
+- `traction.rule_of_40`: annual YoY plus same-current-period operating margin percent.
+- `deal_terms.ownership`: same-round/date/currency investment and pre/post valuation,
+  or reviewed dated post-money transaction ownership percent.
+- `traction.burn`: nonnegative single-period OCF supports anchor 5; two exact annual
+  OCF/revenue periods support anchors 1–5. Flat burn and nonpositive growth bases
+  remain unavailable rather than receiving an invented anchor.
+
+Numeric bands come from the approved rubric and are compared before rounding.
+Inputs are limited to cited support; unrelated receipts cannot complete a formula.
+No reported Evidence, source ID, or derived Evidence is synthesized. Existing
+helper-derived growth/margin/runway citations require exact value, unit, currency,
+period, date, supporting IDs and derivation correspondence. Composite derived
+Rule-of-40/ownership/burn citations and reported facts carrying supporting formulas
+remain rejected until their structured formula contract is implemented.
+Stage and valuation reasonableness remain fail-closed: numeric amounts or stage
+names cannot establish qualitative anchors. Direct growth/margin/runway metrics
+lack reviewed typed roles and are not guessed from source prose.
+All actual modes remain blocked before any call; a live policy cannot enter this
+fixture consumer. Injected verifiers remain additional mandatory gates, not
+substitutes for deterministic checks. Tests are offline synthetic inputs, not
+provider or authenticated review evidence.

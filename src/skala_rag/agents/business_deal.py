@@ -16,6 +16,7 @@ from skala_rag.agents.evaluation import (
 from skala_rag.agents.finance_verification import (
     ReviewedFinancialFact,
     validate_financial_facts,
+    validate_financial_rating,
 )
 from skala_rag.contracts.error_codes import ErrorCode, is_retryable
 from skala_rag.contracts.evaluation import EvaluationSnapshot
@@ -181,10 +182,10 @@ def evaluate_business_deal(
                         if c.status == "observed"
                         else (c.applicability_evidence_ids or [])
                     )
-                    if not cited or any(eid not in facts for eid in cited):
-                        raise ValueError("reviewed metric-role facts required")
-                    roles = {facts[eid].metric_role for eid in cited}
                     if c.status == "not_applicable":
+                        if not cited or any(eid not in facts for eid in cited):
+                            raise ValueError("reviewed metric-role facts required")
+                        roles = {facts[eid].metric_role for eid in cited}
                         if c.criterion_id == "traction.rule_of_40":
                             if roles != {"confirmed_pre_revenue"}:
                                 raise ValueError("confirmed pre-revenue fact required")
@@ -197,11 +198,8 @@ def evaluate_business_deal(
                         else:
                             raise ValueError("unapproved N/A criterion")
                     else:
-                        # Fact attribution is not anchor correspondence. Keep the
-                        # approved observed path closed until deterministic bands
-                        # and cross-metric derivations are implemented.
-                        raise ValueError(
-                            "approved observed rating correspondence unavailable"
+                        validate_financial_rating(
+                            c.criterion_id, c.rating, cited, snapshot, facts, rubric
                         )
                 if c.status == "observed":
                     inputs = [allowed[eid] for eid in c.evidence_ids]
@@ -211,7 +209,9 @@ def evaluate_business_deal(
                         for sid in e.supporting_evidence_ids
                     ]
                     money = [e for e in inputs if e.currency is not None]
-                    if len({(e.unit, e.currency) for e in money}) > 1:
+                    if (
+                        not approved and len({(e.unit, e.currency) for e in money}) > 1
+                    ) or (approved and len({e.currency for e in money}) > 1):
                         raise ValueError("mixed financial units/currencies")
                     if any(
                         e.source_id not in snapshot.sources
