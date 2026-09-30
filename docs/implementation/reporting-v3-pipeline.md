@@ -15,14 +15,20 @@ from skala_rag.reporting.v3_runtime import build_report_nodes_v3
 from skala_rag.reporting.v3_pipeline import run_report_v3
 
 context = build_report_context_v3(
-    candidate_result, snapshots_by_candidate,
-    as_of=run_input.as_of, corpus_version=run_input.corpus_version,
+    candidate_result,
+    snapshots_by_candidate,
+    as_of=run_input.as_of,
+    corpus_version=run_input.corpus_version,
     execution_mode=run_input.execution_mode,
 )
 generate, judge = build_report_nodes_v3(
-    runtime=shared_runtime, generator_call=generator_call, judge_call=judge_call,
-    budget=tool_budget, readiness=readiness,
-    generator_transport=generator_attempt, judge_transport=judge_attempt,
+    runtime=shared_runtime,
+    generator_call=generator_call,
+    judge_call=judge_call,
+    budget=tool_budget,
+    readiness=readiness,
+    generator_transport=generator_attempt,
+    judge_transport=judge_attempt,
     allowance_for=verified_allowance,
 )
 result = run_report_v3(context, generate=generate, judge=judge)
