@@ -183,3 +183,23 @@ uv lock --check
 | heojiwon2 (허지원) | InvestmentState(#7), Tool·LLM·clock 주입 인터페이스(#8), 후보 탐색·적격성(#17, #18), retrieve·Evidence Collector(#19), 재조사 loop(#25), 보고서 생성·수정 loop(#28), 코퍼스 manifest gate·200페이지 한도(#44, #91), 안전한 외부 fetch(#46) |
 | wjd990819-ops | criterion catalog·정책 fixture(#9), 공통 가상 fixture(#12), State reducer(#15), retrieve·Evidence Collector(#19) |
 | XXXXXim (심혁) | 23개 criterion rubric·재무 단위 규칙(#10, #11), 점수 집계·투자 판단과 DTO 어댑터(#16, #68), 영역 평가 wrapper(#22), ReportContext(#26), Structural Validator(#27), 재무 Evidence 단위·기간 검증(#53) |
+
+## Fixture CLI (#29)
+
+저장소 루트에서 다음 명령을 실행한다.
+
+```bash
+uv run python -m skala_rag.cli --theme 'Physical AI robotics' --config tests/fixtures/cli-input.json
+```
+
+고정된 가상 후보 두 개를 v3 controller와 다섯 병렬 평가 branch로 처리한다.
+입력 주제는 manifest에 기록하며, 실제 검색이나 주제별 기업 발견은 수행하지 않는다.
+`outputs/<run_id>/`에 `candidate-result.json`, `trace.json`, `draft.md`,
+`manifest.json`을 저장한다. 점수는 반올림 없이 decimal 문자열로 보존한다.
+산출물은 가상 데이터이고 외부 호출·유료 LLM·모델 다운로드는 없다.
+
+현재 #94의 v3 보고서 context adapter가 없어 draft는 진단용이며 검증된 보고서가
+아니다. manifest는 `running`/`run_outcome=null`, CLI는 미완료를 나타내는 exit 1을
+반환한다. 보고서 수정 소진의 `completed`+Warning+exit 2와 구별한다.
+구조·의미·PDF 검증과 final 발행은 미실행이다. `--mode live` 또는 live 설정은
+실행 전에 거절한다. 전체 live runner는 #96 범위다.

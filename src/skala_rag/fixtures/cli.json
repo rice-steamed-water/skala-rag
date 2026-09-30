@@ -1,0 +1,2419 @@
+{
+  "schema_version": "synthetic-common-1",
+  "execution_mode": "fixture",
+  "synthetic": true,
+  "locator": "fixture://common-v1",
+  "description": "전부 가상 데이터. 실제 기업·평가·투자 판단·성능 측정 결과가 아님.",
+  "policy_version": "main-draft-0.1.0",
+  "cases": {
+    "eligible": "co-fixture-eligible",
+    "ineligible": "co-fixture-ineligible",
+    "unknown": "co-fixture-unknown",
+    "same_name": "co-fixture-same_name"
+  },
+  "candidates": {
+    "co-fixture-eligible": {
+      "schema_version": "synthetic-common-1",
+      "candidate_id": "co-fixture-eligible",
+      "canonical_name": "가상 로봇 알파",
+      "aliases": [],
+      "country": "KR",
+      "homepage_url": "fixture://eligible/homepage",
+      "legal_identifiers": {
+        "fixture_registry": "fictional-entity-0"
+      },
+      "discovery_source_ids": [
+        "src-fixture-eligible"
+      ]
+    },
+    "co-fixture-ineligible": {
+      "schema_version": "synthetic-common-1",
+      "candidate_id": "co-fixture-ineligible",
+      "canonical_name": "가상 로봇 ineligible",
+      "aliases": [],
+      "country": "KR",
+      "homepage_url": "fixture://ineligible/homepage",
+      "legal_identifiers": {
+        "fixture_registry": "fictional-entity-1"
+      },
+      "discovery_source_ids": [
+        "src-fixture-ineligible"
+      ]
+    },
+    "co-fixture-unknown": {
+      "schema_version": "synthetic-common-1",
+      "candidate_id": "co-fixture-unknown",
+      "canonical_name": "가상 로봇 unknown",
+      "aliases": [],
+      "country": "KR",
+      "homepage_url": "fixture://unknown/homepage",
+      "legal_identifiers": {
+        "fixture_registry": "fictional-entity-2"
+      },
+      "discovery_source_ids": [
+        "src-fixture-unknown"
+      ]
+    },
+    "co-fixture-same_name": {
+      "schema_version": "synthetic-common-1",
+      "candidate_id": "co-fixture-same_name",
+      "canonical_name": "가상 로봇 알파",
+      "aliases": [],
+      "country": "US",
+      "homepage_url": "fixture://same_name/homepage",
+      "legal_identifiers": {
+        "fixture_registry": "fictional-entity-3"
+      },
+      "discovery_source_ids": [
+        "src-fixture-same_name"
+      ]
+    }
+  },
+  "profiles": {
+    "co-fixture-eligible": {
+      "schema_version": "synthetic-common-1",
+      "candidate_id": "co-fixture-eligible",
+      "domain_match": true,
+      "is_listed": false,
+      "exit_completed": false,
+      "stage": {
+        "schema_version": "synthetic-common-1",
+        "raw_label": "seed",
+        "normalized_round": "seed",
+        "bucket": "early",
+        "last_round_date": null,
+        "cumulative_funding_krw": null,
+        "method": "explicit",
+        "source_ids": [
+          "src-fixture-eligible"
+        ],
+        "confidence": "unknown",
+        "rationale": "가상 단계 예시. 실제 정규화 결과 아님."
+      },
+      "as_of": "2026-09-30",
+      "field_evidence_ids": {
+        "fixture_profile": [
+          "ev-fixture-eligible-founder-expertise"
+        ]
+      }
+    },
+    "co-fixture-ineligible": {
+      "schema_version": "synthetic-common-1",
+      "candidate_id": "co-fixture-ineligible",
+      "domain_match": true,
+      "is_listed": true,
+      "exit_completed": false,
+      "stage": {
+        "schema_version": "synthetic-common-1",
+        "raw_label": "series_b",
+        "normalized_round": "series_b",
+        "bucket": "early",
+        "last_round_date": null,
+        "cumulative_funding_krw": null,
+        "method": "explicit",
+        "source_ids": [
+          "src-fixture-ineligible"
+        ],
+        "confidence": "unknown",
+        "rationale": "가상 단계 예시. 실제 정규화 결과 아님."
+      },
+      "as_of": "2026-09-30",
+      "field_evidence_ids": {
+        "fixture_profile": [
+          "ev-fixture-ineligible-technology-integration"
+        ]
+      }
+    },
+    "co-fixture-unknown": {
+      "schema_version": "synthetic-common-1",
+      "candidate_id": "co-fixture-unknown",
+      "domain_match": true,
+      "is_listed": null,
+      "exit_completed": false,
+      "stage": {
+        "schema_version": "synthetic-common-1",
+        "raw_label": null,
+        "normalized_round": "unknown",
+        "bucket": "unknown",
+        "last_round_date": null,
+        "cumulative_funding_krw": null,
+        "method": "unknown",
+        "source_ids": [
+          "src-fixture-unknown"
+        ],
+        "confidence": "unknown",
+        "rationale": "가상 단계 예시. 실제 정규화 결과 아님."
+      },
+      "as_of": "2026-09-30",
+      "field_evidence_ids": {
+        "fixture_profile": [
+          "ev-fixture-unknown-technology-integration"
+        ]
+      }
+    },
+    "co-fixture-same_name": {
+      "schema_version": "synthetic-common-1",
+      "candidate_id": "co-fixture-same_name",
+      "domain_match": true,
+      "is_listed": false,
+      "exit_completed": false,
+      "stage": {
+        "schema_version": "synthetic-common-1",
+        "raw_label": "series_a",
+        "normalized_round": "series_a",
+        "bucket": "early",
+        "last_round_date": null,
+        "cumulative_funding_krw": null,
+        "method": "explicit",
+        "source_ids": [
+          "src-fixture-same_name"
+        ],
+        "confidence": "unknown",
+        "rationale": "가상 단계 예시. 실제 정규화 결과 아님."
+      },
+      "as_of": "2026-09-30",
+      "field_evidence_ids": {
+        "fixture_profile": [
+          "ev-fixture-same_name-technology-integration"
+        ]
+      }
+    }
+  },
+  "eligibility_results": {
+    "eligibility-v1-82388bfe4b7ec5f79570f5ecd67df583a1cff9e5f229a4fccebf434e4aa50017": {
+      "schema_version": "synthetic-common-1",
+      "eligibility_result_id": "eligibility-v1-82388bfe4b7ec5f79570f5ecd67df583a1cff9e5f229a4fccebf434e4aa50017",
+      "run_id": "run-common-fixture",
+      "candidate_id": "co-fixture-eligible",
+      "evidence_revision": 1,
+      "policy_version": "main-draft-0.1.0",
+      "as_of": "2026-09-30",
+      "status": "eligible",
+      "checks": {
+        "synthetic": true
+      },
+      "reason_codes": [
+        "FIXTURE_ELIGIBLE"
+      ],
+      "evidence_ids": [
+        "ev-fixture-eligible-founder-expertise"
+      ]
+    },
+    "eligibility-v1-0bbf826d490f8e5d4d5e5660ca96da5cadd8016d3bc54be875ace613afb86e76": {
+      "schema_version": "synthetic-common-1",
+      "eligibility_result_id": "eligibility-v1-0bbf826d490f8e5d4d5e5660ca96da5cadd8016d3bc54be875ace613afb86e76",
+      "run_id": "run-common-fixture",
+      "candidate_id": "co-fixture-ineligible",
+      "evidence_revision": 1,
+      "policy_version": "main-draft-0.1.0",
+      "as_of": "2026-09-30",
+      "status": "ineligible",
+      "checks": {
+        "synthetic": true
+      },
+      "reason_codes": [
+        "FIXTURE_INELIGIBLE"
+      ],
+      "evidence_ids": [
+        "ev-fixture-ineligible-technology-integration"
+      ]
+    },
+    "eligibility-v1-675d25b554d64de82c5d0d5e5c2ba7ac26b7e880cc6e7ee54e22dc4846eab3f5": {
+      "schema_version": "synthetic-common-1",
+      "eligibility_result_id": "eligibility-v1-675d25b554d64de82c5d0d5e5c2ba7ac26b7e880cc6e7ee54e22dc4846eab3f5",
+      "run_id": "run-common-fixture",
+      "candidate_id": "co-fixture-unknown",
+      "evidence_revision": 1,
+      "policy_version": "main-draft-0.1.0",
+      "as_of": "2026-09-30",
+      "status": "unknown",
+      "checks": {
+        "synthetic": true
+      },
+      "reason_codes": [
+        "FIXTURE_UNKNOWN"
+      ],
+      "evidence_ids": [
+        "ev-fixture-unknown-technology-integration"
+      ]
+    },
+    "eligibility-v1-8f43097fa639d7d0a7a5c10fef72b9854635716eac39c9950f9044b8702b946e": {
+      "schema_version": "synthetic-common-1",
+      "eligibility_result_id": "eligibility-v1-8f43097fa639d7d0a7a5c10fef72b9854635716eac39c9950f9044b8702b946e",
+      "run_id": "run-common-fixture",
+      "candidate_id": "co-fixture-same_name",
+      "evidence_revision": 1,
+      "policy_version": "main-draft-0.1.0",
+      "as_of": "2026-09-30",
+      "status": "eligible",
+      "checks": {
+        "synthetic": true
+      },
+      "reason_codes": [
+        "FIXTURE_ELIGIBLE"
+      ],
+      "evidence_ids": [
+        "ev-fixture-same_name-technology-integration"
+      ]
+    }
+  },
+  "sources": {
+    "src-fixture-eligible": {
+      "schema_version": "synthetic-common-1",
+      "source_id": "src-fixture-eligible",
+      "title": "가상 로봇 알파 가상 자료 (eligible)",
+      "publisher": "가상 fixture 제작자",
+      "author": null,
+      "source_kind": "report",
+      "url": "fixture://eligible/report",
+      "local_path": null,
+      "published_at": "2026-09-29",
+      "retrieved_at": "2026-09-30T00:00:00Z",
+      "content_hash": "f022422add1e7937fdd76dd28fab8caa2145d3ab053a630d71d7c994eefe8de7",
+      "language": "ko",
+      "access_notes": "가상 데이터이며 원문이나 실제 자료가 아님.",
+      "bibliographic_metadata": {
+        "synthetic": true
+      }
+    },
+    "src-fixture-ineligible": {
+      "schema_version": "synthetic-common-1",
+      "source_id": "src-fixture-ineligible",
+      "title": "가상 로봇 ineligible 가상 자료 (ineligible)",
+      "publisher": "가상 fixture 제작자",
+      "author": null,
+      "source_kind": "report",
+      "url": "fixture://ineligible/report",
+      "local_path": null,
+      "published_at": "2026-09-29",
+      "retrieved_at": "2026-09-30T00:00:00Z",
+      "content_hash": "bf0ec9c946c615c912ed9611211c9ec3ff7398d053f6c3e205fc4a6e2bdd2d11",
+      "language": "ko",
+      "access_notes": "가상 데이터이며 원문이나 실제 자료가 아님.",
+      "bibliographic_metadata": {
+        "synthetic": true
+      }
+    },
+    "src-fixture-unknown": {
+      "schema_version": "synthetic-common-1",
+      "source_id": "src-fixture-unknown",
+      "title": "가상 로봇 unknown 가상 자료 (unknown)",
+      "publisher": "가상 fixture 제작자",
+      "author": null,
+      "source_kind": "report",
+      "url": "fixture://unknown/report",
+      "local_path": null,
+      "published_at": "2026-09-29",
+      "retrieved_at": "2026-09-30T00:00:00Z",
+      "content_hash": "3f7e135beedf3642f0a4108ecf7bcac6fa0634f814fd75ea6be30b06e0fb1e5d",
+      "language": "ko",
+      "access_notes": "가상 데이터이며 원문이나 실제 자료가 아님.",
+      "bibliographic_metadata": {
+        "synthetic": true
+      }
+    },
+    "src-fixture-same_name": {
+      "schema_version": "synthetic-common-1",
+      "source_id": "src-fixture-same_name",
+      "title": "가상 로봇 알파 가상 자료 (same_name)",
+      "publisher": "가상 fixture 제작자",
+      "author": null,
+      "source_kind": "report",
+      "url": "fixture://same_name/report",
+      "local_path": null,
+      "published_at": "2026-09-29",
+      "retrieved_at": "2026-09-30T00:00:00Z",
+      "content_hash": "a108b397f9639dbf94b51a63d376a953eb389e799d677a26b09374e948c9fc9d",
+      "language": "ko",
+      "access_notes": "가상 데이터이며 원문이나 실제 자료가 아님.",
+      "bibliographic_metadata": {
+        "synthetic": true
+      }
+    }
+  },
+  "chunks": {
+    "chunk-fixture-eligible": {
+      "schema_version": "synthetic-common-1",
+      "chunk_id": "chunk-fixture-eligible",
+      "source_id": "src-fixture-eligible",
+      "corpus_version": "corpus-fixture-v1",
+      "text": "가상 eligible 자료의 founder.expertise 관측 예시\n가상 eligible 자료의 founder.industry 관측 예시\n가상 eligible 자료의 founder.execution 관측 예시\n가상 eligible 자료의 market.size 관측 예시\n가상 eligible 자료의 market.growth 관측 예시\n가상 eligible 자료의 market.demand 관측 예시\n가상 eligible 자료의 technology.maturity 관측 예시\n가상 eligible 자료의 technology.reliability 관측 예시\n가상 eligible 자료의 technology.integration 관측 예시\n가상 eligible 자료의 technology.commercialization 관측 예시\n가상 eligible 자료의 moat.differentiation 관측 예시\n가상 eligible 자료의 moat.ip 관측 예시\n가상 eligible 자료의 moat.data 관측 예시\n가상 eligible 자료의 moat.lock_in 관측 예시\n가상 eligible 자료의 traction.revenue_growth 관측 예시\n가상 eligible 자료의 traction.gross_margin 관측 예시\n가상 eligible 자료의 traction.burn 관측 예시\n가상 eligible 자료의 traction.runway 관측 예시\n가상 eligible 자료의 traction.concentration 관측 예시\n가상 eligible 자료의 traction.rule_of_40 관측 예시\n가상 eligible 자료의 deal_terms.stage 관측 예시\n가상 eligible 자료의 deal_terms.valuation 관측 예시\n가상 eligible 자료의 deal_terms.ownership 관측 예시",
+      "page_start": 1,
+      "page_end": 1,
+      "section": "가상 관측",
+      "locator": "fixture://eligible/report#page=1",
+      "candidate_ids": [
+        "co-fixture-eligible"
+      ],
+      "scope": "company",
+      "language": "ko",
+      "embedding_model": "fixture-no-model",
+      "embedding_revision": "fixture-v1"
+    },
+    "chunk-fixture-ineligible": {
+      "schema_version": "synthetic-common-1",
+      "chunk_id": "chunk-fixture-ineligible",
+      "source_id": "src-fixture-ineligible",
+      "corpus_version": "corpus-fixture-v1",
+      "text": "가상 ineligible 자료의 technology.integration 관측 예시",
+      "page_start": 1,
+      "page_end": 1,
+      "section": "가상 관측",
+      "locator": "fixture://ineligible/report#page=1",
+      "candidate_ids": [
+        "co-fixture-ineligible"
+      ],
+      "scope": "company",
+      "language": "ko",
+      "embedding_model": "fixture-no-model",
+      "embedding_revision": "fixture-v1"
+    },
+    "chunk-fixture-unknown": {
+      "schema_version": "synthetic-common-1",
+      "chunk_id": "chunk-fixture-unknown",
+      "source_id": "src-fixture-unknown",
+      "corpus_version": "corpus-fixture-v1",
+      "text": "가상 unknown 자료의 technology.integration 관측 예시",
+      "page_start": 1,
+      "page_end": 1,
+      "section": "가상 관측",
+      "locator": "fixture://unknown/report#page=1",
+      "candidate_ids": [
+        "co-fixture-unknown"
+      ],
+      "scope": "company",
+      "language": "ko",
+      "embedding_model": "fixture-no-model",
+      "embedding_revision": "fixture-v1"
+    },
+    "chunk-fixture-same_name": {
+      "schema_version": "synthetic-common-1",
+      "chunk_id": "chunk-fixture-same_name",
+      "source_id": "src-fixture-same_name",
+      "corpus_version": "corpus-fixture-v1",
+      "text": "가상 same_name 자료의 technology.integration 관측 예시",
+      "page_start": 1,
+      "page_end": 1,
+      "section": "가상 관측",
+      "locator": "fixture://same_name/report#page=1",
+      "candidate_ids": [
+        "co-fixture-same_name"
+      ],
+      "scope": "company",
+      "language": "ko",
+      "embedding_model": "fixture-no-model",
+      "embedding_revision": "fixture-v1"
+    }
+  },
+  "evidence": {
+    "ev-fixture-eligible-founder-expertise": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-eligible-founder-expertise",
+      "candidate_id": "co-fixture-eligible",
+      "scope": "company",
+      "criterion_ids": [
+        "founder.expertise"
+      ],
+      "claim": "가상 eligible 자료의 founder.expertise 관측 예시",
+      "source_id": "src-fixture-eligible",
+      "locator": "fixture://eligible/report#criterion=founder.expertise",
+      "excerpt": "가상 founder.expertise 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-eligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-eligible-founder-industry": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-eligible-founder-industry",
+      "candidate_id": "co-fixture-eligible",
+      "scope": "company",
+      "criterion_ids": [
+        "founder.industry"
+      ],
+      "claim": "가상 eligible 자료의 founder.industry 관측 예시",
+      "source_id": "src-fixture-eligible",
+      "locator": "fixture://eligible/report#criterion=founder.industry",
+      "excerpt": "가상 founder.industry 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-eligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-eligible-founder-execution": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-eligible-founder-execution",
+      "candidate_id": "co-fixture-eligible",
+      "scope": "company",
+      "criterion_ids": [
+        "founder.execution"
+      ],
+      "claim": "가상 eligible 자료의 founder.execution 관측 예시",
+      "source_id": "src-fixture-eligible",
+      "locator": "fixture://eligible/report#criterion=founder.execution",
+      "excerpt": "가상 founder.execution 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-eligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-eligible-market-size": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-eligible-market-size",
+      "candidate_id": "co-fixture-eligible",
+      "scope": "company",
+      "criterion_ids": [
+        "market.size"
+      ],
+      "claim": "가상 eligible 자료의 market.size 관측 예시",
+      "source_id": "src-fixture-eligible",
+      "locator": "fixture://eligible/report#criterion=market.size",
+      "excerpt": "가상 market.size 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-eligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-eligible-market-growth": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-eligible-market-growth",
+      "candidate_id": "co-fixture-eligible",
+      "scope": "company",
+      "criterion_ids": [
+        "market.growth"
+      ],
+      "claim": "가상 eligible 자료의 market.growth 관측 예시",
+      "source_id": "src-fixture-eligible",
+      "locator": "fixture://eligible/report#criterion=market.growth",
+      "excerpt": "가상 market.growth 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-eligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-eligible-market-demand": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-eligible-market-demand",
+      "candidate_id": "co-fixture-eligible",
+      "scope": "company",
+      "criterion_ids": [
+        "market.demand"
+      ],
+      "claim": "가상 eligible 자료의 market.demand 관측 예시",
+      "source_id": "src-fixture-eligible",
+      "locator": "fixture://eligible/report#criterion=market.demand",
+      "excerpt": "가상 market.demand 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-eligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-eligible-technology-maturity": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-eligible-technology-maturity",
+      "candidate_id": "co-fixture-eligible",
+      "scope": "company",
+      "criterion_ids": [
+        "technology.maturity"
+      ],
+      "claim": "가상 eligible 자료의 technology.maturity 관측 예시",
+      "source_id": "src-fixture-eligible",
+      "locator": "fixture://eligible/report#criterion=technology.maturity",
+      "excerpt": "가상 technology.maturity 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-eligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-eligible-technology-reliability": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-eligible-technology-reliability",
+      "candidate_id": "co-fixture-eligible",
+      "scope": "company",
+      "criterion_ids": [
+        "technology.reliability"
+      ],
+      "claim": "가상 eligible 자료의 technology.reliability 관측 예시",
+      "source_id": "src-fixture-eligible",
+      "locator": "fixture://eligible/report#criterion=technology.reliability",
+      "excerpt": "가상 technology.reliability 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-eligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-eligible-technology-integration": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-eligible-technology-integration",
+      "candidate_id": "co-fixture-eligible",
+      "scope": "company",
+      "criterion_ids": [
+        "technology.integration"
+      ],
+      "claim": "가상 eligible 자료의 technology.integration 관측 예시",
+      "source_id": "src-fixture-eligible",
+      "locator": "fixture://eligible/report#criterion=technology.integration",
+      "excerpt": "가상 technology.integration 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-eligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-eligible-technology-commercialization": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-eligible-technology-commercialization",
+      "candidate_id": "co-fixture-eligible",
+      "scope": "company",
+      "criterion_ids": [
+        "technology.commercialization"
+      ],
+      "claim": "가상 eligible 자료의 technology.commercialization 관측 예시",
+      "source_id": "src-fixture-eligible",
+      "locator": "fixture://eligible/report#criterion=technology.commercialization",
+      "excerpt": "가상 technology.commercialization 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-eligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-eligible-moat-differentiation": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-eligible-moat-differentiation",
+      "candidate_id": "co-fixture-eligible",
+      "scope": "company",
+      "criterion_ids": [
+        "moat.differentiation"
+      ],
+      "claim": "가상 eligible 자료의 moat.differentiation 관측 예시",
+      "source_id": "src-fixture-eligible",
+      "locator": "fixture://eligible/report#criterion=moat.differentiation",
+      "excerpt": "가상 moat.differentiation 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-eligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-eligible-moat-ip": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-eligible-moat-ip",
+      "candidate_id": "co-fixture-eligible",
+      "scope": "company",
+      "criterion_ids": [
+        "moat.ip"
+      ],
+      "claim": "가상 eligible 자료의 moat.ip 관측 예시",
+      "source_id": "src-fixture-eligible",
+      "locator": "fixture://eligible/report#criterion=moat.ip",
+      "excerpt": "가상 moat.ip 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-eligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-eligible-moat-data": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-eligible-moat-data",
+      "candidate_id": "co-fixture-eligible",
+      "scope": "company",
+      "criterion_ids": [
+        "moat.data"
+      ],
+      "claim": "가상 eligible 자료의 moat.data 관측 예시",
+      "source_id": "src-fixture-eligible",
+      "locator": "fixture://eligible/report#criterion=moat.data",
+      "excerpt": "가상 moat.data 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-eligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-eligible-moat-lock_in": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-eligible-moat-lock_in",
+      "candidate_id": "co-fixture-eligible",
+      "scope": "company",
+      "criterion_ids": [
+        "moat.lock_in"
+      ],
+      "claim": "가상 eligible 자료의 moat.lock_in 관측 예시",
+      "source_id": "src-fixture-eligible",
+      "locator": "fixture://eligible/report#criterion=moat.lock_in",
+      "excerpt": "가상 moat.lock_in 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-eligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-eligible-traction-revenue_growth": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-eligible-traction-revenue_growth",
+      "candidate_id": "co-fixture-eligible",
+      "scope": "company",
+      "criterion_ids": [
+        "traction.revenue_growth"
+      ],
+      "claim": "가상 eligible 자료의 traction.revenue_growth 관측 예시",
+      "source_id": "src-fixture-eligible",
+      "locator": "fixture://eligible/report#criterion=traction.revenue_growth",
+      "excerpt": "가상 traction.revenue_growth 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-eligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-eligible-traction-gross_margin": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-eligible-traction-gross_margin",
+      "candidate_id": "co-fixture-eligible",
+      "scope": "company",
+      "criterion_ids": [
+        "traction.gross_margin"
+      ],
+      "claim": "가상 eligible 자료의 traction.gross_margin 관측 예시",
+      "source_id": "src-fixture-eligible",
+      "locator": "fixture://eligible/report#criterion=traction.gross_margin",
+      "excerpt": "가상 traction.gross_margin 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-eligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-eligible-traction-burn": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-eligible-traction-burn",
+      "candidate_id": "co-fixture-eligible",
+      "scope": "company",
+      "criterion_ids": [
+        "traction.burn"
+      ],
+      "claim": "가상 eligible 자료의 traction.burn 관측 예시",
+      "source_id": "src-fixture-eligible",
+      "locator": "fixture://eligible/report#criterion=traction.burn",
+      "excerpt": "가상 traction.burn 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-eligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-eligible-traction-runway": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-eligible-traction-runway",
+      "candidate_id": "co-fixture-eligible",
+      "scope": "company",
+      "criterion_ids": [
+        "traction.runway"
+      ],
+      "claim": "가상 eligible 자료의 traction.runway 관측 예시",
+      "source_id": "src-fixture-eligible",
+      "locator": "fixture://eligible/report#criterion=traction.runway",
+      "excerpt": "가상 traction.runway 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-eligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-eligible-traction-concentration": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-eligible-traction-concentration",
+      "candidate_id": "co-fixture-eligible",
+      "scope": "company",
+      "criterion_ids": [
+        "traction.concentration"
+      ],
+      "claim": "가상 eligible 자료의 traction.concentration 관측 예시",
+      "source_id": "src-fixture-eligible",
+      "locator": "fixture://eligible/report#criterion=traction.concentration",
+      "excerpt": "가상 traction.concentration 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-eligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-eligible-traction-rule_of_40": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-eligible-traction-rule_of_40",
+      "candidate_id": "co-fixture-eligible",
+      "scope": "company",
+      "criterion_ids": [
+        "traction.rule_of_40"
+      ],
+      "claim": "가상 eligible 자료의 traction.rule_of_40 관측 예시",
+      "source_id": "src-fixture-eligible",
+      "locator": "fixture://eligible/report#criterion=traction.rule_of_40",
+      "excerpt": "가상 traction.rule_of_40 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-eligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-eligible-deal_terms-stage": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-eligible-deal_terms-stage",
+      "candidate_id": "co-fixture-eligible",
+      "scope": "company",
+      "criterion_ids": [
+        "deal_terms.stage"
+      ],
+      "claim": "가상 eligible 자료의 deal_terms.stage 관측 예시",
+      "source_id": "src-fixture-eligible",
+      "locator": "fixture://eligible/report#criterion=deal_terms.stage",
+      "excerpt": "가상 deal_terms.stage 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-eligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-eligible-deal_terms-valuation": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-eligible-deal_terms-valuation",
+      "candidate_id": "co-fixture-eligible",
+      "scope": "company",
+      "criterion_ids": [
+        "deal_terms.valuation"
+      ],
+      "claim": "가상 eligible 자료의 deal_terms.valuation 관측 예시",
+      "source_id": "src-fixture-eligible",
+      "locator": "fixture://eligible/report#criterion=deal_terms.valuation",
+      "excerpt": "가상 deal_terms.valuation 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-eligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-eligible-deal_terms-ownership": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-eligible-deal_terms-ownership",
+      "candidate_id": "co-fixture-eligible",
+      "scope": "company",
+      "criterion_ids": [
+        "deal_terms.ownership"
+      ],
+      "claim": "가상 eligible 자료의 deal_terms.ownership 관측 예시",
+      "source_id": "src-fixture-eligible",
+      "locator": "fixture://eligible/report#criterion=deal_terms.ownership",
+      "excerpt": "가상 deal_terms.ownership 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-eligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-ineligible-technology-integration": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-ineligible-technology-integration",
+      "candidate_id": "co-fixture-ineligible",
+      "scope": "company",
+      "criterion_ids": [
+        "technology.integration"
+      ],
+      "claim": "가상 ineligible 자료의 technology.integration 관측 예시",
+      "source_id": "src-fixture-ineligible",
+      "locator": "fixture://ineligible/report#criterion=technology.integration",
+      "excerpt": "가상 technology.integration 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-ineligible",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-ineligible"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-unknown-technology-integration": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-unknown-technology-integration",
+      "candidate_id": "co-fixture-unknown",
+      "scope": "company",
+      "criterion_ids": [
+        "technology.integration"
+      ],
+      "claim": "가상 unknown 자료의 technology.integration 관측 예시",
+      "source_id": "src-fixture-unknown",
+      "locator": "fixture://unknown/report#criterion=technology.integration",
+      "excerpt": "가상 technology.integration 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-unknown",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-unknown"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    },
+    "ev-fixture-same_name-technology-integration": {
+      "schema_version": "synthetic-common-1",
+      "evidence_id": "ev-fixture-same_name-technology-integration",
+      "candidate_id": "co-fixture-same_name",
+      "scope": "company",
+      "criterion_ids": [
+        "technology.integration"
+      ],
+      "claim": "가상 same_name 자료의 technology.integration 관측 예시",
+      "source_id": "src-fixture-same_name",
+      "locator": "fixture://same_name/report#criterion=technology.integration",
+      "excerpt": "가상 technology.integration 예시. 실측 아님.",
+      "provenance": [
+        {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-same_name",
+          "method": "rag",
+          "chunk_id": "chunk-fixture-same_name"
+        }
+      ],
+      "evidence_kind": "reported",
+      "confidence": "unknown",
+      "limitations": [
+        "실제 기업 자료가 아닌 가상 fixture"
+      ],
+      "supporting_evidence_ids": [],
+      "conflicts_with": []
+    }
+  },
+  "retrieval_records": {
+    "retrieval-fixture-eligible": {
+      "schema_version": "synthetic-common-1",
+      "retrieval_id": "retrieval-fixture-eligible",
+      "run_id": "run-common-fixture",
+      "candidate_id": "co-fixture-eligible",
+      "tool_name": "fixture-retrieve",
+      "query": "가상 로봇 알파 가상 자료",
+      "arguments_without_secrets": {
+        "execution_mode": "fixture"
+      },
+      "started_at": "2026-09-30T00:00:00Z",
+      "finished_at": "2026-09-30T00:00:01Z",
+      "status": "ok",
+      "source_ids": [
+        "src-fixture-eligible"
+      ],
+      "chunk_ids": [
+        "chunk-fixture-eligible"
+      ],
+      "evidence_ids": [
+        "ev-fixture-eligible-founder-expertise",
+        "ev-fixture-eligible-founder-industry",
+        "ev-fixture-eligible-founder-execution",
+        "ev-fixture-eligible-market-size",
+        "ev-fixture-eligible-market-growth",
+        "ev-fixture-eligible-market-demand",
+        "ev-fixture-eligible-technology-maturity",
+        "ev-fixture-eligible-technology-reliability",
+        "ev-fixture-eligible-technology-integration",
+        "ev-fixture-eligible-technology-commercialization",
+        "ev-fixture-eligible-moat-differentiation",
+        "ev-fixture-eligible-moat-ip",
+        "ev-fixture-eligible-moat-data",
+        "ev-fixture-eligible-moat-lock_in",
+        "ev-fixture-eligible-traction-revenue_growth",
+        "ev-fixture-eligible-traction-gross_margin",
+        "ev-fixture-eligible-traction-burn",
+        "ev-fixture-eligible-traction-runway",
+        "ev-fixture-eligible-traction-concentration",
+        "ev-fixture-eligible-traction-rule_of_40",
+        "ev-fixture-eligible-deal_terms-stage",
+        "ev-fixture-eligible-deal_terms-valuation",
+        "ev-fixture-eligible-deal_terms-ownership"
+      ],
+      "error_id": null,
+      "cost": null,
+      "cache_hit": false
+    },
+    "retrieval-fixture-ineligible": {
+      "schema_version": "synthetic-common-1",
+      "retrieval_id": "retrieval-fixture-ineligible",
+      "run_id": "run-common-fixture",
+      "candidate_id": "co-fixture-ineligible",
+      "tool_name": "fixture-retrieve",
+      "query": "가상 로봇 ineligible 가상 자료",
+      "arguments_without_secrets": {
+        "execution_mode": "fixture"
+      },
+      "started_at": "2026-09-30T00:00:00Z",
+      "finished_at": "2026-09-30T00:00:01Z",
+      "status": "ok",
+      "source_ids": [
+        "src-fixture-ineligible"
+      ],
+      "chunk_ids": [
+        "chunk-fixture-ineligible"
+      ],
+      "evidence_ids": [
+        "ev-fixture-ineligible-technology-integration"
+      ],
+      "error_id": null,
+      "cost": null,
+      "cache_hit": false
+    },
+    "retrieval-fixture-unknown": {
+      "schema_version": "synthetic-common-1",
+      "retrieval_id": "retrieval-fixture-unknown",
+      "run_id": "run-common-fixture",
+      "candidate_id": "co-fixture-unknown",
+      "tool_name": "fixture-retrieve",
+      "query": "가상 로봇 unknown 가상 자료",
+      "arguments_without_secrets": {
+        "execution_mode": "fixture"
+      },
+      "started_at": "2026-09-30T00:00:00Z",
+      "finished_at": "2026-09-30T00:00:01Z",
+      "status": "ok",
+      "source_ids": [
+        "src-fixture-unknown"
+      ],
+      "chunk_ids": [
+        "chunk-fixture-unknown"
+      ],
+      "evidence_ids": [
+        "ev-fixture-unknown-technology-integration"
+      ],
+      "error_id": null,
+      "cost": null,
+      "cache_hit": false
+    },
+    "retrieval-fixture-same_name": {
+      "schema_version": "synthetic-common-1",
+      "retrieval_id": "retrieval-fixture-same_name",
+      "run_id": "run-common-fixture",
+      "candidate_id": "co-fixture-same_name",
+      "tool_name": "fixture-retrieve",
+      "query": "가상 로봇 알파 가상 자료",
+      "arguments_without_secrets": {
+        "execution_mode": "fixture"
+      },
+      "started_at": "2026-09-30T00:00:00Z",
+      "finished_at": "2026-09-30T00:00:01Z",
+      "status": "ok",
+      "source_ids": [
+        "src-fixture-same_name"
+      ],
+      "chunk_ids": [
+        "chunk-fixture-same_name"
+      ],
+      "evidence_ids": [
+        "ev-fixture-same_name-technology-integration"
+      ],
+      "error_id": null,
+      "cost": null,
+      "cache_hit": false
+    }
+  },
+  "snapshots": {
+    "snapshot-v1-554b5bdf7a453385f7a8876b41af78e72b9cbff7a19e41084cba8f087fbeb964": {
+      "schema_version": "synthetic-common-1",
+      "snapshot_id": "snapshot-v1-554b5bdf7a453385f7a8876b41af78e72b9cbff7a19e41084cba8f087fbeb964",
+      "run_id": "run-common-fixture",
+      "candidate_id": "co-fixture-eligible",
+      "evaluation_round": 1,
+      "evidence_revision": 1,
+      "policy_version": "main-draft-0.1.0",
+      "corpus_version": "corpus-fixture-v1",
+      "index_version": "index-fixture-v1",
+      "as_of": "2026-09-30",
+      "evidence_ids": [
+        "ev-fixture-eligible-founder-expertise",
+        "ev-fixture-eligible-founder-industry",
+        "ev-fixture-eligible-founder-execution",
+        "ev-fixture-eligible-market-size",
+        "ev-fixture-eligible-market-growth",
+        "ev-fixture-eligible-market-demand",
+        "ev-fixture-eligible-technology-maturity",
+        "ev-fixture-eligible-technology-reliability",
+        "ev-fixture-eligible-technology-integration",
+        "ev-fixture-eligible-technology-commercialization",
+        "ev-fixture-eligible-moat-differentiation",
+        "ev-fixture-eligible-moat-ip",
+        "ev-fixture-eligible-moat-data",
+        "ev-fixture-eligible-moat-lock_in",
+        "ev-fixture-eligible-traction-revenue_growth",
+        "ev-fixture-eligible-traction-gross_margin",
+        "ev-fixture-eligible-traction-burn",
+        "ev-fixture-eligible-traction-runway",
+        "ev-fixture-eligible-traction-concentration",
+        "ev-fixture-eligible-traction-rule_of_40",
+        "ev-fixture-eligible-deal_terms-stage",
+        "ev-fixture-eligible-deal_terms-valuation",
+        "ev-fixture-eligible-deal_terms-ownership"
+      ],
+      "evidence": {
+        "ev-fixture-eligible-founder-expertise": {
+          "schema_version": "synthetic-common-1",
+          "evidence_id": "ev-fixture-eligible-founder-expertise",
+          "candidate_id": "co-fixture-eligible",
+          "scope": "company",
+          "criterion_ids": [
+            "founder.expertise"
+          ],
+          "claim": "가상 eligible 자료의 founder.expertise 관측 예시",
+          "source_id": "src-fixture-eligible",
+          "locator": "fixture://eligible/report#criterion=founder.expertise",
+          "excerpt": "가상 founder.expertise 예시. 실측 아님.",
+          "provenance": [
+            {
+              "schema_version": "synthetic-common-1",
+              "retrieval_id": "retrieval-fixture-eligible",
+              "method": "rag",
+              "chunk_id": "chunk-fixture-eligible"
+            }
+          ],
+          "evidence_kind": "reported",
+          "confidence": "unknown",
+          "limitations": [
+            "실제 기업 자료가 아닌 가상 fixture"
+          ],
+          "supporting_evidence_ids": [],
+          "conflicts_with": []
+        },
+        "ev-fixture-eligible-founder-industry": {
+          "schema_version": "synthetic-common-1",
+          "evidence_id": "ev-fixture-eligible-founder-industry",
+          "candidate_id": "co-fixture-eligible",
+          "scope": "company",
+          "criterion_ids": [
+            "founder.industry"
+          ],
+          "claim": "가상 eligible 자료의 founder.industry 관측 예시",
+          "source_id": "src-fixture-eligible",
+          "locator": "fixture://eligible/report#criterion=founder.industry",
+          "excerpt": "가상 founder.industry 예시. 실측 아님.",
+          "provenance": [
+            {
+              "schema_version": "synthetic-common-1",
+              "retrieval_id": "retrieval-fixture-eligible",
+              "method": "rag",
+              "chunk_id": "chunk-fixture-eligible"
+            }
+          ],
+          "evidence_kind": "reported",
+          "confidence": "unknown",
+          "limitations": [
+            "실제 기업 자료가 아닌 가상 fixture"
+          ],
+          "supporting_evidence_ids": [],
+          "conflicts_with": []
+        },
+        "ev-fixture-eligible-founder-execution": {
+          "schema_version": "synthetic-common-1",
+          "evidence_id": "ev-fixture-eligible-founder-execution",
+          "candidate_id": "co-fixture-eligible",
+          "scope": "company",
+          "criterion_ids": [
+            "founder.execution"
+          ],
+          "claim": "가상 eligible 자료의 founder.execution 관측 예시",
+          "source_id": "src-fixture-eligible",
+          "locator": "fixture://eligible/report#criterion=founder.execution",
+          "excerpt": "가상 founder.execution 예시. 실측 아님.",
+          "provenance": [
+            {
+              "schema_version": "synthetic-common-1",
+              "retrieval_id": "retrieval-fixture-eligible",
+              "method": "rag",
+              "chunk_id": "chunk-fixture-eligible"
+            }
+          ],
+          "evidence_kind": "reported",
+          "confidence": "unknown",
+          "limitations": [
+            "실제 기업 자료가 아닌 가상 fixture"
+          ],
+          "supporting_evidence_ids": [],
+          "conflicts_with": []
+        },
+        "ev-fixture-eligible-market-size": {
+          "schema_version": "synthetic-common-1",
+          "evidence_id": "ev-fixture-eligible-market-size",
+          "candidate_id": "co-fixture-eligible",
+          "scope": "company",
+          "criterion_ids": [
+            "market.size"
+          ],
+          "claim": "가상 eligible 자료의 market.size 관측 예시",
+          "source_id": "src-fixture-eligible",
+          "locator": "fixture://eligible/report#criterion=market.size",
+          "excerpt": "가상 market.size 예시. 실측 아님.",
+          "provenance": [
+            {
+              "schema_version": "synthetic-common-1",
+              "retrieval_id": "retrieval-fixture-eligible",
+              "method": "rag",
+              "chunk_id": "chunk-fixture-eligible"
+            }
+          ],
+          "evidence_kind": "reported",
+          "confidence": "unknown",
+          "limitations": [
+            "실제 기업 자료가 아닌 가상 fixture"
+          ],
+          "supporting_evidence_ids": [],
+          "conflicts_with": []
+        },
+        "ev-fixture-eligible-market-growth": {
+          "schema_version": "synthetic-common-1",
+          "evidence_id": "ev-fixture-eligible-market-growth",
+          "candidate_id": "co-fixture-eligible",
+          "scope": "company",
+          "criterion_ids": [
+            "market.growth"
+          ],
+          "claim": "가상 eligible 자료의 market.growth 관측 예시",
+          "source_id": "src-fixture-eligible",
+          "locator": "fixture://eligible/report#criterion=market.growth",
+          "excerpt": "가상 market.growth 예시. 실측 아님.",
+          "provenance": [
+            {
+              "schema_version": "synthetic-common-1",
+              "retrieval_id": "retrieval-fixture-eligible",
+              "method": "rag",
+              "chunk_id": "chunk-fixture-eligible"
+            }
+          ],
+          "evidence_kind": "reported",
+          "confidence": "unknown",
+          "limitations": [
+            "실제 기업 자료가 아닌 가상 fixture"
+          ],
+          "supporting_evidence_ids": [],
+          "conflicts_with": []
+        },
+        "ev-fixture-eligible-market-demand": {
+          "schema_version": "synthetic-common-1",
+          "evidence_id": "ev-fixture-eligible-market-demand",
+          "candidate_id": "co-fixture-eligible",
+          "scope": "company",
+          "criterion_ids": [
+            "market.demand"
+          ],
+          "claim": "가상 eligible 자료의 market.demand 관측 예시",
+          "source_id": "src-fixture-eligible",
+          "locator": "fixture://eligible/report#criterion=market.demand",
+          "excerpt": "가상 market.demand 예시. 실측 아님.",
+          "provenance": [
+            {
+              "schema_version": "synthetic-common-1",
+              "retrieval_id": "retrieval-fixture-eligible",
+              "method": "rag",
+              "chunk_id": "chunk-fixture-eligible"
+            }
+          ],
+          "evidence_kind": "reported",
+          "confidence": "unknown",
+          "limitations": [
+            "실제 기업 자료가 아닌 가상 fixture"
+          ],
+          "supporting_evidence_ids": [],
+          "conflicts_with": []
+        },
+        "ev-fixture-eligible-technology-maturity": {
+          "schema_version": "synthetic-common-1",
+          "evidence_id": "ev-fixture-eligible-technology-maturity",
+          "candidate_id": "co-fixture-eligible",
+          "scope": "company",
+          "criterion_ids": [
+            "technology.maturity"
+          ],
+          "claim": "가상 eligible 자료의 technology.maturity 관측 예시",
+          "source_id": "src-fixture-eligible",
+          "locator": "fixture://eligible/report#criterion=technology.maturity",
+          "excerpt": "가상 technology.maturity 예시. 실측 아님.",
+          "provenance": [
+            {
+              "schema_version": "synthetic-common-1",
+              "retrieval_id": "retrieval-fixture-eligible",
+              "method": "rag",
+              "chunk_id": "chunk-fixture-eligible"
+            }
+          ],
+          "evidence_kind": "reported",
+          "confidence": "unknown",
+          "limitations": [
+            "실제 기업 자료가 아닌 가상 fixture"
+          ],
+          "supporting_evidence_ids": [],
+          "conflicts_with": []
+        },
+        "ev-fixture-eligible-technology-reliability": {
+          "schema_version": "synthetic-common-1",
+          "evidence_id": "ev-fixture-eligible-technology-reliability",
+          "candidate_id": "co-fixture-eligible",
+          "scope": "company",
+          "criterion_ids": [
+            "technology.reliability"
+          ],
+          "claim": "가상 eligible 자료의 technology.reliability 관측 예시",
+          "source_id": "src-fixture-eligible",
+          "locator": "fixture://eligible/report#criterion=technology.reliability",
+          "excerpt": "가상 technology.reliability 예시. 실측 아님.",
+          "provenance": [
+            {
+              "schema_version": "synthetic-common-1",
+              "retrieval_id": "retrieval-fixture-eligible",
+              "method": "rag",
+              "chunk_id": "chunk-fixture-eligible"
+            }
+          ],
+          "evidence_kind": "reported",
+          "confidence": "unknown",
+          "limitations": [
+            "실제 기업 자료가 아닌 가상 fixture"
+          ],
+          "supporting_evidence_ids": [],
+          "conflicts_with": []
+        },
+        "ev-fixture-eligible-technology-integration": {
+          "schema_version": "synthetic-common-1",
+          "evidence_id": "ev-fixture-eligible-technology-integration",
+          "candidate_id": "co-fixture-eligible",
+          "scope": "company",
+          "criterion_ids": [
+            "technology.integration"
+          ],
+          "claim": "가상 eligible 자료의 technology.integration 관측 예시",
+          "source_id": "src-fixture-eligible",
+          "locator": "fixture://eligible/report#criterion=technology.integration",
+          "excerpt": "가상 technology.integration 예시. 실측 아님.",
+          "provenance": [
+            {
+              "schema_version": "synthetic-common-1",
+              "retrieval_id": "retrieval-fixture-eligible",
+              "method": "rag",
+              "chunk_id": "chunk-fixture-eligible"
+            }
+          ],
+          "evidence_kind": "reported",
+          "confidence": "unknown",
+          "limitations": [
+            "실제 기업 자료가 아닌 가상 fixture"
+          ],
+          "supporting_evidence_ids": [],
+          "conflicts_with": []
+        },
+        "ev-fixture-eligible-technology-commercialization": {
+          "schema_version": "synthetic-common-1",
+          "evidence_id": "ev-fixture-eligible-technology-commercialization",
+          "candidate_id": "co-fixture-eligible",
+          "scope": "company",
+          "criterion_ids": [
+            "technology.commercialization"
+          ],
+          "claim": "가상 eligible 자료의 technology.commercialization 관측 예시",
+          "source_id": "src-fixture-eligible",
+          "locator": "fixture://eligible/report#criterion=technology.commercialization",
+          "excerpt": "가상 technology.commercialization 예시. 실측 아님.",
+          "provenance": [
+            {
+              "schema_version": "synthetic-common-1",
+              "retrieval_id": "retrieval-fixture-eligible",
+              "method": "rag",
+              "chunk_id": "chunk-fixture-eligible"
+            }
+          ],
+          "evidence_kind": "reported",
+          "confidence": "unknown",
+          "limitations": [
+            "실제 기업 자료가 아닌 가상 fixture"
+          ],
+          "supporting_evidence_ids": [],
+          "conflicts_with": []
+        },
+        "ev-fixture-eligible-moat-differentiation": {
+          "schema_version": "synthetic-common-1",
+          "evidence_id": "ev-fixture-eligible-moat-differentiation",
+          "candidate_id": "co-fixture-eligible",
+          "scope": "company",
+          "criterion_ids": [
+            "moat.differentiation"
+          ],
+          "claim": "가상 eligible 자료의 moat.differentiation 관측 예시",
+          "source_id": "src-fixture-eligible",
+          "locator": "fixture://eligible/report#criterion=moat.differentiation",
+          "excerpt": "가상 moat.differentiation 예시. 실측 아님.",
+          "provenance": [
+            {
+              "schema_version": "synthetic-common-1",
+              "retrieval_id": "retrieval-fixture-eligible",
+              "method": "rag",
+              "chunk_id": "chunk-fixture-eligible"
+            }
+          ],
+          "evidence_kind": "reported",
+          "confidence": "unknown",
+          "limitations": [
+            "실제 기업 자료가 아닌 가상 fixture"
+          ],
+          "supporting_evidence_ids": [],
+          "conflicts_with": []
+        },
+        "ev-fixture-eligible-moat-ip": {
+          "schema_version": "synthetic-common-1",
+          "evidence_id": "ev-fixture-eligible-moat-ip",
+          "candidate_id": "co-fixture-eligible",
+          "scope": "company",
+          "criterion_ids": [
+            "moat.ip"
+          ],
+          "claim": "가상 eligible 자료의 moat.ip 관측 예시",
+          "source_id": "src-fixture-eligible",
+          "locator": "fixture://eligible/report#criterion=moat.ip",
+          "excerpt": "가상 moat.ip 예시. 실측 아님.",
+          "provenance": [
+            {
+              "schema_version": "synthetic-common-1",
+              "retrieval_id": "retrieval-fixture-eligible",
+              "method": "rag",
+              "chunk_id": "chunk-fixture-eligible"
+            }
+          ],
+          "evidence_kind": "reported",
+          "confidence": "unknown",
+          "limitations": [
+            "실제 기업 자료가 아닌 가상 fixture"
+          ],
+          "supporting_evidence_ids": [],
+          "conflicts_with": []
+        },
+        "ev-fixture-eligible-moat-data": {
+          "schema_version": "synthetic-common-1",
+          "evidence_id": "ev-fixture-eligible-moat-data",
+          "candidate_id": "co-fixture-eligible",
+          "scope": "company",
+          "criterion_ids": [
+            "moat.data"
+          ],
+          "claim": "가상 eligible 자료의 moat.data 관측 예시",
+          "source_id": "src-fixture-eligible",
+          "locator": "fixture://eligible/report#criterion=moat.data",
+          "excerpt": "가상 moat.data 예시. 실측 아님.",
+          "provenance": [
+            {
+              "schema_version": "synthetic-common-1",
+              "retrieval_id": "retrieval-fixture-eligible",
+              "method": "rag",
+              "chunk_id": "chunk-fixture-eligible"
+            }
+          ],
+          "evidence_kind": "reported",
+          "confidence": "unknown",
+          "limitations": [
+            "실제 기업 자료가 아닌 가상 fixture"
+          ],
+          "supporting_evidence_ids": [],
+          "conflicts_with": []
+        },
+        "ev-fixture-eligible-moat-lock_in": {
+          "schema_version": "synthetic-common-1",
+          "evidence_id": "ev-fixture-eligible-moat-lock_in",
+          "candidate_id": "co-fixture-eligible",
+          "scope": "company",
+          "criterion_ids": [
+            "moat.lock_in"
+          ],
+          "claim": "가상 eligible 자료의 moat.lock_in 관측 예시",
+          "source_id": "src-fixture-eligible",
+          "locator": "fixture://eligible/report#criterion=moat.lock_in",
+          "excerpt": "가상 moat.lock_in 예시. 실측 아님.",
+          "provenance": [
+            {
+              "schema_version": "synthetic-common-1",
+              "retrieval_id": "retrieval-fixture-eligible",
+              "method": "rag",
+              "chunk_id": "chunk-fixture-eligible"
+            }
+          ],
+          "evidence_kind": "reported",
+          "confidence": "unknown",
+          "limitations": [
+            "실제 기업 자료가 아닌 가상 fixture"
+          ],
+          "supporting_evidence_ids": [],
+          "conflicts_with": []
+        },
+        "ev-fixture-eligible-traction-revenue_growth": {
+          "schema_version": "synthetic-common-1",
+          "evidence_id": "ev-fixture-eligible-traction-revenue_growth",
+          "candidate_id": "co-fixture-eligible",
+          "scope": "company",
+          "criterion_ids": [
+            "traction.revenue_growth"
+          ],
+          "claim": "가상 eligible 자료의 traction.revenue_growth 관측 예시",
+          "source_id": "src-fixture-eligible",
+          "locator": "fixture://eligible/report#criterion=traction.revenue_growth",
+          "excerpt": "가상 traction.revenue_growth 예시. 실측 아님.",
+          "provenance": [
+            {
+              "schema_version": "synthetic-common-1",
+              "retrieval_id": "retrieval-fixture-eligible",
+              "method": "rag",
+              "chunk_id": "chunk-fixture-eligible"
+            }
+          ],
+          "evidence_kind": "reported",
+          "confidence": "unknown",
+          "limitations": [
+            "실제 기업 자료가 아닌 가상 fixture"
+          ],
+          "supporting_evidence_ids": [],
+          "conflicts_with": []
+        },
+        "ev-fixture-eligible-traction-gross_margin": {
+          "schema_version": "synthetic-common-1",
+          "evidence_id": "ev-fixture-eligible-traction-gross_margin",
+          "candidate_id": "co-fixture-eligible",
+          "scope": "company",
+          "criterion_ids": [
+            "traction.gross_margin"
+          ],
+          "claim": "가상 eligible 자료의 traction.gross_margin 관측 예시",
+          "source_id": "src-fixture-eligible",
+          "locator": "fixture://eligible/report#criterion=traction.gross_margin",
+          "excerpt": "가상 traction.gross_margin 예시. 실측 아님.",
+          "provenance": [
+            {
+              "schema_version": "synthetic-common-1",
+              "retrieval_id": "retrieval-fixture-eligible",
+              "method": "rag",
+              "chunk_id": "chunk-fixture-eligible"
+            }
+          ],
+          "evidence_kind": "reported",
+          "confidence": "unknown",
+          "limitations": [
+            "실제 기업 자료가 아닌 가상 fixture"
+          ],
+          "supporting_evidence_ids": [],
+          "conflicts_with": []
+        },
+        "ev-fixture-eligible-traction-burn": {
+          "schema_version": "synthetic-common-1",
+          "evidence_id": "ev-fixture-eligible-traction-burn",
+          "candidate_id": "co-fixture-eligible",
+          "scope": "company",
+          "criterion_ids": [
+            "traction.burn"
+          ],
+          "claim": "가상 eligible 자료의 traction.burn 관측 예시",
+          "source_id": "src-fixture-eligible",
+          "locator": "fixture://eligible/report#criterion=traction.burn",
+          "excerpt": "가상 traction.burn 예시. 실측 아님.",
+          "provenance": [
+            {
+              "schema_version": "synthetic-common-1",
+              "retrieval_id": "retrieval-fixture-eligible",
+              "method": "rag",
+              "chunk_id": "chunk-fixture-eligible"
+            }
+          ],
+          "evidence_kind": "reported",
+          "confidence": "unknown",
+          "limitations": [
+            "실제 기업 자료가 아닌 가상 fixture"
+          ],
+          "supporting_evidence_ids": [],
+          "conflicts_with": []
+        },
+        "ev-fixture-eligible-traction-runway": {
+          "schema_version": "synthetic-common-1",
+          "evidence_id": "ev-fixture-eligible-traction-runway",
+          "candidate_id": "co-fixture-eligible",
+          "scope": "company",
+          "criterion_ids": [
+            "traction.runway"
+          ],
+          "claim": "가상 eligible 자료의 traction.runway 관측 예시",
+          "source_id": "src-fixture-eligible",
+          "locator": "fixture://eligible/report#criterion=traction.runway",
+          "excerpt": "가상 traction.runway 예시. 실측 아님.",
+          "provenance": [
+            {
+              "schema_version": "synthetic-common-1",
+              "retrieval_id": "retrieval-fixture-eligible",
+              "method": "rag",
+              "chunk_id": "chunk-fixture-eligible"
+            }
+          ],
+          "evidence_kind": "reported",
+          "confidence": "unknown",
+          "limitations": [
+            "실제 기업 자료가 아닌 가상 fixture"
+          ],
+          "supporting_evidence_ids": [],
+          "conflicts_with": []
+        },
+        "ev-fixture-eligible-traction-concentration": {
+          "schema_version": "synthetic-common-1",
+          "evidence_id": "ev-fixture-eligible-traction-concentration",
+          "candidate_id": "co-fixture-eligible",
+          "scope": "company",
+          "criterion_ids": [
+            "traction.concentration"
+          ],
+          "claim": "가상 eligible 자료의 traction.concentration 관측 예시",
+          "source_id": "src-fixture-eligible",
+          "locator": "fixture://eligible/report#criterion=traction.concentration",
+          "excerpt": "가상 traction.concentration 예시. 실측 아님.",
+          "provenance": [
+            {
+              "schema_version": "synthetic-common-1",
+              "retrieval_id": "retrieval-fixture-eligible",
+              "method": "rag",
+              "chunk_id": "chunk-fixture-eligible"
+            }
+          ],
+          "evidence_kind": "reported",
+          "confidence": "unknown",
+          "limitations": [
+            "실제 기업 자료가 아닌 가상 fixture"
+          ],
+          "supporting_evidence_ids": [],
+          "conflicts_with": []
+        },
+        "ev-fixture-eligible-traction-rule_of_40": {
+          "schema_version": "synthetic-common-1",
+          "evidence_id": "ev-fixture-eligible-traction-rule_of_40",
+          "candidate_id": "co-fixture-eligible",
+          "scope": "company",
+          "criterion_ids": [
+            "traction.rule_of_40"
+          ],
+          "claim": "가상 eligible 자료의 traction.rule_of_40 관측 예시",
+          "source_id": "src-fixture-eligible",
+          "locator": "fixture://eligible/report#criterion=traction.rule_of_40",
+          "excerpt": "가상 traction.rule_of_40 예시. 실측 아님.",
+          "provenance": [
+            {
+              "schema_version": "synthetic-common-1",
+              "retrieval_id": "retrieval-fixture-eligible",
+              "method": "rag",
+              "chunk_id": "chunk-fixture-eligible"
+            }
+          ],
+          "evidence_kind": "reported",
+          "confidence": "unknown",
+          "limitations": [
+            "실제 기업 자료가 아닌 가상 fixture"
+          ],
+          "supporting_evidence_ids": [],
+          "conflicts_with": []
+        },
+        "ev-fixture-eligible-deal_terms-stage": {
+          "schema_version": "synthetic-common-1",
+          "evidence_id": "ev-fixture-eligible-deal_terms-stage",
+          "candidate_id": "co-fixture-eligible",
+          "scope": "company",
+          "criterion_ids": [
+            "deal_terms.stage"
+          ],
+          "claim": "가상 eligible 자료의 deal_terms.stage 관측 예시",
+          "source_id": "src-fixture-eligible",
+          "locator": "fixture://eligible/report#criterion=deal_terms.stage",
+          "excerpt": "가상 deal_terms.stage 예시. 실측 아님.",
+          "provenance": [
+            {
+              "schema_version": "synthetic-common-1",
+              "retrieval_id": "retrieval-fixture-eligible",
+              "method": "rag",
+              "chunk_id": "chunk-fixture-eligible"
+            }
+          ],
+          "evidence_kind": "reported",
+          "confidence": "unknown",
+          "limitations": [
+            "실제 기업 자료가 아닌 가상 fixture"
+          ],
+          "supporting_evidence_ids": [],
+          "conflicts_with": []
+        },
+        "ev-fixture-eligible-deal_terms-valuation": {
+          "schema_version": "synthetic-common-1",
+          "evidence_id": "ev-fixture-eligible-deal_terms-valuation",
+          "candidate_id": "co-fixture-eligible",
+          "scope": "company",
+          "criterion_ids": [
+            "deal_terms.valuation"
+          ],
+          "claim": "가상 eligible 자료의 deal_terms.valuation 관측 예시",
+          "source_id": "src-fixture-eligible",
+          "locator": "fixture://eligible/report#criterion=deal_terms.valuation",
+          "excerpt": "가상 deal_terms.valuation 예시. 실측 아님.",
+          "provenance": [
+            {
+              "schema_version": "synthetic-common-1",
+              "retrieval_id": "retrieval-fixture-eligible",
+              "method": "rag",
+              "chunk_id": "chunk-fixture-eligible"
+            }
+          ],
+          "evidence_kind": "reported",
+          "confidence": "unknown",
+          "limitations": [
+            "실제 기업 자료가 아닌 가상 fixture"
+          ],
+          "supporting_evidence_ids": [],
+          "conflicts_with": []
+        },
+        "ev-fixture-eligible-deal_terms-ownership": {
+          "schema_version": "synthetic-common-1",
+          "evidence_id": "ev-fixture-eligible-deal_terms-ownership",
+          "candidate_id": "co-fixture-eligible",
+          "scope": "company",
+          "criterion_ids": [
+            "deal_terms.ownership"
+          ],
+          "claim": "가상 eligible 자료의 deal_terms.ownership 관측 예시",
+          "source_id": "src-fixture-eligible",
+          "locator": "fixture://eligible/report#criterion=deal_terms.ownership",
+          "excerpt": "가상 deal_terms.ownership 예시. 실측 아님.",
+          "provenance": [
+            {
+              "schema_version": "synthetic-common-1",
+              "retrieval_id": "retrieval-fixture-eligible",
+              "method": "rag",
+              "chunk_id": "chunk-fixture-eligible"
+            }
+          ],
+          "evidence_kind": "reported",
+          "confidence": "unknown",
+          "limitations": [
+            "실제 기업 자료가 아닌 가상 fixture"
+          ],
+          "supporting_evidence_ids": [],
+          "conflicts_with": []
+        }
+      },
+      "sources": {
+        "src-fixture-eligible": {
+          "schema_version": "synthetic-common-1",
+          "source_id": "src-fixture-eligible",
+          "title": "가상 로봇 알파 가상 자료 (eligible)",
+          "publisher": "가상 fixture 제작자",
+          "author": null,
+          "source_kind": "report",
+          "url": "fixture://eligible/report",
+          "local_path": null,
+          "published_at": "2026-09-29",
+          "retrieved_at": "2026-09-30T00:00:00Z",
+          "content_hash": "f022422add1e7937fdd76dd28fab8caa2145d3ab053a630d71d7c994eefe8de7",
+          "language": "ko",
+          "access_notes": "가상 데이터이며 원문이나 실제 자료가 아님.",
+          "bibliographic_metadata": {
+            "synthetic": true
+          }
+        }
+      },
+      "chunks": {
+        "chunk-fixture-eligible": {
+          "schema_version": "synthetic-common-1",
+          "chunk_id": "chunk-fixture-eligible",
+          "source_id": "src-fixture-eligible",
+          "corpus_version": "corpus-fixture-v1",
+          "text": "가상 eligible 자료의 founder.expertise 관측 예시\n가상 eligible 자료의 founder.industry 관측 예시\n가상 eligible 자료의 founder.execution 관측 예시\n가상 eligible 자료의 market.size 관측 예시\n가상 eligible 자료의 market.growth 관측 예시\n가상 eligible 자료의 market.demand 관측 예시\n가상 eligible 자료의 technology.maturity 관측 예시\n가상 eligible 자료의 technology.reliability 관측 예시\n가상 eligible 자료의 technology.integration 관측 예시\n가상 eligible 자료의 technology.commercialization 관측 예시\n가상 eligible 자료의 moat.differentiation 관측 예시\n가상 eligible 자료의 moat.ip 관측 예시\n가상 eligible 자료의 moat.data 관측 예시\n가상 eligible 자료의 moat.lock_in 관측 예시\n가상 eligible 자료의 traction.revenue_growth 관측 예시\n가상 eligible 자료의 traction.gross_margin 관측 예시\n가상 eligible 자료의 traction.burn 관측 예시\n가상 eligible 자료의 traction.runway 관측 예시\n가상 eligible 자료의 traction.concentration 관측 예시\n가상 eligible 자료의 traction.rule_of_40 관측 예시\n가상 eligible 자료의 deal_terms.stage 관측 예시\n가상 eligible 자료의 deal_terms.valuation 관측 예시\n가상 eligible 자료의 deal_terms.ownership 관측 예시",
+          "page_start": 1,
+          "page_end": 1,
+          "section": "가상 관측",
+          "locator": "fixture://eligible/report#page=1",
+          "candidate_ids": [
+            "co-fixture-eligible"
+          ],
+          "scope": "company",
+          "language": "ko",
+          "embedding_model": "fixture-no-model",
+          "embedding_revision": "fixture-v1"
+        }
+      },
+      "retrieval_records": {
+        "retrieval-fixture-eligible": {
+          "schema_version": "synthetic-common-1",
+          "retrieval_id": "retrieval-fixture-eligible",
+          "run_id": "run-common-fixture",
+          "candidate_id": "co-fixture-eligible",
+          "tool_name": "fixture-retrieve",
+          "query": "가상 로봇 알파 가상 자료",
+          "arguments_without_secrets": {
+            "execution_mode": "fixture"
+          },
+          "started_at": "2026-09-30T00:00:00Z",
+          "finished_at": "2026-09-30T00:00:01Z",
+          "status": "ok",
+          "source_ids": [
+            "src-fixture-eligible"
+          ],
+          "chunk_ids": [
+            "chunk-fixture-eligible"
+          ],
+          "evidence_ids": [
+            "ev-fixture-eligible-founder-expertise",
+            "ev-fixture-eligible-founder-industry",
+            "ev-fixture-eligible-founder-execution",
+            "ev-fixture-eligible-market-size",
+            "ev-fixture-eligible-market-growth",
+            "ev-fixture-eligible-market-demand",
+            "ev-fixture-eligible-technology-maturity",
+            "ev-fixture-eligible-technology-reliability",
+            "ev-fixture-eligible-technology-integration",
+            "ev-fixture-eligible-technology-commercialization",
+            "ev-fixture-eligible-moat-differentiation",
+            "ev-fixture-eligible-moat-ip",
+            "ev-fixture-eligible-moat-data",
+            "ev-fixture-eligible-moat-lock_in",
+            "ev-fixture-eligible-traction-revenue_growth",
+            "ev-fixture-eligible-traction-gross_margin",
+            "ev-fixture-eligible-traction-burn",
+            "ev-fixture-eligible-traction-runway",
+            "ev-fixture-eligible-traction-concentration",
+            "ev-fixture-eligible-traction-rule_of_40",
+            "ev-fixture-eligible-deal_terms-stage",
+            "ev-fixture-eligible-deal_terms-valuation",
+            "ev-fixture-eligible-deal_terms-ownership"
+          ],
+          "error_id": null,
+          "cost": null,
+          "cache_hit": false
+        }
+      }
+    }
+  },
+  "evaluations": {
+    "co-fixture-eligible:1:founder": {
+      "schema_version": "synthetic-common-1",
+      "run_id": "run-common-fixture",
+      "candidate_id": "co-fixture-eligible",
+      "dimension": "founder",
+      "evaluation_round": 1,
+      "snapshot_id": "snapshot-v1-554b5bdf7a453385f7a8876b41af78e72b9cbff7a19e41084cba8f087fbeb964",
+      "evidence_revision": 1,
+      "policy_version": "main-draft-0.1.0",
+      "rubric_version": "rubric-fixture-v1",
+      "criteria": [
+        {
+          "schema_version": "synthetic-common-1",
+          "criterion_id": "founder.expertise",
+          "status": "observed",
+          "rating": 3,
+          "evidence_ids": [
+            "ev-fixture-eligible-founder-expertise"
+          ],
+          "rationale": "가상 예시이며 실제 rubric 적용 결과 아님.",
+          "missing_reason": null,
+          "applicability_note": null
+        },
+        {
+          "schema_version": "synthetic-common-1",
+          "criterion_id": "founder.industry",
+          "status": "observed",
+          "rating": 3,
+          "evidence_ids": [
+            "ev-fixture-eligible-founder-industry"
+          ],
+          "rationale": "가상 예시이며 실제 rubric 적용 결과 아님.",
+          "missing_reason": null,
+          "applicability_note": null
+        },
+        {
+          "schema_version": "synthetic-common-1",
+          "criterion_id": "founder.execution",
+          "status": "observed",
+          "rating": 3,
+          "evidence_ids": [
+            "ev-fixture-eligible-founder-execution"
+          ],
+          "rationale": "가상 예시이며 실제 rubric 적용 결과 아님.",
+          "missing_reason": null,
+          "applicability_note": null
+        }
+      ],
+      "research_gaps": [],
+      "caveats": [
+        "가상 평가이며 실제 LLM 출력·투자 판단이 아님."
+      ]
+    },
+    "co-fixture-eligible:1:market": {
+      "schema_version": "synthetic-common-1",
+      "run_id": "run-common-fixture",
+      "candidate_id": "co-fixture-eligible",
+      "dimension": "market",
+      "evaluation_round": 1,
+      "snapshot_id": "snapshot-v1-554b5bdf7a453385f7a8876b41af78e72b9cbff7a19e41084cba8f087fbeb964",
+      "evidence_revision": 1,
+      "policy_version": "main-draft-0.1.0",
+      "rubric_version": "rubric-fixture-v1",
+      "criteria": [
+        {
+          "schema_version": "synthetic-common-1",
+          "criterion_id": "market.size",
+          "status": "observed",
+          "rating": 3,
+          "evidence_ids": [
+            "ev-fixture-eligible-market-size"
+          ],
+          "rationale": "가상 예시이며 실제 rubric 적용 결과 아님.",
+          "missing_reason": null,
+          "applicability_note": null
+        },
+        {
+          "schema_version": "synthetic-common-1",
+          "criterion_id": "market.growth",
+          "status": "observed",
+          "rating": 3,
+          "evidence_ids": [
+            "ev-fixture-eligible-market-growth"
+          ],
+          "rationale": "가상 예시이며 실제 rubric 적용 결과 아님.",
+          "missing_reason": null,
+          "applicability_note": null
+        },
+        {
+          "schema_version": "synthetic-common-1",
+          "criterion_id": "market.demand",
+          "status": "observed",
+          "rating": 3,
+          "evidence_ids": [
+            "ev-fixture-eligible-market-demand"
+          ],
+          "rationale": "가상 예시이며 실제 rubric 적용 결과 아님.",
+          "missing_reason": null,
+          "applicability_note": null
+        }
+      ],
+      "research_gaps": [],
+      "caveats": [
+        "가상 평가이며 실제 LLM 출력·투자 판단이 아님."
+      ]
+    },
+    "co-fixture-eligible:1:technology": {
+      "schema_version": "synthetic-common-1",
+      "run_id": "run-common-fixture",
+      "candidate_id": "co-fixture-eligible",
+      "dimension": "technology",
+      "evaluation_round": 1,
+      "snapshot_id": "snapshot-v1-554b5bdf7a453385f7a8876b41af78e72b9cbff7a19e41084cba8f087fbeb964",
+      "evidence_revision": 1,
+      "policy_version": "main-draft-0.1.0",
+      "rubric_version": "rubric-fixture-v1",
+      "criteria": [
+        {
+          "schema_version": "synthetic-common-1",
+          "criterion_id": "technology.maturity",
+          "status": "observed",
+          "rating": 3,
+          "evidence_ids": [
+            "ev-fixture-eligible-technology-maturity"
+          ],
+          "rationale": "가상 예시이며 실제 rubric 적용 결과 아님.",
+          "missing_reason": null,
+          "applicability_note": null
+        },
+        {
+          "schema_version": "synthetic-common-1",
+          "criterion_id": "technology.reliability",
+          "status": "observed",
+          "rating": 3,
+          "evidence_ids": [
+            "ev-fixture-eligible-technology-reliability"
+          ],
+          "rationale": "가상 예시이며 실제 rubric 적용 결과 아님.",
+          "missing_reason": null,
+          "applicability_note": null
+        },
+        {
+          "schema_version": "synthetic-common-1",
+          "criterion_id": "technology.integration",
+          "status": "observed",
+          "rating": 3,
+          "evidence_ids": [
+            "ev-fixture-eligible-technology-integration"
+          ],
+          "rationale": "가상 예시이며 실제 rubric 적용 결과 아님.",
+          "missing_reason": null,
+          "applicability_note": null
+        },
+        {
+          "schema_version": "synthetic-common-1",
+          "criterion_id": "technology.commercialization",
+          "status": "observed",
+          "rating": 3,
+          "evidence_ids": [
+            "ev-fixture-eligible-technology-commercialization"
+          ],
+          "rationale": "가상 예시이며 실제 rubric 적용 결과 아님.",
+          "missing_reason": null,
+          "applicability_note": null
+        }
+      ],
+      "research_gaps": [],
+      "caveats": [
+        "가상 평가이며 실제 LLM 출력·투자 판단이 아님."
+      ]
+    },
+    "co-fixture-eligible:1:moat": {
+      "schema_version": "synthetic-common-1",
+      "run_id": "run-common-fixture",
+      "candidate_id": "co-fixture-eligible",
+      "dimension": "moat",
+      "evaluation_round": 1,
+      "snapshot_id": "snapshot-v1-554b5bdf7a453385f7a8876b41af78e72b9cbff7a19e41084cba8f087fbeb964",
+      "evidence_revision": 1,
+      "policy_version": "main-draft-0.1.0",
+      "rubric_version": "rubric-fixture-v1",
+      "criteria": [
+        {
+          "schema_version": "synthetic-common-1",
+          "criterion_id": "moat.differentiation",
+          "status": "observed",
+          "rating": 3,
+          "evidence_ids": [
+            "ev-fixture-eligible-moat-differentiation"
+          ],
+          "rationale": "가상 예시이며 실제 rubric 적용 결과 아님.",
+          "missing_reason": null,
+          "applicability_note": null
+        },
+        {
+          "schema_version": "synthetic-common-1",
+          "criterion_id": "moat.ip",
+          "status": "observed",
+          "rating": 3,
+          "evidence_ids": [
+            "ev-fixture-eligible-moat-ip"
+          ],
+          "rationale": "가상 예시이며 실제 rubric 적용 결과 아님.",
+          "missing_reason": null,
+          "applicability_note": null
+        },
+        {
+          "schema_version": "synthetic-common-1",
+          "criterion_id": "moat.data",
+          "status": "observed",
+          "rating": 3,
+          "evidence_ids": [
+            "ev-fixture-eligible-moat-data"
+          ],
+          "rationale": "가상 예시이며 실제 rubric 적용 결과 아님.",
+          "missing_reason": null,
+          "applicability_note": null
+        },
+        {
+          "schema_version": "synthetic-common-1",
+          "criterion_id": "moat.lock_in",
+          "status": "observed",
+          "rating": 3,
+          "evidence_ids": [
+            "ev-fixture-eligible-moat-lock_in"
+          ],
+          "rationale": "가상 예시이며 실제 rubric 적용 결과 아님.",
+          "missing_reason": null,
+          "applicability_note": null
+        }
+      ],
+      "research_gaps": [],
+      "caveats": [
+        "가상 평가이며 실제 LLM 출력·투자 판단이 아님."
+      ]
+    },
+    "co-fixture-eligible:1:traction": {
+      "schema_version": "synthetic-common-1",
+      "run_id": "run-common-fixture",
+      "candidate_id": "co-fixture-eligible",
+      "dimension": "traction",
+      "evaluation_round": 1,
+      "snapshot_id": "snapshot-v1-554b5bdf7a453385f7a8876b41af78e72b9cbff7a19e41084cba8f087fbeb964",
+      "evidence_revision": 1,
+      "policy_version": "main-draft-0.1.0",
+      "rubric_version": "rubric-fixture-v1",
+      "criteria": [
+        {
+          "schema_version": "synthetic-common-1",
+          "criterion_id": "traction.revenue_growth",
+          "status": "observed",
+          "rating": 3,
+          "evidence_ids": [
+            "ev-fixture-eligible-traction-revenue_growth"
+          ],
+          "rationale": "가상 예시이며 실제 rubric 적용 결과 아님.",
+          "missing_reason": null,
+          "applicability_note": null
+        },
+        {
+          "schema_version": "synthetic-common-1",
+          "criterion_id": "traction.gross_margin",
+          "status": "observed",
+          "rating": 3,
+          "evidence_ids": [
+            "ev-fixture-eligible-traction-gross_margin"
+          ],
+          "rationale": "가상 예시이며 실제 rubric 적용 결과 아님.",
+          "missing_reason": null,
+          "applicability_note": null
+        },
+        {
+          "schema_version": "synthetic-common-1",
+          "criterion_id": "traction.burn",
+          "status": "observed",
+          "rating": 3,
+          "evidence_ids": [
+            "ev-fixture-eligible-traction-burn"
+          ],
+          "rationale": "가상 예시이며 실제 rubric 적용 결과 아님.",
+          "missing_reason": null,
+          "applicability_note": null
+        },
+        {
+          "schema_version": "synthetic-common-1",
+          "criterion_id": "traction.runway",
+          "status": "observed",
+          "rating": 3,
+          "evidence_ids": [
+            "ev-fixture-eligible-traction-runway"
+          ],
+          "rationale": "가상 예시이며 실제 rubric 적용 결과 아님.",
+          "missing_reason": null,
+          "applicability_note": null
+        },
+        {
+          "schema_version": "synthetic-common-1",
+          "criterion_id": "traction.concentration",
+          "status": "observed",
+          "rating": 3,
+          "evidence_ids": [
+            "ev-fixture-eligible-traction-concentration"
+          ],
+          "rationale": "가상 예시이며 실제 rubric 적용 결과 아님.",
+          "missing_reason": null,
+          "applicability_note": null
+        },
+        {
+          "schema_version": "synthetic-common-1",
+          "criterion_id": "traction.rule_of_40",
+          "status": "missing",
+          "rating": null,
+          "evidence_ids": [],
+          "rationale": "가상 예시이며 실제 rubric 적용 결과 아님.",
+          "missing_reason": "가상 자료의 적용조건 미확정",
+          "applicability_note": "가상 적용조건 예시"
+        }
+      ],
+      "research_gaps": [],
+      "caveats": [
+        "가상 평가이며 실제 LLM 출력·투자 판단이 아님."
+      ]
+    },
+    "co-fixture-eligible:1:deal_terms": {
+      "schema_version": "synthetic-common-1",
+      "run_id": "run-common-fixture",
+      "candidate_id": "co-fixture-eligible",
+      "dimension": "deal_terms",
+      "evaluation_round": 1,
+      "snapshot_id": "snapshot-v1-554b5bdf7a453385f7a8876b41af78e72b9cbff7a19e41084cba8f087fbeb964",
+      "evidence_revision": 1,
+      "policy_version": "main-draft-0.1.0",
+      "rubric_version": "rubric-fixture-v1",
+      "criteria": [
+        {
+          "schema_version": "synthetic-common-1",
+          "criterion_id": "deal_terms.stage",
+          "status": "observed",
+          "rating": 3,
+          "evidence_ids": [
+            "ev-fixture-eligible-deal_terms-stage"
+          ],
+          "rationale": "가상 예시이며 실제 rubric 적용 결과 아님.",
+          "missing_reason": null,
+          "applicability_note": null
+        },
+        {
+          "schema_version": "synthetic-common-1",
+          "criterion_id": "deal_terms.valuation",
+          "status": "observed",
+          "rating": 3,
+          "evidence_ids": [
+            "ev-fixture-eligible-deal_terms-valuation"
+          ],
+          "rationale": "가상 예시이며 실제 rubric 적용 결과 아님.",
+          "missing_reason": null,
+          "applicability_note": null
+        },
+        {
+          "schema_version": "synthetic-common-1",
+          "criterion_id": "deal_terms.ownership",
+          "status": "observed",
+          "rating": 3,
+          "evidence_ids": [
+            "ev-fixture-eligible-deal_terms-ownership"
+          ],
+          "rationale": "가상 예시이며 실제 rubric 적용 결과 아님.",
+          "missing_reason": null,
+          "applicability_note": null
+        }
+      ],
+      "research_gaps": [],
+      "caveats": [
+        "가상 평가이며 실제 LLM 출력·투자 판단이 아님."
+      ]
+    }
+  }
+}
