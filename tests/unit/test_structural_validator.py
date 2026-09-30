@@ -204,3 +204,25 @@ def test_summary_without_decision_is_fail_not_crash(ctx):
     bad = ctx.model_copy(update={"decisions": {}})
     result = validate_report(_draft(ctx), bad)
     assert "SV01" in _codes(result) and result.checks["action"] == "fail"
+
+
+def test_token_in_preamble_is_checked(ctx):
+    good = _draft(ctx)
+    md = "# 가상 보고서 [@evidence:ev-not-allowed]\n\n" + good.markdown
+    result = validate_report(good.model_copy(update={"markdown": md}), ctx)
+    assert "SV05" in _codes(result)
+
+
+def test_unclosed_token_is_revise(ctx):
+    good = _draft(ctx)
+    md = good.markdown.replace(
+        "## SUMMARY\n\n", "## SUMMARY\n\n근거 [@evidence:ev-x\n", 1
+    )
+    result = validate_report(good.model_copy(update={"markdown": md}), ctx)
+    assert "SV05" in _codes(result) and result.checks["action"] == "revise"
+
+
+def test_title_preamble_without_tokens_still_passes(ctx):
+    good = _draft(ctx)
+    md = "# 가상 보고서 제목\n\n" + good.markdown
+    assert validate_report(good.model_copy(update={"markdown": md}), ctx).valid
