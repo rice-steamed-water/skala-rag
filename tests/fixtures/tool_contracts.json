@@ -1,0 +1,183 @@
+{
+  "label": "Wholly synthetic tool-boundary payloads; not live tool output or approved budgets",
+  "ToolBudget": {
+    "schema_version": "synthetic-1",
+    "max_calls": 8,
+    "max_retries": 2,
+    "timeout_seconds": 30,
+    "deadline": null
+  },
+  "EvidenceBundle": {
+    "schema_version": "synthetic-1",
+    "sources": {
+      "src-synthetic": {
+        "schema_version": "synthetic-1",
+        "source_id": "src-synthetic",
+        "title": "Synthetic document",
+        "publisher": "Synthetic publisher",
+        "author": null,
+        "source_kind": "report",
+        "url": "https://fixture.invalid/report",
+        "retrieved_at": "2026-09-01T12:00:00+09:00",
+        "content_hash": "synthetic-placeholder-not-measured",
+        "language": "ko",
+        "access_notes": "Synthetic only",
+        "bibliographic_metadata": {
+          "synthetic": true,
+          "pages": [
+            1,
+            2
+          ]
+        }
+      }
+    },
+    "evidence": {
+      "ev-synthetic": {
+        "schema_version": "synthetic-1",
+        "evidence_id": "ev-synthetic",
+        "candidate_id": "co-synthetic",
+        "scope": "company",
+        "criterion_ids": [
+          "synthetic.criterion"
+        ],
+        "claim": "Synthetic unmeasured claim",
+        "source_id": "src-synthetic",
+        "locator": "https://fixture.invalid/report#page=1",
+        "excerpt": "Synthetic excerpt",
+        "provenance": [
+          {
+            "schema_version": "synthetic-1",
+            "retrieval_id": "retrieval-synthetic",
+            "method": "rag",
+            "chunk_id": "chunk-synthetic"
+          }
+        ],
+        "evidence_kind": "reported",
+        "confidence": "unknown",
+        "limitations": [
+          "Synthetic only"
+        ],
+        "supporting_evidence_ids": [],
+        "conflicts_with": []
+      }
+    }
+  },
+  "CompanyResearchBundle": {
+    "schema_version": "synthetic-1",
+    "sources": {
+      "src-synthetic": {
+        "schema_version": "synthetic-1",
+        "source_id": "src-synthetic",
+        "title": "Synthetic document",
+        "publisher": "Synthetic publisher",
+        "author": null,
+        "source_kind": "report",
+        "url": "https://fixture.invalid/report",
+        "retrieved_at": "2026-09-01T12:00:00+09:00",
+        "content_hash": "synthetic-placeholder-not-measured",
+        "language": "ko",
+        "access_notes": "Synthetic only",
+        "bibliographic_metadata": {
+          "synthetic": true,
+          "pages": [
+            1,
+            2
+          ]
+        }
+      }
+    },
+    "evidence": {
+      "ev-synthetic": {
+        "schema_version": "synthetic-1",
+        "evidence_id": "ev-synthetic",
+        "candidate_id": "co-synthetic",
+        "scope": "company",
+        "criterion_ids": [
+          "synthetic.criterion"
+        ],
+        "claim": "Synthetic unmeasured claim",
+        "source_id": "src-synthetic",
+        "locator": "https://fixture.invalid/report#page=1",
+        "excerpt": "Synthetic excerpt",
+        "provenance": [
+          {
+            "schema_version": "synthetic-1",
+            "retrieval_id": "retrieval-synthetic",
+            "method": "rag",
+            "chunk_id": "chunk-synthetic"
+          }
+        ],
+        "evidence_kind": "reported",
+        "confidence": "unknown",
+        "limitations": [
+          "Synthetic only"
+        ],
+        "supporting_evidence_ids": [],
+        "conflicts_with": []
+      }
+    },
+    "profile": {
+      "schema_version": "synthetic-1",
+      "candidate_id": "co-synthetic",
+      "stage": {
+        "schema_version": "synthetic-1",
+        "normalized_round": "unknown",
+        "bucket": "unknown",
+        "method": "unknown",
+        "source_ids": [],
+        "confidence": "unknown",
+        "rationale": "Synthetic unknown"
+      },
+      "as_of": "2026-09-01",
+      "field_evidence_ids": {
+        "is_listed": []
+      }
+    }
+  },
+  "ToolResult": {
+    "schema_version": "synthetic-1",
+    "status": "ok",
+    "data": {
+      "schema_version": "synthetic-1",
+      "chunks": [],
+      "sources": {}
+    },
+    "retrieval_records": [
+      {
+        "schema_version": "synthetic-1",
+        "retrieval_id": "retrieval-synthetic",
+        "run_id": "run-synthetic",
+        "tool_name": "synthetic-tool",
+        "query": "Synthetic query",
+        "arguments_without_secrets": {
+          "synthetic": true
+        },
+        "started_at": "2026-09-01T12:00:00Z",
+        "finished_at": "2026-09-01T12:00:01Z",
+        "status": "empty",
+        "source_ids": [],
+        "chunk_ids": [],
+        "evidence_ids": [],
+        "cache_hit": false
+      }
+    ],
+    "errors": []
+  },
+  "DecisionPolicyResult": {
+    "schema_version": "synthetic-1",
+    "label": "WATCHLIST",
+    "report_grade": "synthetic grade",
+    "reason_codes": [
+      "SYNTHETIC_REASON"
+    ]
+  },
+  "RenderResult": {
+    "schema_version": "synthetic-1",
+    "artifact_path": "outputs/synthetic/report.pdf",
+    "page_count": 4,
+    "layout_measurements": {
+      "synthetic": true
+    },
+    "errors": []
+  }
+}
