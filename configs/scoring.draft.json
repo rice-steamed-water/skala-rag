@@ -1,0 +1,172 @@
+{
+  "policy_version": "main-draft-0.1.0",
+  "status": "draft",
+  "basis": "docs/implementation/scoring.md §2–6; design-v3 미반영",
+  "open_decisions": [
+    "D01",
+    "D02",
+    "D03",
+    "D05",
+    "D08"
+  ],
+  "criteria": [
+    {
+      "criterion_id": "founder.expertise",
+      "dimension": "founder",
+      "display_name": "도메인 전문성",
+      "weight": 2
+    },
+    {
+      "criterion_id": "founder.industry",
+      "dimension": "founder",
+      "display_name": "관련 산업 경험",
+      "weight": 2
+    },
+    {
+      "criterion_id": "founder.execution",
+      "dimension": "founder",
+      "display_name": "창업/사업화 경험",
+      "weight": 1
+    },
+    {
+      "criterion_id": "market.size",
+      "dimension": "market",
+      "display_name": "목표 시장 규모",
+      "weight": 10
+    },
+    {
+      "criterion_id": "market.growth",
+      "dimension": "market",
+      "display_name": "시장 성장성",
+      "weight": 10
+    },
+    {
+      "criterion_id": "market.demand",
+      "dimension": "market",
+      "display_name": "수요/확장성",
+      "weight": 10
+    },
+    {
+      "criterion_id": "technology.maturity",
+      "dimension": "technology",
+      "display_name": "핵심 기술 완성도",
+      "weight": 10
+    },
+    {
+      "criterion_id": "technology.reliability",
+      "dimension": "technology",
+      "display_name": "실제 환경 성능/안정성",
+      "weight": 5
+    },
+    {
+      "criterion_id": "technology.integration",
+      "dimension": "technology",
+      "display_name": "AI/HW/SW 통합",
+      "weight": 5
+    },
+    {
+      "criterion_id": "technology.commercialization",
+      "dimension": "technology",
+      "display_name": "확장/상용화 가능성",
+      "weight": 5
+    },
+    {
+      "criterion_id": "moat.differentiation",
+      "dimension": "moat",
+      "display_name": "경쟁사 대비 차별성",
+      "weight": 5
+    },
+    {
+      "criterion_id": "moat.ip",
+      "dimension": "moat",
+      "display_name": "기술/특허 진입장벽",
+      "weight": 5
+    },
+    {
+      "criterion_id": "moat.data",
+      "dimension": "moat",
+      "display_name": "데이터/학습 경쟁력",
+      "weight": 5
+    },
+    {
+      "criterion_id": "moat.lock_in",
+      "dimension": "moat",
+      "display_name": "고객 락인/생태계",
+      "weight": 5
+    },
+    {
+      "criterion_id": "traction.revenue_growth",
+      "dimension": "traction",
+      "display_name": "매출 성장률",
+      "weight": 3
+    },
+    {
+      "criterion_id": "traction.gross_margin",
+      "dimension": "traction",
+      "display_name": "매출총이익률",
+      "weight": 2
+    },
+    {
+      "criterion_id": "traction.burn",
+      "dimension": "traction",
+      "display_name": "번레이트",
+      "weight": 1
+    },
+    {
+      "criterion_id": "traction.runway",
+      "dimension": "traction",
+      "display_name": "런웨이",
+      "weight": 2
+    },
+    {
+      "criterion_id": "traction.concentration",
+      "dimension": "traction",
+      "display_name": "고객 집중도",
+      "weight": 1
+    },
+    {
+      "criterion_id": "traction.rule_of_40",
+      "dimension": "traction",
+      "display_name": "Rule of 40",
+      "weight": 1
+    },
+    {
+      "criterion_id": "deal_terms.stage",
+      "dimension": "deal_terms",
+      "display_name": "투자 시리즈",
+      "weight": 2
+    },
+    {
+      "criterion_id": "deal_terms.valuation",
+      "dimension": "deal_terms",
+      "display_name": "Valuation",
+      "weight": 5
+    },
+    {
+      "criterion_id": "deal_terms.ownership",
+      "dimension": "deal_terms",
+      "display_name": "지분율",
+      "weight": 3
+    }
+  ],
+  "dimension_weights": {
+    "founder": 5,
+    "market": 30,
+    "technology": 25,
+    "moat": 20,
+    "traction": 10,
+    "deal_terms": 10
+  },
+  "thresholds": {
+    "priority_score": "80",
+    "recommend_score": "70",
+    "watchlist_score": "60",
+    "missing_weight": "30",
+    "low_dimension_rating": "2"
+  },
+  "budgets": {
+    "max_candidates": 5,
+    "max_research_retries_per_candidate": 2,
+    "max_report_revisions": 2
+  }
+}
