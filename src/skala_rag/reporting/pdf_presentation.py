@@ -145,8 +145,8 @@ class ScoreBar(Flowable):
 
 
 def presentation_flowables(data, width, body, heading, table_class, paragraph_class):
-    """Supplement (do not replace) the exact upstream assessment/citation tables."""
-    scores, decisions, outcomes, selected = data
+    """Compare candidate status; score visuals live in the exact assessment rows."""
+    scores, _, outcomes, _ = data
     section = "INVESTMENT ASSESSMENT & RISKS"
     header = ParagraphStyle("data-header", parent=body, textColor=colors.white)
     flows = []
@@ -181,40 +181,18 @@ def presentation_flowables(data, width, body, heading, table_class, paragraph_cl
     if outcomes:
         title("후보 비교")
         # Candidate-ID order is presentation only, not a new ranking or selection.
-        rows = [["candidate_id / status", "normalized_score", "label"]]
+        rows = [["candidate_id / status", "평가 자료"]]
         for cid, outcome in sorted(outcomes.items()):
-            score, decision = scores.get(cid), decisions.get(cid)
             rows.append(
                 [
                     f"{cid} / {outcome.status}",
-                    score.normalized_score if score else None,
-                    decision.label if decision else None,
+                    "점수 상세 참조" if cid in scores else None,
                 ]
             )
-        table(rows, (0.42, 0.27, 0.31))
-    bars = 0
-    for cid, score in sorted(scores.items()):
-        title(f"점수 요약 — {cid}")
-        table(
-            [
-                ["normalized_score", "label"],
-                [score.normalized_score, decisions[cid].label],
-                ["coverage_pct", "weighted_missing_pct"],
-                [score.coverage_pct, score.weighted_missing_pct],
-            ],
-            (0.5, 0.5),
-            has_header=False,
-        )
-        if score.dimension_scores:
-            title("영역별 점수 — dimension_score_pct (0 - 100%)")
-            rows = [["dimension", "dimension_score_pct"]]
-            for dimension, item in sorted(score.dimension_scores.items()):
-                rows.append([dimension, ScoreBar(item.dimension_score_pct, body)])
-                bars += item.dimension_score_pct is not None
-            table(rows, (0.4, 0.6))
+        table(rows, (0.65, 0.35))
     return flows, {
-        "score_cards": len(scores),
-        "dimension_bars": bars,
+        "score_cards": 0,
+        "dimension_bars": 0,
         "candidate_rows": len(outcomes),
     }
 

@@ -29,10 +29,12 @@ from skala_rag.reporting.pdf_presentation import (
     NAVY,
     TEAL,
     VERSION,
+    ScoreBar,
     page_decoration,
     presentation_flowables,
     table_style,
     validated_presentation,
+    value_text,
 )
 from skala_rag.reporting.validator import artifact_hash
 
@@ -282,6 +284,27 @@ class PDFRenderer:
             }
             for section, kind, value in blocks:
                 if kind == "table":
+                    # Only an exact canonical candidate table can receive bars.
+                    # The trusted payload was checked against the current draft;
+                    # narrative numbers never become graphical observations.
+                    score = None
+                    if (
+                        presentation is not None
+                        and section == "INVESTMENT ASSESSMENT & RISKS"
+                        and len(value) > 1
+                        and value[0] == ["항목", "값"]
+                        and value[1][0] == "candidate_id"
+                    ):
+                        score = presentation[0].get(value[1][1])
+                    if score is not None:
+                        visualizations["score_cards"] += 1
+                        story.append(
+                            MeasuredParagraph(
+                                f"점수 요약 / 영역별 점수 — {score.candidate_id}",
+                                subhead,
+                                section,
+                            )
+                        )
                     rows = [
                         [
                             Paragraph(
@@ -292,6 +315,18 @@ class PDFRenderer:
                         ]
                         for i, row in enumerate(value)
                     ]
+                    if score is not None:
+                        for index, row in enumerate(value):
+                            for dimension, item in score.dimension_scores.items():
+                                if row[0] == f"{dimension}.dimension_score_pct" and row[
+                                    1
+                                ] == value_text(item.dimension_score_pct):
+                                    rows[index][1] = ScoreBar(
+                                        item.dimension_score_pct, body
+                                    )
+                                    visualizations["dimension_bars"] += (
+                                        item.dimension_score_pct is not None
+                                    )
                     table = MeasuredTable(
                         rows,
                         colWidths=[width / len(rows[0])] * len(rows[0]),
