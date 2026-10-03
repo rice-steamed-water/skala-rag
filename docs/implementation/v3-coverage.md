@@ -66,3 +66,17 @@ Missing만 정확히 한 번 요구하며 비중 내림차순, 동률 catalog �
 fixture만 허용한다. D14 rubric/applicability rule 목록·live provider/예산/corpus
 승인을 대체하지 않는다. #24 병렬 평가/State, #23 후속 v3 wiring, #25 실제 조사
 loop, #82 정책 loader와의 최종 adapter 연결은 담당 작업에서 수행한다.
+
+## #184 controller 연결
+
+`graph.candidates_v3.run_candidates_v3`는 명시 주입 재조사 callback으로
+Coverage 부족 시 최초 수집 제외 후보별 추가 최대2회를 요청 전에 소비한다.
+응답 후 실제 admitted Evidence로 Coverage를 다시 계산하며, `NoApplicableCriteria`를
+`ZERO_APPLICABLE_DENOMINATOR`로 분류해 점수/판정 없이 archive→advance한다.
+gap template은 호출자가 제공한 경우만 `build_research_gaps_v3`로 검증한다.
+검색 쿼리·최소 근거 rule·provider 기본값을 생성하지 않는다. 실제 상충 ID를 전달하며
+미설정 callback/terminal 실패를 Missing 또는 투자 비추천으로 바꾸지 않는다.
+정확한 인터페이스·revision·freeze 폐쇄성·오류 회계는
+[issue184-v3-research-loop.md](issue184-v3-research-loop.md)를 참조한다.
+이 loop는 Python controller이며 LangGraph는 평가 subgraph만이다. fixture gate와
+Company Research/unknown 적격성의 별도 미정 경계는 유지한다.

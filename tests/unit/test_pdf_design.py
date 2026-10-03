@@ -11,7 +11,7 @@ from tests.integration.test_v3_candidates import scenario
 from tests.unit.test_pdf_renderer import make_draft, renderer
 from tests.unit.test_v3_report_pipeline import Stub, context
 
-from skala_rag.reporting.pdf import PDFLayoutValidator
+from skala_rag.reporting.pdf import PDFLayoutValidator, _blocks
 from skala_rag.reporting.pdf_presentation import ScoreBar, validated_presentation
 from skala_rag.reporting.v3_context import build_report_context_v3
 from skala_rag.reporting.v3_pipeline import (
@@ -53,6 +53,58 @@ def test_v3_validated_scores_reach_real_pdf_design(tmp_path):
     for number, page in enumerate(PdfReader(result.artifact_path).pages, 1):
         assert f"PAGE {number}" in page.extract_text()
         assert "INVESTMENT REVIEW" in page.extract_text()
+
+
+@pytest.mark.parametrize("rating", [5, 1])
+def test_two_candidate_pdf_fits_without_duplicate_score_display(tmp_path, rating):
+    from datetime import date
+
+    from skala_rag.fixture_runner import run_fixture
+
+    snapshots = {}
+    candidates, _ = run_fixture(
+        ratings=(rating, rating),
+        snapshots=snapshots,
+    )
+    snap = next(iter(snapshots.values()))
+    ctx = build_report_context_v3(
+        candidates,
+        snapshots,
+        as_of=date.fromisoformat(snap["as_of"]),
+        corpus_version=snap["corpus_version"],
+        execution_mode="fixture",
+    )
+    draft = ReportGeneratorV3(Stub())(ctx, [])
+    original = draft.model_dump_json()
+    structural = validate_report_v3(draft, ctx)
+    judged = SemanticJudgeV3(Stub())(draft, ctx)
+    result = renderer(tmp_path, lambda _: (structural, judged))(draft, "pdf-layout-v1")
+    assert result.page_count <= 5
+    assert result.errors == []
+    assert PDFLayoutValidator()(draft, ctx, result).valid
+    assert result.layout_measurements["visualizations"]["dimension_bars"] == 12
+    assert not result.layout_measurements["final_allowed"]
+    assert draft.model_dump_json() == original
+    text = re.sub(
+        r"\s+",
+        "",
+        "\n".join(p.extract_text() for p in PdfReader(result.artifact_path).pages),
+    )
+    # All exact canonical rows survive, but scalar score labels are not repeated
+    # in supplementary cards/comparison charts.
+    assert text.count("normalized_score") == 2
+    for field in ("coverage_pct", "weighted_missing_pct"):
+        assert text.count(field) == 2
+    for _, kind, value in _blocks(draft.markdown):
+        if kind == "table":
+            for row in value[1:]:
+                assert re.sub(r"\s+", "", "".join(row)) in text
+        elif kind == "paragraph":
+            assert re.sub(r"\s+", "", value) in text
+    for token in draft.cited_evidence_ids:
+        assert f"[@evidence:{token}]" in text
+    for token in draft.reference_source_ids:
+        assert f"[@source:{token}]" in text
 
 
 def test_presentation_values_cannot_diverge_from_validated_draft(tmp_path):

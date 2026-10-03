@@ -2,6 +2,7 @@
 
 import json
 from copy import deepcopy
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -256,11 +257,13 @@ def run_fixture(
         ),
         freeze=freeze,
     )
-    stages = CandidateStagesV3(
+    stages = replace(
+        stages,
         **{
             name: traced(name, getattr(stages, name))
             for name in stages.__dataclass_fields__
-        }
+            if getattr(stages, name) is not None
+        },
     )
     result = run_candidates_v3(
         stages,
