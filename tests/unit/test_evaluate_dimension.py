@@ -9,6 +9,7 @@ import yaml
 from tests.fixtures.loader import load_common_fixtures
 
 from skala_rag.agents.evaluation import (
+    evaluate_dimension,
     make_evaluate_dimension,
     output_from_evaluation,
 )
@@ -165,6 +166,49 @@ def test_evidence_must_cover_criterion(fx, snapshot):
     result = _evaluator(FakeLLM([out, out]))("moat", snapshot, CORE)
     assert result.status == "failure"
     assert "EVIDENCE_CRITERION_MISMATCH" in result.errors[0].message_redacted
+
+
+@pytest.mark.parametrize("explicit_prompt", [None, "versioned user prompt"])
+def test_merged_prompt_hooks_preserve_precedence_repair_and_redaction(
+    fx, snapshot, explicit_prompt
+):
+    import json
+
+    output = _fixture_output(fx, snapshot, "market")
+    llm = FakeLLM([output, output])
+    validations = []
+
+    def validate(result):
+        validations.append(result)
+        return ["MARKET_CONTEXT_MIXED_SIZE: PRIVATE_VALIDATOR_TEXT"]
+
+    result = evaluate_dimension(
+        "market",
+        snapshot,
+        CORE,
+        llm=llm,
+        policy=POLICY,
+        clock=FakeClock(datetime(2026, 9, 30, tzinfo=UTC)),
+        schema_version=SV,
+        system_prompt="versioned system prompt",
+        user_prompt=explicit_prompt,
+        prompt_context={"segment_id": "fixture-market"},
+        extra_validator=validate,
+    )
+    assert result.status == "failure"
+    assert result.evaluation is None
+    assert len(validations) == len(llm.calls) == 2
+    assert all(call.system == "versioned system prompt" for call in llm.calls)
+    first_prompt = llm.calls[0].user
+    if explicit_prompt is None:
+        assert json.loads(first_prompt)["context"] == {"segment_id": "fixture-market"}
+    else:
+        assert first_prompt == explicit_prompt
+    assert llm.calls[1].user.startswith(first_prompt)
+    assert "MARKET_CONTEXT_MIXED_SIZE" in llm.calls[1].user
+    assert "MARKET_CONTEXT_MIXED_SIZE" in result.errors[0].message_redacted
+    assert "PRIVATE_VALIDATOR_TEXT" not in llm.calls[1].user
+    assert "PRIVATE_VALIDATOR_TEXT" not in result.errors[0].message_redacted
 
 
 def test_prompt_contains_only_snapshot_evidence(fx, snapshot):

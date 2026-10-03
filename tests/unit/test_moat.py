@@ -20,6 +20,9 @@ from skala_rag.scoring.catalog import load_policy
 ROOT = Path(__file__).resolve().parents[2]
 POLICY = load_policy(ROOT / "configs/scoring.draft.json", execution_mode="fixture")
 RUBRIC = yaml.safe_load((ROOT / "configs/rubrics/core.yaml").read_text())
+# Historical proposed-only patent/comparison behavior is a separate fixture.
+# Do not use it to infer approval of the checked-in artifact or runtime access.
+PROPOSED_RUBRIC = {**RUBRIC, "status": "proposed"}
 
 
 def _artifact(reference="fixture-reviewed-core"):
@@ -92,7 +95,7 @@ def test_snapshot_only_moat_bridge(patent_state):
     )
     result = evaluate_moat(
         snapshot,
-        rubric=RUBRIC,
+        rubric=PROPOSED_RUBRIC,
         policy=POLICY,
         llm=FakeLLM([output]),
         clock=FakeClock(datetime(2026, 9, 30, tzinfo=UTC)),
@@ -149,7 +152,7 @@ def test_offline_boundaries(kind):
     )
     result = evaluate_moat(
         snapshot,
-        rubric=RUBRIC,
+        rubric=PROPOSED_RUBRIC,
         policy=POLICY,
         llm=llm,
         clock=FakeClock(datetime(2026, 9, 30, tzinfo=UTC)),
@@ -183,8 +186,9 @@ def _approved_case(
     ).model_dump()
     if mutate:
         mutate(output)
+    assert RUBRIC["status"] == "approved"
     rubric = deepcopy(RUBRIC)
-    rubric.update(status="approved", rubric_version=rubric_version)
+    rubric["rubric_version"] = rubric_version
     llm = FakeLLM([output])
     calls = []
 
@@ -328,8 +332,9 @@ def test_loaded_approved_fixture_consumer(admission):
             f"{snapshot.candidate_id}:{snapshot.evaluation_round}:moat"
         ]
     )
+    assert RUBRIC["status"] == "approved"
+    assert RUBRIC["rubric_version"] == "core-0.1.0"
     rubric = deepcopy(RUBRIC)
-    rubric.update(status="approved", rubric_version="core-0.1.0")
     llm = FakeLLM([output])
     seen = []
 
@@ -362,6 +367,47 @@ def test_loaded_approved_fixture_consumer(admission):
     assert result.policy_version == "v3-operational-1.0.0"
     assert seen == ["operational", "core", "finance"]
     assert len(llm.calls) == 1
+
+
+@pytest.mark.parametrize("admission", ["missing", "rejected", "boolean_review"])
+def test_checked_in_approved_core_is_not_a_runtime_or_semantic_receipt(admission):
+    from skala_rag.agents.moat import evaluate_moat
+
+    assert RUBRIC["status"] == "approved"
+    assert RUBRIC["rubric_version"] == "core-0.1.0"
+    fixtures = load_common_fixtures(POLICY)
+    snapshot = _closed_snapshot(next(iter(fixtures.snapshots.values())))
+    output = output_from_evaluation(
+        fixtures.evaluations[
+            f"{snapshot.candidate_id}:{snapshot.evaluation_round}:moat"
+        ]
+    )
+    llm = FakeLLM([output])
+    kwargs = dict(
+        rubric=RUBRIC,
+        policy=POLICY,
+        llm=llm,
+        clock=FakeClock(datetime(2026, 9, 30, tzinfo=UTC)),
+        schema_version="fixture-1",
+        verify_observation=lambda criterion, evidence: True,
+        verified_patents={},
+        independent_comparisons={},
+    )
+    if admission != "missing":
+        kwargs.update(
+            artifact_approval=_artifact(),
+            artifact_verifier=lambda approval: admission != "rejected",
+        )
+    if admission == "boolean_review":
+        result = evaluate_moat(snapshot, **kwargs)
+        assert result.status == "failure"
+        assert result.evaluations is None
+        assert "MOAT_RUBRIC_UNVERIFIED" in result.errors[0].message_redacted
+        assert len(llm.calls) == 1
+    else:
+        with pytest.raises(ValueError):
+            evaluate_moat(snapshot, **kwargs)
+        assert llm.calls == []
 
 
 def test_constructed_approved_contract_is_not_loading_proof():

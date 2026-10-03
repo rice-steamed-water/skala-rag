@@ -108,7 +108,7 @@ Evidence 부족은 missing이며 rubric/evaluator semantic gate를 완화하지 
 | D11 OPEN | 원문 DAY 3 일정 보존 | 실제 제출 날짜·시간대·Slack thread |
 | D12 OPEN | Physical AI / Robotics 도메인 | 국가 범위·지원 provider·미지원 표시·live 탐색 |
 | D13 REJECTED | 전체 RAG 문서≤200페이지 한도 적용 제외 ([기록](#d13--200페이지-산정-규칙-적용-제외-91)) | 없음. 승인 corpus manifest gate(#44)는 페이지 산정 없이 유지 |
-| D14 OPEN | N/A에 승인 rule·사유·근거 필요 | criterion별 rating·rule·품질 기준, 재무 단위/기간/동일 라운드·burn 적용성 |
+| D14 core / finance APPROVED, runtime 연결 OPEN | core-0.1.0(founder·market·technology·moat 14개) rating·최소 근거·missing 코드와 Q1–Q5 ([기록](#d14-승인-기록--core-foundermarkettechnologymoat-59)); finance-0.1.0 9개 criterion 및 허용 N/A ([후속 승인](#d14-finance-승인--61-2026-09-30)) | 실제 artifact·의미 검증·승인 policy 소비·runtime readiness·live 예산/연결; 승인이 구현 완료를 뜻하지 않음 |
 
 승인되지 않은 세부는 가상 정책 주입/인터페이스로 검증하며 live 기본값으로 숨기지 않는다. 승인된 운영 규칙의 기대값 테스트와 남은 OPEN gate 테스트를 분리한다. 현재 구현 가용성은 [공통 계약](contracts.md)과 pinned [정합화 기록](design-v3-alignment.md)을 따른다.
 
@@ -249,6 +249,18 @@ D09 중 렌더러·A4·폰트·여백·SUMMARY 측정 기준·인용 token 화�
 - Owner and reviewers: XXXXXim / 지표·평가 담당 검토 요청 대상.
 - Approval date: -
 - Supersedes: 없음.
+
+## D14 승인 기록 — core: founder·market·technology·moat (#59)
+
+- Decision ID: D14 (founder·market·technology·moat 부분)
+- Status: APPROVED (core-0.1.0 한정; 구현·live 검증 완료 아님)
+- Decision: 위 [D14 제안 기록 — founder·market·technology·moat (#10, OPEN)](#d14-제안-기록--foundermarkettechnologymoat-10-open)의 Decision 그대로, `configs/rubrics/core.yaml` rubric_version `core-0.1.0`을 승인한다. [rubric-core.md](rubric-core.md) §6 Q1–Q5는 표의 제안안대로 승인: Q1 SAM(USD)·CAGR·특허 구간 baseline, Q2 회사 자기주장만이면 최대 4, Q3 14개 criterion not_applicable 금지 유지, Q4 창업자는 핵심 창업팀 대표 수준, Q5 CAGR 1구간 상충은 낮은 쪽·2구간 이상 missing.
+- Rationale and source: [#59 승인 기록](https://github.com/rice-steamed-water/skala-rag/issues/59#issuecomment-5904859865) — 사용자(heojiwon2)가 작업 대화에서 "D14 승인"을 명시하고 범위를 core만으로 선택.
+- Rejected alternatives: 같은 응답에서 finance 부분 동시 승인은 선택하지 않음.
+- Affected documents / policy version / tests: configs/rubrics/core.yaml(status), rubric-core.md, configs/README.md; `agents.founder`·`agents.market` 게이트, tests/unit/test_founder.py·test_market.py. 정책 파일 `scoring.draft.json`은 draft 그대로이며 이 승인이 정책 승인이나 live 예산 추가가 아니다.
+- Owner and reviewers: 승인자 heojiwon2. 원 제안자 XXXXXim의 별도 승인을 추정하지 않는다.
+- Approval date: 2026-09-30 (Asia/Seoul)
+- Supersedes: 위 core 제안 기록의 OPEN 상태(기록 본문은 이력으로 보존). traction·deal_terms 제안 기록은 OPEN 유지.
 
 ## D14 제안 기록 — traction·deal_terms (#11, OPEN)
 
