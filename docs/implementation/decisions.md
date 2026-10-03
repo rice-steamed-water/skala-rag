@@ -1,8 +1,49 @@
 # 결정 목록 — v3 방향·운영 승인과 남은 세부 정책
 
+<a id="execution-python-direct"></a>
+## EXECUTION-PYTHON-DIRECT — Python 직접 실행 승인 (#166)
+
+- Decision ID: EXECUTION-PYTHON-DIRECT
+- Status: APPROVED (실행 인터페이스 방향만; 문서 정합화)
+- Decision: Python 코드에서 기존 runner/Graph를 직접 호출하는 방식으로 마무리한다. 신규 CLI·flag·subcommand·console-script 패키징·CLI UX/배포 개선은 중단한다. 기존 병합 CLI/parser와 테스트는 호환성으로 보존한다.
+- Rationale and source: 사용자 작업 대화 “cli 관련 부분은 더이상 진행하지 말자. python을 직접 실행하는 것으로 끝내자.” 및 “issue로 만들어서 진행해. 설계 문서 업데이트부터”; [#166](https://github.com/rice-steamed-water/skala-rag/issues/166)에 기록.
+- Rejected alternatives: CLI-first 추가 개발; `python -m skala_rag.cli`를 직접 callable 실행으로 재명명; 존재하지 않는 실행 스크립트/API를 구현된 것으로 안내; 기존 코드·테스트 삭제.
+- Affected documents / policy version / tests: [Python 실행 안내](python-execution.md), README·문서 홈·architecture·contracts·delivery·alignment·fixture 안내. 정책/schema 버전 변경 없음. Python 호출 receipt·artifact 검증과 기존 fixture 회귀를 구별한다. #96 live runner 및 #111 도식은 담당자 정합화 대상이며 이 결정으로 완료되지 않는다.
+- Owner and reviewers: 사용자 승인, 기록자 luk0715 (#166); 다른 담당자 승인을 추정하지 않는다.
+- Source date: 2026-09-30 (작업 대화 및 이슈 근거 기록일). 이슈 생성 `2026-09-30T09:16:42Z`는 사용자 승인 시각이 아니며 별도 승인 시각은 미기록이다.
+- Supersedes: 신규 실행 인터페이스의 CLI-first 방향과 CLI 기능/프로세스 종료 코드를 새 개발 완료 조건으로 요구하는 부분만 대체한다. 아래 D01–D14·V3-OPERATIONS 원문 기록은 수정하지 않는다. completed+Warning·현재 draft/findings·final 금지·fatal 구분은 유지하며 CLI exit 0/2/1은 기존 호환 매핑이다.
+- Still gated: 정책·rubric·selector·provider·corpus·예산/readiness·유료 호출 승인은 이 결정의 범위가 아니다. 기존 `skala_rag.cli.run(...) -> Path` 재사용만 안내하며 runner 이동·새 RunResult API·live 구현 완료를 주장하지 않는다.
+
+## #158 현재 실행 provider 제외 승인 범위
+
+사용자의 이번 실행 지시로 KIPRIS·KRX·중기부·Tavily를 제외하고 각각
+#154/#155/#156/#157 후속 작업으로 보류한다. Tavily 실패는 사용자 보고이며
+이 구현에서 재현한 관측이 아니다. 기존 승인·adapter·fixture는 이력/호환성으로
+보존한다. 기존 승인 RAG/공식 출처는 원래 승인·readiness·예산 gate 아래 계속한다.
+새 Naver 도입·유료 fallback·예산 확대·M3 실행은 승인하지 않았다.
+Evidence 부족은 missing이며 rubric/evaluator semantic gate를 완화하지 않는다.
+범위 축소를 M2 전체 성공이나 #48/#55 완료로 표시하지 않는다.
+[caller 주입 경계와 미연결 owner 파일](provider-scope.md)을 따른다.
+
 [문서 홈](../README.md) · [v3 원문](../design/design-v3.html) · [이전 통합 원문](../raws/robotics_startup_agentic_rag_notion_integrated.md) · [정합화·영향표](design-v3-alignment.md)
 
 새 구현은 v3를 따른다. **방향 승인, 운영 규칙 승인, 구조 DTO 가용성, 실제 runtime 구현은 별개**다. #3의 D01–D06·D08, #14의 D09 부분 승인과 D14 OPEN 원본 10개 레코드는 아래에 byte-identical 이력으로 보존한다. 과거 기록의 상태·날짜·근거를 소급 변경하지 않는다. 아래 후속 승인이 현재 v3 범위를 정하며, 남은 `v3-OPEN`만 기본값 설치/live 실행의 gate다.
+
+## #168 승인 값의 live-compatible scoring 계약 — 2026-09-30
+
+- Status: APPROVED (기존 승인 값의 계약 코드 호환 경계만).
+- Source: #168 본문의 사용자 확인 UI 기록과 이번 구현 지시. #82 운영 값,
+  Core `core-0.1.0`, Finance `finance-0.1.0`의 기존 값만 보존한다.
+- Decision: legacy draft 계약을 live로 확장하지 않고 별도 승인 계약을 둔다.
+  외부 승인 근거/버전을 신뢰된 caller verifier가 확인하며, runtime readiness와
+  call/token/cost 예산 gate는 별도로 확인한다. fixture가 기본이며 OPEN 의존성은 차단한다.
+- Not approved: 새 점수/rubric/ranking 값, 최소 Evidence/Coverage gate, 새 RNG,
+  시간·호출·비용 상한, 네 제외 provider 복구, paid fallback, 실제 유료 호출 또는 M3.
+- Implementation: [호출 계약 및 남은 gate](live-scoring-policy.md). 기존 fixture
+  config의 `not_approved` budget/readiness를 승인으로 덮어쓰지 않는다. rubric 파일의
+  승인 상태 반영과 실제 semantic verifier는 각 owner 작업이며 여기서 완료하지 않는다.
+- Historical records: 아래 기존 D14 OPEN 기록은 소급 변경하지 않는다. #168이
+  참조하는 정확한 Core/Finance 버전 승인과 미결정 controller 세부를 구분한다.
 
 ## v3 전환 방향 승인 — 별도 기록
 
@@ -67,7 +108,7 @@
 | D11 OPEN | 원문 DAY 3 일정 보존 | 실제 제출 날짜·시간대·Slack thread |
 | D12 OPEN | Physical AI / Robotics 도메인 | 국가 범위·지원 provider·미지원 표시·live 탐색 |
 | D13 REJECTED | 전체 RAG 문서≤200페이지 한도 적용 제외 ([기록](#d13--200페이지-산정-규칙-적용-제외-91)) | 없음. 승인 corpus manifest gate(#44)는 페이지 산정 없이 유지 |
-| D14 core APPROVED / finance OPEN | core-0.1.0(founder·market·technology·moat 14개) rating·최소 근거·missing 코드와 Q1–Q5 제안안 ([기록](#d14-승인-기록--core-foundermarkettechnologymoat-59)); N/A에 승인 rule·사유·근거 필요 | finance-0.1.0(traction·deal_terms) rating·rule·품질 기준, 재무 단위/기간/동일 라운드·burn 적용성; 정책 파일 draft→승인 연결 |
+| D14 core / finance APPROVED, runtime 연결 OPEN | core-0.1.0(founder·market·technology·moat 14개) rating·최소 근거·missing 코드와 Q1–Q5 ([기록](#d14-승인-기록--core-foundermarkettechnologymoat-59)); finance-0.1.0 9개 criterion 및 허용 N/A ([후속 승인](#d14-finance-승인--61-2026-09-30)) | 실제 artifact·의미 검증·승인 policy 소비·runtime readiness·live 예산/연결; 승인이 구현 완료를 뜻하지 않음 |
 
 승인되지 않은 세부는 가상 정책 주입/인터페이스로 검증하며 live 기본값으로 숨기지 않는다. 승인된 운영 규칙의 기대값 테스트와 남은 OPEN gate 테스트를 분리한다. 현재 구현 가용성은 [공통 계약](contracts.md)과 pinned [정합화 기록](design-v3-alignment.md)을 따른다.
 
@@ -255,3 +296,78 @@ D09 중 렌더러·A4·폰트·여백·SUMMARY 측정 기준·인용 token 화�
 - “특정 항목 2점”을 비중이 1점인 세부항목의 획득점수와 직접 비교하지 않는다.
 - 최종 embedding 후보가 공개되어 있다는 사실만으로 과제의 오픈소스 요구 충족을 선언하지 않는다.
 - 원문의 도구 비용·접근성 표는 당시 메모다. 키 발급, 이용조건, 접근 성공은 구현 시 다시 확인해야 한다.
+
+## #52 텍스트 범위 corpus 사용 승인 — 2026-09-30
+
+xxhigh가 [사용자 확인 UI에서 텍스트 전용 범위를 승인](https://github.com/rice-steamed-water/skala-rag/issues/52#issuecomment-5905563007)했다.
+π0 v4/π0.5 v1의 본문·caption·텍스트 표만 인덱싱하며 이미지·그래프 미추출 정보는
+한계로 보존한다. 기존 전체 문서 `partial`을 유지하고, 원문/페이지 텍스트 hash·추출 설정·
+검토된 누락 항목에 묶인 별도 text_index_review로 승인 범위를 고정한다.
+다른 partial 문서·텍스트 누락/추출 실패를 이 승인으로 허용하지 않는다.
+실제 두 PDF/36페이지 텍스트 검증과 범위 gate 결과는
+[검증 기록](issue52-text-scope.md)에 있다. BGE-M3 다운로드·embedding 실행·store 선택·
+#52 전체 완료는 승인/검증되지 않았다.
+
+### #52 후속 범위 승인 — 2026-09-30
+
+이후 xxhigh가 실제 embedding/index 성공 조건을 후속 작업으로 옮기고 현재 #52의
+blocked 제거를 요청했다. 로컬 다운로드 대신 Hugging Face API를 사용하며,
+endpoint 주소는 이후 설정하고 지금은 API 인터페이스·테스트를 진행하도록 확인했다.
+위 이전 승인 기록의 전체 완료 보류는 이 구현 범위 변경으로 대체한다.
+모델/tokenizer 다운로드 보류와 실제 실행 미검증은 유지한다. endpoint/provider 지원,
+배포 revision 확인·실제 저장소 선택·실측 검증은 후속 live 작업에서 해결한다.
+SQLite는 선택 가능한 offline 구현이며 운영 기본값을 정하지 않는다.
+
+## D09 PDF renderer·분량 측정·layout 회계 승인 — #95
+
+- Decision ID: D09 PDF
+- Status: APPROVED
+- Decision: ReportLab4.4.9, NanumGothic Regular/Bold(OFL1.1 포함), A4·18mm 여백,
+  본문10.5pt/leading15pt·heading14pt. SUMMARY heading 포함 실제 draw bbox 높이를
+  전체 A4 높이로 나누며 단일 page·fraction<=0.5. 표지/REFERENCE 포함 PDF<=5page.
+  renderer는 사실/점수/label을 바꾸지 않으며 저장 파일의 페이지/인용/hash를 대조한다.
+- Error accounting: layout 위반은 기존 공유 report 수정 예산(최대2회)을 소비한다.
+  renderer 오류와 변경/stale artifact는 fatal. 새 render retry loop는 없고
+  소진/미검증 PDF는 final 승격 금지. 수정된 draft는 구조·의미 검증부터 다시 실행한다.
+- Rationale: 실제 PDF fixture 검토와 사용자 확인 UI의 명시적 승인.
+- Rejected alternatives: 이번 범위에 여러 renderer 비교·새 품질 benchmark·추가 재시도 없음.
+- Affected: configs/pdf.layout.v1.json, pyproject/uv.lock, reporting.pdf, #94/#96 runner 인계.
+- Owner/reviewer: wjd990819-ops / 사용자
+- Approval date: 2026-09-30
+- Evidence: 사용자 질문 답변 「제안한 설정·의존성·오류 처리 승인」.
+
+앞선 D09 PDF OPEN 표현은 당시 기록이다. 위 PDF 선택/측정/회계만 승인되었으며
+mode별 예외·실제 Generator/Judge·M3 live 완료를 함께 승인하거나 완료로 표시하지 않는다.
+
+## D09 후속 — 한글 HTML→Playwright PDF 경로 승인 (#175)
+
+- Status: APPROVED (추가 경로만; 위 ReportLab #95 승인은 삭제·변경하지 않는다)
+- Decision: 사용자 확인 UI 「제안한 HTML→PDF 경로·의존성 추가 승인」(2026-09-30, #175).
+  한글 정형 HTML을 저장하고 그 bytes를 Playwright/Chromium(`playwright==1.63.0`)으로 PDF화한다.
+  A4·18mm·NanumGothic·최대5페이지·SUMMARY≤0.5는 유지하며 PDF 좌표로 측정한다.
+- Error accounting: layout 위반은 공유 수정 예산(최대2회), browser/renderer 오류는 fatal이고
+  다른 renderer로 대체하지 않는다. fixture/stub은 final 승격 금지.
+- Affected: pyproject/uv.lock, reporting.html_report·html_pdf·korean_report, v3 Generator/Judge
+  prompt(`report-v3-2`), [korean-html-report.md](korean-html-report.md).
+- 병합·유료 API 실행·rubric/점수 변경은 승인 범위 밖이다.
+
+## #94 D09 mode 형식·Generator/Judge 사용 범위 승인 — 2026-09-30
+
+xxhigh가 [제안한 형식·모델 범위를 승인](https://github.com/rice-steamed-water/skala-rag/issues/94#issuecomment-5906219758)했다.
+기존 OpenAI gpt-4.1-mini-2025-04-14 adapter를 Generator/Judge에 주입하고
+single_candidate/no_recommendation 모두 E-1 다섯 섹션을 유지한다.
+무선택 SUMMARY에는 selector의 이유와 후보 비교를 보존하며 upstream 점수·판정·N/A·
+인용을 바꾸지 않는다. 실제 API 성공 검증은 #96 최종 live 실행에서 확인한다.
+이 승인은 미확인 credential/요금/예산의 호출, 새 모델 비교·다운로드 승인이나
+M3 품질 완료가 아니다. [구현·검증 경계](reporting-v3-pipeline.md)를 따른다.
+
+## D14 Finance 승인 — #61 (2026-09-30)
+
+Status: APPROVED (Finance 부분만). 사용자 승인 기록: #61 comment5906253348.
+finance-0.1.0 §1–§3의 9개 criterion 구간·최소근거 및 Q1–Q6는
+[rubric-finance 현재 승인](rubric-finance.md)의 범위로 승인되었다. 이전 Finance
+OPEN·개정 제안은 이력이다. Core rubric·다른 정책을 승인하지 않는다.
+N/A는 확인된 pre-revenue Rule40·동일 기간/주체 OCF≥0 runway만 허용;
+rule ID/reason/snapshot evidence 필수, 미확인은 missing, burn5는 실제 재무근거 필요.
+작은 기저 limitations 필수(새 cap/threshold 없음), pre/post 미상은 missing,
+valuation 직전3배/동종중앙값2배, CAPEX 제외. 정책 승인과 #55 live 완료는 별개.

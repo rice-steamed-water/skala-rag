@@ -8,6 +8,8 @@
 
 ## 1. 작업 패키지
 
+**#166 실행 기준:** 최종 인터페이스는 [Python 직접 호출](python-execution.md)이다. 신규 CLI·flag·subcommand·console-script 패키징·UX는 WP/M1–M4의 완료 조건이 아니다. 병합된 CLI/parser·테스트는 호환성으로 유지한다. Python 반환 경로의 receipt·현재 draft/findings·검증 결과·manifest/trace/hash로 정상·Warning·fatal을 구분하며 프로세스 exit 0을 성공 증거로 쓰지 않는다. 과거 #82의 CLI2는 [기존 호환 매핑](fixture-cli.md#기존-exit-code-매핑)이다.
+
 | WP | 구현 범위 | 다른 작업에 넘길 것 | 완료 조건 |
 | --- | --- | --- | --- |
 | WP1 Contracts / Graph | 공통 schema, reducer, graph wiring, 전 후보 loop·selector, Coverage 조사·보고서 수정, 예산 | schema와 fixture, graph trace, runner | 유한 종료·5 branch/6 dimension 합류·상태 격리·Warning/acceptance 분리 |
@@ -21,9 +23,11 @@
 
 ## 2. 디렉터리 구조와 현재 구현
 
+아래 `906312a`·`1f23e09` 구현/미구현 설명은 당시 snapshot이다. #166의 `5bebad436ec5fe032f23b0c5bf4b503bbc4a7a27` 기준에는 #29 fixture callable과 #94/#95 보고서·PDF 경로가 병합되어 있다. 설치·복사 가능한 실행 예제와 검증 경계는 [Python 실행 안내](python-execution.md)를 따른다. 이 보완은 다른 정책/모델 선택이나 전체 live 완료를 새로 판단하지 않는다.
+
 채택한 디렉터리 구조와 공통 파일 규칙은 [CONTRIBUTING.md](../../CONTRIBUTING.md#폴더-구조)에 있다.
 
-`pyproject.toml`은 Python `>=3.11`과 uv/ruff/pytest를 명시하고 `uv.lock`이 해석 결과를 고정한다. pinned 통합 기준 `906312a`에는 baseline DTO/State/reducer/catalog/점수·재무 helper·DTO adapter뿐 아니라 #17 발견/Normalize, #18 fixture 조사·Eligibility, #19 GuardedRetriever/EvidenceCollector, #22 dimension 평가 wrapper, #23 fixture 후보 Graph, #26 ReportContext, #27 baseline Structural Validator 및 #73/PR #74의 독립 `contracts.v3` 구조 DTO가 있다. #23은 baseline 첫 추천 인계이며 v3 전 후보 selector가 아니다. v3 구조 DTO는 계산·selector·0분모/Warning controller·State/Graph 연결을 실행하지 않는다. CLI·보고서 생성/Judge·실 PDF·live RAG는 여전히 목표다. 실제 API는 [공통 계약](contracts.md), cutoff는 [정합화 기록](design-v3-alignment.md)을 따른다.
+`pyproject.toml`은 Python `>=3.11`과 uv/ruff/pytest를 명시하고 `uv.lock`이 해석 결과를 고정한다. 과거 pinned 통합 기준 `906312a`에는 baseline DTO/State/reducer/catalog/점수·재무 helper·DTO adapter뿐 아니라 #17 발견/Normalize, #18 fixture 조사·Eligibility, #19 GuardedRetriever/EvidenceCollector, #22 dimension 평가 wrapper, #23 fixture 후보 Graph, #26 ReportContext, #27 baseline Structural Validator 및 #73/PR #74의 독립 `contracts.v3` 구조 DTO가 있다. #23은 baseline 첫 추천 인계이며 v3 전 후보 selector가 아니다. v3 구조 DTO 자체는 계산·selector·0분모/Warning controller·State/Graph 연결을 실행하지 않는다. 이후 fixture callable·보고서/PDF 경로는 위 #166 실행 안내로 보완하며 CLI 추가 개발을 목표로 두지 않는다. 실제 API는 [공통 계약](contracts.md), cutoff는 [정합화 기록](design-v3-alignment.md)을 따른다.
 
 #9/PR #38의 `scoring.catalog.load_policy`, `configs/scoring.draft.json`과 계산 fixture도 기준 main에 있다. fixture 전용 draft이며 v3 `aggregate_scores`·`decide` 구현이나 정책 승인으로 보지 않는다.
 
@@ -74,7 +78,7 @@ WP1이 예산 제한을 적용한 runner로 통합한다. WP6는 real Report Gen
 
 ### M4 — 재현·제출
 
-작성자가 아닌 팀원이 깨끗한 환경에서 README만 따라 재실행한다. 코드·설계·README·보고서가 같은 policy/model/corpus version을 설명하는지 검토한다.
+작성자가 아닌 팀원이 깨끗한 환경에서 README의 Python 직접 호출 예제로 재실행하고 receipt·artifact hash를 확인한다. 코드·설계·README·보고서가 같은 policy/model/corpus version을 설명하는지 검토한다. CLI 패키징/추가 옵션은 제출 요건이 아니다.
 
 **완료:** 설치·실행·검증 로그, 제출 파일, 기여 역할, 미지원/실패 조건이 확인된다. 모든 숫자는 측정값이며 placeholder가 남지 않는다.
 
@@ -99,7 +103,7 @@ WP1이 예산 제한을 적용한 runner로 통합한다. WP6는 real Report Gen
 | T13 | RAG / 실사용 | 실제 retrieval_id/chunk_id → rag provenance → 평가 snapshot의 Evidence → 기술 평가 → 보고서 citation; 사후 rag 표기만으로 통과 금지 | WP3/WP6 |
 | T14 | report / 인용 | Evidence·Source 연결, 실제 인용과 REFERENCE 정확히 일치 | WP6 |
 | T15 | report / 사실성 | 없는 수치·출처·단위 혼합·추정의 사실화 탐지 | WP5/WP6 |
-| T16 | report / 수정 예산 | 구조+의미 공유2회 후 Warning+현재 draft/findings, 미검증 final 승격 금지; 최초 생성 제외 승인, 소진 workflow=completed·CLI exit=2, context/upstream 파손=failed; layout 포함은 OPEN | WP1/WP6 |
+| T16 | report / 수정 예산 | 구조+의미 공유2회 후 Warning+현재 draft/findings, 미검증 final 승격 금지; 최초 생성 제외 승인, 소진 workflow=completed·acceptance=warning·publication_allowed=false, context/upstream 파손=failed; PDF layout 회계는 D09 #95 승인 참조 | WP1/WP6 |
 | T17 | PDF / 형식 | 실제 PDF ≤5페이지, SUMMARY ≤반 페이지, 표·인용 잘림 없음 | WP6 |
 | T18 | security / untrusted content | 문서의 prompt injection 무시, key 누출 없음, private URL fetch 차단 | WP1/WP3 |
 | T19 | reproducibility / 재실행 | lock·설정·corpus·모델·prompt·policy 기록으로 clean run 가능 | 전원 |
@@ -110,7 +114,7 @@ WP1이 예산 제한을 적용한 runner로 통합한다. WP6는 real Report Gen
 | T24 | discovery / 출처 전달 | DiscoveryBundle 출처 해소·dedup 후 무작위로 조사 대상 집합 선정(단순 순서 shuffle 아님), 상한·중복/미지 ID 거절·Eligibility 유지·선정/제외 출처 보존. 주입 RNG의 replay metadata는 제안 fixture로 별도 검사; 기본 random 구현 존재로 오인 금지 | WP1/WP2 |
 | T25 | snapshot / 불변성 | 근거·provenance 추가 후 이전 snapshot 불변, 새 세대에서만 보임; superseded/파생 입력 무효화·참조 폐쇄성 확인; 누락·적격성 근거 무효화는 SNAPSHOT_INVALID로 해당 후보만 archive | WP1/WP3 |
 
-T03의 0분모 후보 오류/exact 경계, T09의 최종 순위·원본 candidate_id tie-break·무선택 비교 보고서, T16의 completed Warning/CLI2 기대값은 **#82 승인 정책 테스트**다. T24의 사전 무작위 집합 선정도 승인 범위다. 새 후보 수·구체 난수/seed·rubric rule·PDF/live 예산 등 남은 OPEN의 차단 테스트와 구현 제안 fixture는 별도로 표시한다. 기존 smoke·DTO·baseline 집계·reducer·재무 helper 테스트는 각 구현 범위의 증거이며 이 v3 T01–T25 전체 구현 증거가 아니다.
+T03의 0분모 후보 오류/exact 경계, T09의 최종 순위·원본 candidate_id tie-break·무선택 비교 보고서, T16의 completed Warning·final 금지 기대값은 **#82 승인 정책 테스트**다. #166 이후 실행 관찰은 Python receipt로 하며 기존 CLI2 테스트는 호환 회귀로 보존한다. T24의 사전 무작위 집합 선정도 승인 범위다. 새 후보 수·구체 난수/seed·rubric rule·PDF/live 예산 등 남은 OPEN의 차단 테스트와 구현 제안 fixture는 별도로 표시한다. 기존 smoke·DTO·baseline 집계·reducer·재무 helper 테스트는 각 구현 범위의 증거이며 이 v3 T01–T25 전체 구현 증거가 아니다.
 
 unit/contract 테스트는 네트워크 없이 실행한다. live integration은 명시적 설정과 예산이 있을 때만 실행하고, 미설정 시 skipped 사유를 남긴다. 외부 LLM 출력의 완전 동일성은 보장하지 않지만, 점수 함수·분기·근거 추적 계약은 동일하게 검증한다.
 
@@ -147,7 +151,7 @@ v3는 본문 약 4~4.5페이지를 목표로 둔다. 목표 분량 합이나 Mar
 - 모든 수치·기업 사실: Evidence로 되돌아가는 인용을 둔다. LLM의 평가는 사실과 구별한다.
 - 추정값: 방법·입력·가정을 밝히고 직접 관측과 구분한다.
 - 무적격: selected=None과 사유 있는 종료 보고서를 만든다. 회사가 선택된 것처럼 빈 섹션을 채우지 않는다. all-WATCHLIST/PASS는 선택 없는 비교 보고서가 승인되었다. 구체 mode 연결과 무적격/Warning의 E-1 섹션 예외는 D09에서 구체화한다. 정책 주입 fixture에서는 전 후보 조사 범위·제외/보류/비추천/오류를 표로 구분하는 안을 검증한다.
-- Warning: 현재 draft·findings·미실행 검사를 명시하고 validated final과 다른 artifact로 반환한다. 수정 소진은 workflow_status=completed·CLI exit=2이며 검증/발행 성공은 아니다. manifest 구체 필드 연결은 후속이다.
+- Warning: 현재 draft·findings·미실행 검사를 명시하고 validated final과 다른 artifact로 반환한다. 수정 소진은 workflow_status=completed이며 검증/발행 성공은 아니다. 현재 fixture receipt의 acceptance=warning·warnings·publication_allowed=false와 저장 검증 결과를 확인한다. CLI exit=2는 기존 호환 매핑이다.
 - 조사 실패: 시장에서 투자 기회가 없다는 결론으로 바꾸지 않는다.
 
 Reference 양식은 v3 E-2와 이전 원문 §9.3을 따른다.
@@ -171,10 +175,11 @@ Reference 양식은 v3 E-2와 이전 원문 §9.3을 따른다.
 
 구조/의미 수정 한도 소진은 현재 결과와 Warning 반환 경로이며 실패한 검사를 pass로 바꾸지 않는다. `CONTEXT_INVALID/UPSTREAM_INVALID`는 별도 fatal이다. PDF renderer 장애·layout 위반의 retry/Warning 매핑은 D08·D09에서 합의하고, 어떤 경우에도 실제 PDF≤5·SUMMARY≤0.5 미검증 산출물을 제출용 final로 승격하지 않는다.
 
-Markdown 줄 수나 토큰 수로 PDF 페이지 준수를 선언하지 않는다. SUMMARY 반 페이지는 고정된 인쇄 가능 본문 영역의 절반으로 측정하는 제안이며 D09에서 합의한다.
+Markdown 줄 수나 토큰 수로 PDF 페이지 준수를 선언하지 않는다. D09 PDF 승인(#95)에 따라 SUMMARY heading 포함 실제 배치 bbox 높이를 전체 A4 페이지 높이로 나눠 0.5 이하인지 확인한다.
 
 ## 6. PR / 작업 완료 정의
 
+- 실행 안내는 실제 존재하는 Python callable의 인자·반환 shape와 일치한다. 정상/Warning/fatal receipt·예외 경계를 검증하고 실행한 fixture와 미실행 live를 구별한다. #166 문서 변경은 runtime 구현·#96 완료를 대신하지 않는다.
 - 맡은 모듈의 입력·출력 계약과 실행 범위가 설명되어 있다.
 - 변경을 검증하는 자동 테스트와 실제 실행 로그가 있다.
 - 외부 자료·fixture·실행 예시를 구분하며 가짜 fixture를 실측으로 표시하지 않는다.

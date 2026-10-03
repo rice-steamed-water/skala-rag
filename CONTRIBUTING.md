@@ -129,7 +129,7 @@ skala-rag/
 │   ├── scoring/                 # 순수 산술·정책 판단
 │   ├── reporting/               # draft·validator·judge·PDF
 │   ├── prompts/                 # 버전 관리되는 prompt
-│   └── cli.py                   # runner 진입점
+│   └── cli.py                   # 기존 fixture callable·CLI 호환 보존; 신규 실행은 Python 직접 호출 (#166)
 ├── data/
 │   ├── manifests/               # 공개 가능한 corpus metadata
 │   └── local/                   # 원문·index (git 제외)

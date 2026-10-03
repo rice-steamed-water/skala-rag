@@ -8,6 +8,8 @@
 
 ## 1. 역할을 나누는 기준
 
+**실행 경계 — #166:** 최종 인터페이스는 [Python 직접 호출](python-execution.md)이다. 기존 fixture `skala_rag.cli.run(...)`은 argparse 없이 실행하고 산출물 `Path`를 반환한다. 목표 Graph/RunResult 계약과 현재 callable은 별개이며 runner 이동·새 API를 구현하지 않는다. CLI/parser·테스트는 호환 보존하고 신규 CLI·옵션·패키징·UX는 개발하지 않는다. 과거 #82의 CLI2는 [기존 매핑](fixture-cli.md#기존-exit-code-매핑)이며 도메인 종료 조건은 아래 completed+Warning/fatal과 receipt다.
+
 | 종류 | 책임 | 예 |
 | --- | --- | --- |
 | Tool-using Agent | 제한된 도구 집합에서 조사 계획·도구 선택·근거 추출 | Discovery, Company Research, Evidence Research(RAG/Web/API 초기·gap 조사) |
@@ -67,7 +69,7 @@ flowchart TD
     judge -->|revise| retry
     judge -->|fail| failed
     retry -->|yes| report
-    retry -->|no| warning[Completed + Warning + CLI 2: draft, not validated final]
+    retry -->|no| warning[Completed + Warning: draft/findings, publication denied]
     judge -->|pass| render[Render PDF]
     render --> layout{Pages and layout valid?}
     layout -->|no| layoutpolicy[Layout policy required: D08 / D09]
@@ -152,7 +154,7 @@ D08의 baseline `5/2/2`, batch당 8회, 추가 retry 2회, 시도별 30초는 �
 - `RECOMMEND_PRIORITY/RECOMMEND/WATCHLIST/PASS` 모두 결과 저장 후 다음 후보. index는 한 번만 증가한다.
 - 사전 선정된 모든 후보 처리 뒤 selector: 적격·정상 평가 후보 중 RECOMMEND_PRIORITY 우선, 다음 RECOMMEND; 같은 label은 normalized_score 내림차순 → weighted_missing_pct 오름차순 → 원본 candidate_id 오름차순이다. 전부 WATCHLIST/PASS면 선택 없이 비교 보고서를 만든다. 입력 순서는 사용하지 않는다. 실패/unknown 후보를 추천으로 승격하지 않는다.
 - 적격 후보가 한 건도 없으면 selected=None과 “투자 평가 가능한 적격 후보 없음” 사유 보고서를 생성한다(v3 D-3). 후보 0건·전부 부적격·전부 unknown을 구별한다. 적격이었으나 평가 실패한 경우는 “적격 후보 없음”과 다르다.
-- 구조/의미 수정 2회 소진: Warning과 현재 draft/findings를 반환한다. 이는 **검증된 final 아님**이다. workflow_status=completed와 CLI exit=2는 #82 승인이다. run_outcome/manifest payload 연결·PDF 상세는 [계약 §5](contracts.md)의 후속 범위이며 새 workflow enum은 추가하지 않는다.
+- 구조/의미 수정 2회 소진: Warning과 현재 draft/findings를 반환한다. 이는 **검증된 final 아님**이다. #82의 workflow_status=completed·final 금지는 유지한다. #166 이후 Python receipt의 warnings·acceptance·publication_allowed로 확인하며 CLI exit=2는 기존 호환 정보다. 새 workflow enum은 추가하지 않는다. 현재 fixture 연결과 목표 RunResult의 차이는 [실행 안내](python-execution.md)를 따른다.
 
 Graph 전체 step 제한은 보조 안전장치다. 이를 정상 종료 정책이나 후보별 예산 대신 사용하지 않는다.
 

@@ -1,0 +1,324 @@
+"""Synthetic offline tests; no policy approval or live measurements."""
+
+from copy import deepcopy
+from datetime import UTC, datetime
+from pathlib import Path
+
+import pytest
+from tests.fixtures.loader import load_common_fixtures
+
+from skala_rag.agents.business_deal import ApprovedVerifiers, evaluate_business_deal
+from skala_rag.contracts.error_codes import ErrorCode
+from skala_rag.contracts.interfaces import LLMError
+from skala_rag.fakes import FakeClock, FakeLLM
+from skala_rag.scoring.catalog import load_policy
+
+
+@pytest.fixture
+def case():
+    root = Path(__file__).resolve().parents[2]
+    policy = load_policy(root / "configs/scoring.draft.json", execution_mode="fixture")
+    snapshot = next(iter(load_common_fixtures(policy).snapshots.values()))
+    output = {
+        d: {
+            "criteria": [
+                dict(
+                    schema_version="test",
+                    criterion_id=c.criterion_id,
+                    status="missing",
+                    rating=None,
+                    evidence_ids=[],
+                    rationale="Not disclosed",
+                    missing_reason="not_disclosed",
+                )
+                for c in policy.criteria
+                if c.dimension == d
+            ],
+            "research_gaps": [],
+            "caveats": [],
+        }
+        for d in ("traction", "deal_terms")
+    }
+    rubric = {
+        "rubric_version": "fixture",
+        "dimensions": {
+            d: {
+                "criteria": {
+                    c.criterion_id: {} for c in policy.criteria if c.dimension == d
+                }
+            }
+            for d in output
+        },
+    }
+    return snapshot, policy, output, rubric
+
+
+def run(case, response, *, approve=True):
+    snapshot, policy, _, rubric = case
+    llm = FakeLLM([response])
+    result = evaluate_business_deal(
+        snapshot,
+        llm=llm,
+        policy=policy,
+        rubric=rubric,
+        verifiers=ApprovedVerifiers(
+            "fixture",
+            "fixture",
+            "fixture",
+            lambda c, s: approve,
+            lambda c, s: approve,
+            lambda c, s: approve,
+        ),
+        clock=FakeClock(datetime(2026, 9, 30, tzinfo=UTC)),
+        schema_version="test",
+    )
+    assert len(llm.calls) == 1
+    return result
+
+
+def test_approved_rubric_disallows_other_na_even_with_true_verifier(case):
+    case[3]["status"] = "approved"
+    output = deepcopy(case[2])
+    c = output["traction"]["criteria"][0]
+    eid = next(
+        e.evidence_id
+        for e in case[0].evidence.values()
+        if c["criterion_id"] in e.criterion_ids
+    )
+    c.update(
+        status="not_applicable",
+        missing_reason=None,
+        applicability_reason="Not disclosed is not N/A",
+        applicability_rule_id="fixture-rule",
+        applicability_evidence_ids=[eid],
+    )
+    assert run(case, output).status == "failure"
+
+
+@pytest.mark.parametrize("mode", ["real", "live"])
+def test_actual_mode_blocked_before_fake_llm_call(case, mode):
+    snapshot, policy, output, rubric = case
+    llm = FakeLLM([output])
+    with pytest.raises(ValueError, match="approved finance-0.1.0 semantic verifiers"):
+        evaluate_business_deal(
+            snapshot,
+            llm=llm,
+            policy=policy,
+            rubric=rubric,
+            verifiers=ApprovedVerifiers(
+                "finance-0.1.0",
+                "finance-0.1.0",
+                "finance-0.1.0",
+                lambda c, s: True,
+                lambda c, s: True,
+                lambda c, s: True,
+            ),
+            clock=FakeClock(datetime(2026, 9, 30, tzinfo=UTC)),
+            schema_version="test",
+            execution_mode=mode,
+        )
+    assert llm.calls == []
+
+
+def test_atomic_missing(case):
+    result = run(case, case[2])
+    assert result.status == "success"
+    assert set(result.evaluations) == {"traction", "deal_terms"}
+
+
+@pytest.mark.parametrize("fault", ["partial", "duplicate", "schema", "rating", "stale"])
+def test_invalid_output_rejects_whole_branch(case, fault):
+    output = deepcopy(case[2])
+    if fault == "partial":
+        del output["deal_terms"]
+    elif fault == "duplicate":
+        output["traction"]["criteria"].append(output["traction"]["criteria"][0])
+    elif fault == "schema":
+        del output["traction"]["criteria"][0]["rationale"]
+    elif fault == "stale":
+        output["snapshot_id"] = "old"
+    else:
+        output["traction"]["criteria"][0]["rating"] = 9
+    result = run(case, output)
+    assert result.status == "failure"
+    assert result.evaluations is None
+
+
+def test_technical_failure_is_not_missing(case):
+    result = run(case, LLMError(ErrorCode.LLM_TIMEOUT, "secret raw error"))
+    assert result.status == "failure"
+    assert result.errors[0].error_code == "LLM_TIMEOUT"
+    assert "secret" not in result.errors[0].message_redacted
+
+
+@pytest.mark.parametrize("approve", [False, True])
+def test_na_requires_injected_rule_validation(case, approve):
+    output = deepcopy(case[2])
+    c = output["traction"]["criteria"][0]
+    eid = next(
+        e.evidence_id
+        for e in case[0].evidence.values()
+        if c["criterion_id"] in e.criterion_ids
+    )
+    c.update(
+        status="not_applicable",
+        missing_reason=None,
+        applicability_reason="Synthetic authorized applicability fact",
+        applicability_rule_id="fixture-rule",
+        applicability_evidence_ids=[eid],
+    )
+    result = run(case, output, approve=approve)
+    assert result.status == ("success" if approve else "failure")
+
+
+@pytest.mark.parametrize("fault", ["foreign", "finance", "unknown_unit"])
+def test_observed_financial_gate(case, fault):
+    output = deepcopy(case[2])
+    c = output["traction"]["criteria"][0]
+    eid = next(
+        e.evidence_id
+        for e in case[0].evidence.values()
+        if c["criterion_id"] in e.criterion_ids
+    )
+    if fault == "unknown_unit":
+        evidence = case[0].evidence[eid]
+        evidence.value = 1
+        evidence.currency = "KRW"
+        evidence.unit = "mystery"
+        evidence.value_as_of = case[0].as_of
+    c.update(
+        status="observed",
+        rating=3,
+        missing_reason=None,
+        evidence_ids=["outside" if fault == "foreign" else eid],
+    )
+    result = run(case, output, approve=fault != "finance")
+    assert result.status == "failure"
+    assert result.evaluations is None
+
+
+@pytest.mark.parametrize("wrong_rating", [False, True])
+def test_approved_observed_gross_margin(case, wrong_rating):
+    import yaml
+    from tests.unit.test_approved_policy import approval_payload
+
+    from skala_rag.agents.finance_verification import ReviewedFinancialFact
+    from skala_rag.scoring.approved_policy import PolicyApprovals, load_approved_policy
+    from skala_rag.scoring.finance import parse_period
+
+    snapshot, _, output, _ = case
+    policy = load_approved_policy(
+        "configs/scoring.v3.json",
+        approvals=PolicyApprovals.model_validate(approval_payload()),
+        approval_verifier=lambda a, p: a.model_dump() == approval_payload()[a.scope],
+    )
+    snapshot.policy_version = policy.policy_version
+    rubric = yaml.safe_load(Path("configs/rubrics/finance.yaml").read_text())
+    template = next(iter(snapshot.evidence.values()))
+    facts = []
+    for role, value in [("revenue", 100), ("cost_of_revenue", 50)]:
+        e = template.model_copy(
+            update={
+                "evidence_id": f"fixture:{role}",
+                "locator": "https://example.com/offline-finance-fixture",
+                "evidence_kind": "reported",
+                "criterion_ids": ["traction.gross_margin"],
+                "value": value,
+                "unit": "one",
+                "currency": "KRW",
+                "period": "2025-01-01/2025-12-31",
+                "value_as_of": snapshot.as_of,
+                "supporting_evidence_ids": [],
+                "conflicts_with": [],
+            }
+        )
+        snapshot.evidence[e.evidence_id] = e
+        snapshot.evidence_ids.append(e.evidence_id)
+        facts.append(
+            ReviewedFinancialFact(
+                **{
+                    k: getattr(snapshot, k)
+                    for k in (
+                        "run_id",
+                        "snapshot_id",
+                        "candidate_id",
+                        "evaluation_round",
+                        "evidence_revision",
+                        "policy_version",
+                    )
+                },
+                reviewer_reference="fixture:review",
+                accounting_entity=snapshot.candidate_id,
+                metric_role=role,
+                funding_round=None,
+                valuation_basis=None,
+                period=parse_period(e.period),
+                evidence=e,
+            )
+        )
+    c = next(
+        c
+        for c in output["traction"]["criteria"]
+        if c["criterion_id"] == "traction.gross_margin"
+    )
+    c.update(
+        status="observed",
+        rating=4 if wrong_rating else 5,
+        missing_reason=None,
+        evidence_ids=[f.evidence.evidence_id for f in facts],
+    )
+    result = evaluate_business_deal(
+        snapshot,
+        policy=policy,
+        rubric=rubric,
+        llm=FakeLLM([output]),
+        clock=FakeClock(datetime(2026, 9, 30, tzinfo=UTC)),
+        schema_version="test",
+        financial_facts=tuple(facts),
+        verifiers=ApprovedVerifiers(
+            "finance-0.1.0",
+            "finance-0.1.0",
+            "finance-0.1.0",
+            lambda c, s: True,
+            lambda c, s: True,
+            lambda c, s: True,
+        ),
+    )
+    assert result.status == ("failure" if wrong_rating else "success")
+    if wrong_rating:
+        assert result.evaluations is None
+
+
+def test_approved_contract_fixture_consumer(case):
+    from tests.unit.test_approved_policy import approval_payload
+
+    from skala_rag.scoring.approved_policy import PolicyApprovals, load_approved_policy
+
+    snapshot, _, output, rubric = case
+    policy = load_approved_policy(
+        "configs/scoring.v3.json",
+        approvals=PolicyApprovals.model_validate(approval_payload()),
+        approval_verifier=lambda a, p: a.model_dump() == approval_payload()[a.scope],
+    )
+    snapshot = snapshot.model_copy(update={"policy_version": policy.policy_version})
+    rubric.update(status="approved", rubric_version="finance-0.1.0")
+    llm = FakeLLM([output])
+    result = evaluate_business_deal(
+        snapshot,
+        policy=policy,
+        rubric=rubric,
+        llm=llm,
+        verifiers=ApprovedVerifiers(
+            "finance-0.1.0",
+            "finance-0.1.0",
+            "finance-0.1.0",
+            lambda c, s: True,
+            lambda c, s: True,
+            lambda c, s: True,
+        ),
+        clock=FakeClock(datetime(2026, 9, 30, tzinfo=UTC)),
+        schema_version="test",
+    )
+    assert result.status == "success"
+    assert set(result.evaluations) == {"traction", "deal_terms"}
+    assert len(llm.calls) == 1

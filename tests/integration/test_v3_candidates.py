@@ -28,6 +28,9 @@ def scenario(
     eligibility_schema=None,
     catalog_mutation=None,
     schema_version=None,
+    run_options=None,
+    stages_transform=None,
+    coverage_na=None,
 ):
     policy = load_v3_policy("configs/scoring.v3.json", execution_mode="fixture")
     catalog = load_policy("configs/scoring.draft.json", execution_mode="fixture")
@@ -160,6 +163,10 @@ def scenario(
         ),
         freeze=freeze,
     )
+    if stages_transform:
+        stages = stages_transform(stages)
+    options = dict(support_check=lambda criterion, evidence: bool(evidence))
+    options.update(run_options or {})
     result = run_candidates_v3(
         stages,
         {b: lambda snap, b=b: evaluate(b, snap) for b in BRANCH_DIMENSIONS},
@@ -168,7 +175,6 @@ def scenario(
         catalog_policy_version="main-draft-0.1.0",
         run_id="run",
         schema_version=schema_version or template["schema_version"],
-        support_check=lambda criterion, evidence: bool(evidence),
         applicability_assessments=lambda cid: {
             criterion_id: ApplicabilityAssessment(
                 schema_version=schema_version or template["schema_version"],
@@ -176,7 +182,7 @@ def scenario(
                 applicability_rule_id="approved-external-rule",
                 evidence_ids=[next(iter(template["evidence"]))],
             )
-            for criterion_id in na
+            for criterion_id in (coverage_na(cid) if coverage_na else na)
         },
         applicability_check=lambda cid, criterion, assessment, evidence: (
             assessment.applicability_rule_id == "approved-external-rule"
@@ -186,8 +192,40 @@ def scenario(
         ),
         industry_evidence_dimensions=set(),
         clock=lambda: datetime(2026, 9, 1, tzinfo=timezone.utc),
+        **options,
     )
     return result, calls
+
+
+def test_coverage_zero_denominator_has_explicit_error_and_advances_once():
+    policy = load_v3_policy("configs/scoring.v3.json", execution_mode="fixture")
+    result, calls = scenario(na={c.criterion_id for c in policy.criteria})
+    assert calls == []
+    assert result.candidate_index == 2
+    assert len(result.outcomes) == 2
+    assert not result.scores and not result.decisions
+    assert {e.node for e in result.errors} == {"coverage"}
+    assert {e.error_code for e in result.errors} == {"ZERO_APPLICABLE_DENOMINATOR"}
+
+
+def test_coverage_zero_then_next_candidate_success_advances_each_once():
+    policy = load_v3_policy("configs/scoring.v3.json", execution_mode="fixture")
+    trace = []
+    result, calls = scenario(
+        coverage_na=lambda cid: (
+            {c.criterion_id for c in policy.criteria} if cid == "company-0" else set()
+        ),
+        run_options={"trace_events": trace},
+    )
+    assert result.candidate_index == 2
+    assert result.outcomes["company-0"].status == "failed"
+    assert result.selection.selected_candidate_id == "company-1"
+    assert len(calls) == 5
+    assert set(result.scores) == {"company-1"}
+    assert result.errors[0].error_code == "ZERO_APPLICABLE_DENOMINATOR"
+    for cid in result.outcomes:
+        steps = [e["step"] for e in trace if e["candidate_id"] == cid]
+        assert steps.count("archive") == steps.count("advance") == 1
 
 
 def test_all_candidates_evaluated_priority_not_first_stop():
@@ -198,6 +236,14 @@ def test_all_candidates_evaluated_priority_not_first_stop():
     assert len(result.outcomes) == 2
     assert result.status == "ready_for_v3_reporting"
     assert result.baseline_report_input is None
+
+
+def test_deficient_coverage_without_callback_is_technical_failure():
+    result, calls = scenario(run_options={"support_check": lambda c, e: False})
+    assert calls == []
+    assert not result.scores and not result.decisions
+    assert all(o.status == "failed" for o in result.outcomes.values())
+    assert {e.error_code for e in result.errors} == {"RESEARCH_CALLBACK_REQUIRED"}
 
 
 def test_failure_then_success_advances_once_and_no_partial_promotion():

@@ -18,10 +18,11 @@ from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Literal, Self
 
-from pydantic import ConfigDict, StrictBool, model_validator
+from pydantic import ConfigDict, Field, StrictBool, model_validator
 
 from skala_rag.contracts._validation import validate_unique
 from skala_rag.contracts.common import Contract, ISODate, Locator, Text
+from skala_rag.rag.text_review import TextIndexReview
 
 LOCAL_CORPUS_ROOT = PurePosixPath("data/local")
 
@@ -43,6 +44,9 @@ class ManifestDocument(Contract):
     extraction_status: Literal["pending", "ok", "partial", "failed"]
     reviewer: Text | None = None
     approved: StrictBool
+    text_index_review: TextIndexReview | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def validate_document(self) -> Self:
@@ -53,6 +57,13 @@ class ManifestDocument(Contract):
         validate_unique(list(self.candidate_ids), "candidate_ids")
         if self.approved and self.reviewer is None:
             raise ValueError("approved document requires reviewer")
+        if self.text_index_review is not None:
+            if self.extraction_status != "partial":
+                raise ValueError("text review applies only to partial documents")
+            if self.text_index_review.source_content_hash != self.content_hash:
+                raise ValueError("text review source hash mismatch")
+            if self.text_index_review.schema_version != self.schema_version:
+                raise ValueError("text review schema mismatch")
         validate_local_path(self.local_path)
         return self
 
@@ -142,7 +153,9 @@ def check_corpus(manifest: CorpusManifest) -> GateResult:
                     "document is not approved",
                 )
             )
-        elif item.extraction_status != "ok":
+        elif item.extraction_status != "ok" and not (
+            item.extraction_status == "partial" and item.text_index_review is not None
+        ):
             issues.append(
                 GateIssue(
                     Rejection.EXTRACTION_NOT_OK,

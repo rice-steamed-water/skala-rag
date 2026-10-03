@@ -179,6 +179,10 @@ def _exclusion(
         return "currency_mismatch"
     if evidence.unit != rules.size_unit:
         raise ValueError("market size figure unit must match rubric unit")
+    if evidence.value_as_of is None:
+        raise ValueError("market size figure requires value_as_of")
+    if evidence.value_as_of.year != link.reference_year:
+        raise ValueError("market size value_as_of year must match reference_year")
     return None
 
 
@@ -263,7 +267,12 @@ def evaluate_market(
 
     ``market_links``는 상위 조사 경계에서 시장 정의·지역·기준연도를 확인한
     결과여야 한다. 링크 밖 근거는 프롬프트와 출력 검증 양쪽에서 제외된다.
+    TAM/SAM의 ``value_as_of.year``는 링크의 ``reference_year``와 같아야 한다.
+    금액 기준일이 없거나 링크와 모순되는 입력, rubric 구간 밖 수치는 LLM 호출
+    전에 ``ValueError``로 거절한다. 호출자 계약 오류이며 missing 평가가 아니다.
     """
+    if rubric.get("rubric_version") != "core-0.1.0":
+        raise ValueError("Market evaluation requires approved core-0.1.0")
     if rubric.get("status") != "approved":
         raise ValueError("Market evaluation requires approved rubric (D14 core)")
     if not set(market_links) <= set(snapshot.evidence):

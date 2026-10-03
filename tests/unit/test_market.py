@@ -139,6 +139,22 @@ def _payload(llm, call=0):
     return json.loads(llm.calls[call].user)
 
 
+def test_approval_does_not_transfer_to_unknown_core_version(case):
+    llm = FakeLLM([])
+    with pytest.raises(ValueError, match="core-0.1.0"):
+        evaluate_market(
+            case.snapshot,
+            target_market=TARGET,
+            market_links=case.links,
+            rubric={**RUBRIC, "rubric_version": "core-unapproved"},
+            llm=llm,
+            policy=POLICY,
+            clock=CLOCK,
+            schema_version="synthetic-1",
+        )
+    assert llm.calls == []
+
+
 def test_matching_market_evidence_reaches_wrapper_with_context(case):
     result, llm = case.run(case.output())
     assert result.status == "success"
@@ -157,6 +173,62 @@ def test_matching_market_evidence_reaches_wrapper_with_context(case):
         "rubric_band": 3,
     }
     assert context["market_figures"]["ev-cagr"]["end_year"] == 2030
+
+
+@pytest.mark.parametrize("metric", ["tam", "sam"])
+@pytest.mark.parametrize(
+    "value_as_of", [date(2019, 12, 31), None], ids=["year-mismatch", "null-date"]
+)
+def test_size_source_date_contract_rejected_before_llm(case, metric, value_as_of):
+    fields, link = _sam(year=2025, metric=metric)
+    # model_copy deliberately bypasses the Evidence DTO's monetary-date validator.
+    case.add("ev-date-mismatch", {**fields, "value_as_of": value_as_of}, link)
+    llm = FakeLLM([case.output(size=["ev-date-mismatch"], size_rating=3)])
+    with pytest.raises(ValueError, match="value_as_of"):
+        evaluate_market(
+            case.snapshot,
+            target_market=TARGET,
+            market_links=case.links,
+            rubric=RUBRIC,
+            llm=llm,
+            policy=POLICY,
+            clock=CLOCK,
+            schema_version="synthetic-1",
+        )
+    assert llm.calls == []
+
+
+@pytest.mark.parametrize("metric", ["tam", "sam"])
+def test_size_matching_source_year_reaches_llm(case, metric):
+    fields, link = _sam(year=2025, metric=metric)
+    # Exact dates need not match: this boundary compares monetary reference years.
+    case.add("ev-matching-date", {**fields, "value_as_of": date(2025, 1, 1)}, link)
+    result, llm = case.run(case.output(size=["ev-matching-date"], size_rating=3))
+    assert result.status == "success"
+    assert len(llm.calls) == 1
+    assert (
+        _payload(llm)["context"]["market_figures"]["ev-matching-date"]["reference_year"]
+        == 2025
+    )
+
+
+@pytest.mark.parametrize("metric", ["tam", "sam"])
+def test_size_outside_rubric_bands_rejected_before_llm(case, metric):
+    # Bands cover all finite values; model_copy bypasses DTO finite-number validation.
+    case.add("ev-out-of-band", *_sam(float("nan"), metric=metric))
+    llm = FakeLLM([case.output(size=["ev-out-of-band"], size_rating=1)])
+    with pytest.raises(ValueError, match="value outside rubric bands"):
+        evaluate_market(
+            case.snapshot,
+            target_market=TARGET,
+            market_links=case.links,
+            rubric=RUBRIC,
+            llm=llm,
+            policy=POLICY,
+            clock=CLOCK,
+            schema_version="synthetic-1",
+        )
+    assert llm.calls == []
 
 
 def test_other_segment_and_currency_excluded_from_prompt(case):

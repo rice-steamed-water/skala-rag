@@ -31,6 +31,8 @@ def evaluate_founder_fixture(
     확인한 결과여야 한다. 이 함수는 그 판단을 텍스트에서 재추론하지 않는다.
     매핑 밖 근거는 프롬프트와 출력 검증 양쪽에서 제외한다.
     """
+    if rubric.get("rubric_version") != "core-0.1.0":
+        raise ValueError("Founder fixture requires approved core-0.1.0")
     if rubric.get("status") != "approved" or policy.status != "draft":
         raise ValueError("Founder fixture requires approved rubric and draft policy")
     people = set(founder_person_ids)

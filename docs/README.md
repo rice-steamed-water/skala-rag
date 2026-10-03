@@ -6,12 +6,14 @@
 
 ## 먼저 할 일
 
+**실행 인터페이스 후속 승인 #166:** [Python 직접 실행](implementation/python-execution.md)으로 마무리하며 신규 CLI·옵션·console-script·CLI UX 개발은 중단한다. 기존 #29 fixture callable/parser·테스트는 호환성으로 보존한다. 이 문서의 과거 pinned 구현 snapshot과 CLI2 승인 설명은 이력이며 현재 실행 완료 조건은 Python 상태/receipt·산출물 검증이다. 정책·예산/readiness·live 승인 범위는 바꾸지 않는다.
+
 1. 이 문서에서 목표와 필수 요구사항을 확인한다.
 2. [v3 정합화·영향표](implementation/design-v3-alignment.md)와 [결정 목록](implementation/decisions.md)을 읽는다. 특히 **#82 운영 승인·사전 무작위 선정 승인과 남은 OPEN**을 구별한다.
 3. 모든 구현 담당자가 [공통 데이터 계약](implementation/contracts.md)을 먼저 읽는다.
 4. [작업 분담과 검증](implementation/delivery.md)의 M0 → M1 순서로 시작한다. 외부 API부터 각자 연결하기보다, 같은 fixture로 전체 흐름을 먼저 맞춘다.
 
-pinned 통합 기준 `906312a`에는 baseline DTO/State/reducer/catalog/점수·재무 helper·DTO adapter뿐 아니라 #17 발견/Normalize, #18 fixture 조사·Eligibility, #19 GuardedRetriever/EvidenceCollector, #22 dimension 평가 wrapper, #23 fixture 후보 Graph, #26 ReportContext, #27 baseline Structural Validator 및 #73/PR #74의 독립 `contracts.v3` 구조 DTO가 있다. #23은 baseline 첫 추천 인계이며 v3 전 후보 selector가 아니다. v3 구조 DTO는 계산·selector·0분모/Warning controller·State/Graph 연결을 실행하지 않는다. CLI·보고서 생성/Judge·실 PDF·live RAG는 여전히 목표다. 설치·검증 명령은 [루트 README](../README.md), pinned 통합과 historical snapshot은 [정합화 기록](implementation/design-v3-alignment.md)을 따른다.
+과거 pinned 통합 기준 `906312a`에는 baseline DTO/State/reducer/catalog/점수·재무 helper·DTO adapter뿐 아니라 #17 발견/Normalize, #18 fixture 조사·Eligibility, #19 GuardedRetriever/EvidenceCollector, #22 dimension 평가 wrapper, #23 fixture 후보 Graph, #26 ReportContext, #27 baseline Structural Validator 및 #73/PR #74의 독립 `contracts.v3` 구조 DTO가 있다. #23은 baseline 첫 추천 인계이며 v3 전 후보 selector가 아니다. v3 구조 DTO 자체는 계산·selector·0분모/Warning controller·State/Graph 연결을 실행하지 않는다. 이후 #29 fixture callable·보고서/PDF 경로의 가용 범위는 [Python 실행 안내](implementation/python-execution.md)로 보완하며 신규 CLI는 개발하지 않는다. 설치·검증 명령은 [루트 README](../README.md), pinned 통합과 historical snapshot은 [정합화 기록](implementation/design-v3-alignment.md)을 따른다.
 
 ## 문서를 읽는 순서
 
@@ -19,8 +21,9 @@ pinned 통합 기준 `906312a`에는 baseline DTO/State/reducer/catalog/점수·
 
 | 필요한 내용 | 문서 | 우선 독자 |
 | --- | --- | --- |
+| 최종 실행 인터페이스, 기존 callable·receipt와 호환 경계 | [Python 직접 실행](implementation/python-execution.md) | 전원 |
 | v3 출처·절별 추적·현재 GitHub 작업 영향 | [v3 정합화 기록](implementation/design-v3-alignment.md) | 전원 |
-| 전체 흐름, 노드 책임, 반복과 종료 | [아키텍처](implementation/architecture.md) | Graph / Agent 담당 |
+| 전체 흐름, 노드 책임, 반복과 종료 | [아키텍처](implementation/architecture.md) · [v3 실행 그래프 (Archify HTML)](../.archify/architecture-v3-agent-20260930-172142/v3-agent.html) · [소스·검증 안내](../.archify/architecture-v3-agent-20260930-172142/README.md) | Graph / Agent 담당 |
 | State, Evidence, 평가 결과, Tool 경계 | [공통 데이터 계약](implementation/contracts.md) | 전원 |
 | 평가 항목, 가중치, 결측, 판단 라벨 | [점수와 판단 정책](implementation/scoring.md) | 평가 / 지표 담당 |
 | 창업자·시장·기술·경쟁 우위 rubric, missing 조건 | [핵심 영역 rubric](implementation/rubric-core.md) | 평가 / 지표 담당 |
@@ -90,7 +93,7 @@ D09의 baseline 목차(single_candidate/no_recommendation 각각 7개 섹션)·�
 - RAG 문서 수집·검색과 출처 추적, 외부 검색 adapter, 공통 Evidence 저장소를 만든다.
 - 여섯 점수 차원·23개 criterion을 보존한다. branch envelope는 D04 제안이며 부분 성공 집계는 금지한다.
 - 우선추천·추천·보류·비추천, 적격성 정보부족, 후보 없음, 기술 실패를 구별한다. Warning 반환과 검증된 final 발행도 구별한다.
-- CLI 중심으로 시작한다. 보고서 Markdown과 PDF, 실행 manifest를 남긴다.
+- Python 코드에서 기존 runner/Graph를 직접 호출한다(#166). 보고서 Markdown과 PDF, 실행 manifest를 남기고 상태·Warning·acceptance·publication을 따로 검증한다. CLI 추가 개발은 완료 조건이 아니다.
 
 **이번 범위 밖 — 별도 합의 없이는 추가하지 않음**
 

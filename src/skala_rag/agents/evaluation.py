@@ -315,6 +315,7 @@ def evaluate_dimension(
     schema_version: str,
     max_repairs: int = 1,
     system_prompt: str = SYSTEM_PROMPT,
+    user_prompt: str | None = None,
     prompt_context: Mapping[str, object] | None = None,
     extra_validator: Callable[[DimensionAssessmentOutput], list[str]] | None = None,
 ) -> EvaluationResult:
@@ -328,8 +329,14 @@ def evaluate_dimension(
       붙여 ``max_repairs``회 구조 수정을 요청한다. 그래도 실패하면 failure.
     - 그 밖의 LLM 오류(timeout 등)는 이 wrapper에서 재시도하지 않고 failure
       (재시도 예산은 M2 adapter 범위).
+    - ``system_prompt``/``user_prompt``는 영역별 versioned prompt(#57~#61)가
+      주입한다. 생략하면 fixture용 기본 prompt를 쓴다. 출력 검증은 동일하다.
     """
-    user = build_user_prompt(dimension, snapshot, rubric, policy, prompt_context)
+    user = (
+        user_prompt
+        if user_prompt is not None
+        else build_user_prompt(dimension, snapshot, rubric, policy, prompt_context)
+    )
     prompt = user
     last_problem = ""
     for attempt in range(1, max_repairs + 2):
