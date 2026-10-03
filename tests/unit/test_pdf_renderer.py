@@ -194,3 +194,19 @@ def test_layout_draft_revision_mismatch_is_fatal(tmp_path):
         PDFLayoutValidator()(
             draft, SimpleNamespace(context_id=draft.context_id), result
         )
+
+
+def test_font_hash_mismatch_remains_fatal_without_artifact(tmp_path):
+    render = renderer(tmp_path)
+    render.profile = render.profile.model_copy(update={"regular_sha256": "0" * 64})
+    result = render(make_draft(), "pdf-layout-v1")
+    assert result.errors[0].code == "PDF_FONT_HASH_MISMATCH"
+    assert result.layout_measurements["final_allowed"] is False
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_missing_font_glyph_remains_fatal_without_artifact(tmp_path):
+    result = renderer(tmp_path)(make_draft(body="가상 관측 😀"), "pdf-layout-v1")
+    assert result.errors[0].code == "PDF_FONT_GLYPH_MISSING"
+    assert result.layout_measurements["final_allowed"] is False
+    assert list(tmp_path.iterdir()) == []

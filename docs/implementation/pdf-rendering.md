@@ -53,8 +53,10 @@ ReportLab renderer 위에 절제된 navy/teal 투자 보고서 스타일을 적�
 
 - 타이포그래피: 제목/섹션(navy)·소제목(teal)·본문(ink), 표 헤더는 navy 배경·흰 글씨,
   줄무늬 행. 모든 페이지에 헤더(보고서명)와 푸터(모드 FIXTURE/LIVE, PAGE n).
-- 시각 요소: 후보 비교 표, 후보별 점수 카드(normalized_score·label·coverage_pct·
-  weighted_missing_pct), 영역별 `dimension_score_pct` 막대(고정 0–100 트랙).
+- 시각 요소: 후보 상태 비교 표와 후보별 원본 점수 상세 표. #181에서 별도 점수 카드와
+  별도 영역 막대 표의 중복 표시를 없애고 원본 `dimension_score_pct` 값 셀에
+  고정 0–100 트랙을 배치한다. normalized_score·label·coverage_pct·weighted_missing_pct와
+  모든 원점수·적용/N/A/결측 비중·판정 사유·위험·한계는 원본 행 그대로 한 번 표시한다.
 - 데이터 출처: v3 구조 검증(`validate_report_v3`)이 통과한 뒤 같은 proof의
   `checks["pdf_presentation"]`에 담은 검증된 `ScoreSummary`/`InvestmentDecision`/
   `CandidateOutcome`만 쓴다. renderer가 context_id·draft_hash·execution_mode·정확한
@@ -63,5 +65,24 @@ ReportLab renderer 위에 절제된 navy/teal 투자 보고서 스타일을 적�
 - 값 표기: Decimal 원문 그대로 표시(반올림 없음). None은 "미상"으로 표시하고 막대/채움을
   그리지 않으며 0으로 렌더하지 않는다. 선택 없음(no-selection) 모드는 그대로 유지된다.
 - 측정: `layout_measurements`에 `presentation_version`과 `visualizations` 개수를 기록한다.
+  기존 `score_cards` 키는 실제 렌더한 후보별 상세 점수 표 수이며 `dimension_bars`는
+  그 표에 실제 배치한 관측 막대 수다(미상은 막대 없음).
 - 검증: `tests/unit/test_pdf_design.py`가 실제 PDF를 만들어 텍스트 추출로 확인한다.
-  시각(육안·래스터) 검증은 수행하지 않았다.
+  #173 구현 당시 시각(육안·래스터) 검증은 수행하지 않았다. #181 후속 검증은 아래와 같다.
+
+## 두 후보 fixture 분량 회귀 (#181)
+
+`tests/unit/test_pdf_design.py`는 실제 기본 fixture runner의 두 후보 추천/무선택
+context를 렌더한다. 수정 전 양쪽 6페이지로 실패하는 회귀를 확인했고, 중복 점수
+시각화 제거 후 ≤5페이지·SUMMARY ≤0.5·A4·경계·인용 검사를 통과한다. 각 원본 표의
+모든 행과 값이 PDF 텍스트에 남는지, draft 불변 및 fixture final 금지를 함께 검사한다.
+폰트 크기·행간·여백·페이지 상한이나 validator는 변경하지 않는다. 기존 CLI/M1
+회귀는 그대로 보존하며 fixture 통과를 실제 API/Judge 품질이나 시각 검토로 해석하지 않는다.
+
+2026-10-03 부모 독립 검증에서 추천·무선택 fixture PDF 각각 5페이지와 현재 PDF·manifest
+artifact hash를 다시 확인했다. `pdftoppm -png -r 100 <PDF> <prefix>`로 10페이지를
+래스터화하고 전체 contact sheet 및 6개 확대 영역의 한글·표·점수·인용·REFERENCE를
+대조했다. 보이는 영역에서 잘림·겹침을 관측하지 않았으나 실제 기업 자료의 긴 URL이나
+임의 분량까지 검증한 것은 아니다. 새 clone의 frozen 의존성에 빌드한 wheel을 설치해
+Python 직접 fixture 호출도 재현했다. 모두 `fixture_only`·`publication_allowed=false`이며,
+전체 live 실행·실제 Semantic Judge·실기업 보고서 품질 검증과 구별한다.
