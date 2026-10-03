@@ -1,23 +1,26 @@
 """All-candidate fixture v3 controller using #20 coverage and #24 LangGraph.
 
 This is deliberately separate from baseline candidates.py and ReportInput. It does
-not implement discovery policy, research retry, reporting, CLI or live providers.
+not implement discovery policy, reporting, CLI or live providers. Research control
+is Python; only the five-way evaluation subgraph is LangGraph.
 """
 
 from collections.abc import Callable, Collection, Mapping, Sequence
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from time import perf_counter
-from typing import Any
+from typing import Any, TypeVar
 
 from skala_rag.contracts.candidates import Candidate, EligibilityResult
+from skala_rag.contracts.coverage import ResearchGap
 from skala_rag.contracts.errors import WorkflowError
 from skala_rag.contracts.evaluation import EvaluationSnapshot
 from skala_rag.contracts.evidence import Evidence
 from skala_rag.contracts.ids import evaluation_key
 from skala_rag.contracts.reports import CandidateOutcome
 from skala_rag.contracts.v3 import (
+    CoverageResult,
     Evaluation,
     InvestmentDecision,
     ScoreSummary,
@@ -29,10 +32,48 @@ from skala_rag.scoring.aggregate_v3 import (
     aggregate_scores_v3,
 )
 from skala_rag.scoring.catalog import ScoringPolicy
-from skala_rag.scoring.coverage_v3 import ApplicabilityCheck, check_coverage_v3
+from skala_rag.scoring.coverage_v3 import (
+    ApplicabilityCheck,
+    NoApplicableCriteria,
+    build_research_gaps_v3,
+    check_coverage_v3,
+)
 from skala_rag.scoring.decision_v3 import decide_v3
 from skala_rag.scoring.selector_v3 import SelectionResultV3, select_best_v3
 from skala_rag.scoring.v3_policy import V3Policy
+
+T = TypeVar("T")
+
+
+class RecoverableResearchFailure(Exception):
+    """Explicit transient failure; its message is never persisted by controller."""
+
+
+class ResearchLoopFailure(ValueError):
+    """Controller-owned redacted research failure code."""
+
+    def __init__(self, code: str):
+        self.code = code
+        super().__init__(code)
+
+
+@dataclass(frozen=True)
+class ResearchRequestV3:
+    run_id: str
+    candidate: dict
+    research: object
+    coverage: CoverageResult
+    evidence: tuple[Evidence, ...]
+    attempt: int
+    remaining_requests: int
+    research_gaps: tuple[ResearchGap, ...] = ()
+
+
+@dataclass(frozen=True)
+class ResearchResponseV3:
+    candidate_id: str
+    base_evidence_revision: int
+    evidence: Sequence[Evidence | dict]
 
 
 @dataclass(frozen=True)
@@ -45,6 +86,20 @@ class CandidateStagesV3:
     eligibility: Callable[[dict, object], EligibilityResult | dict]
     collect: Callable[[dict, object], Sequence[Evidence | dict]]
     freeze: Callable[[dict, EligibilityResult, object], EvaluationSnapshot | dict]
+    additional_research: Callable[[ResearchRequestV3], ResearchResponseV3] | None = None
+    freeze_with_evidence: (
+        Callable[
+            [dict, EligibilityResult, CoverageResult, tuple[Evidence, ...]],
+            EvaluationSnapshot | dict,
+        ]
+        | None
+    ) = None
+    unresolved_conflicts: (
+        Callable[[dict, tuple[Evidence, ...]], Sequence[str]] | None
+    ) = None
+    gap_templates: (
+        Callable[[dict, CoverageResult], Sequence[ResearchGap | dict]] | None
+    ) = None
 
 
 @dataclass(frozen=True)
@@ -64,6 +119,10 @@ class CandidateRunV3:
         "V3 SelectionResult and ScoreSummary require a versioned v3 ReportInput/"
         "context adapter; baseline ReportInput/report graph is incompatible."
     )
+    research_retry_count: dict[str, int] = field(default_factory=dict)
+    research_stop_reasons: dict[str, str] = field(default_factory=dict)
+    coverage_results: dict[str, CoverageResult] = field(default_factory=dict)
+    research_gaps: dict[str, tuple[ResearchGap, ...]] = field(default_factory=dict)
 
 
 def run_candidates_v3(
@@ -111,13 +170,20 @@ def run_candidates_v3(
         clock=clock,
     ).compile()
 
-    def timed(step, cid, operation, input_ids=()):
+    retry_counts: dict[str, int] = {}
+    stop_reasons: dict[str, str] = {}
+    coverages: dict[str, CoverageResult] = {}
+    research_gaps: dict[str, tuple[ResearchGap, ...]] = {}
+
+    def timed(step, cid, operation: Callable[[], T], input_ids=()) -> T:
         started_at = datetime.now(timezone.utc).isoformat()
         started = perf_counter()
         status = "failed"
         output_ids = []
         try:
             value = operation()
+            if isinstance(value, CoverageResult):
+                coverages[cid] = value.model_copy(deep=True)
             status = "ok"
             if isinstance(value, dict):
                 output_ids = list(value.get("evaluations_v3", {}))
@@ -149,6 +215,18 @@ def run_candidates_v3(
                         output_ids=output_ids,
                         status=status,
                         execution_mode="fixture",
+                        research_retry_count=retry_counts.get(cid, 0),
+                        research_stop_reason=stop_reasons.get(cid),
+                        controller="python",
+                        evidence_revision=coverages[cid].evidence_revision
+                        if cid in coverages
+                        else None,
+                        missing_criterion_ids=list(coverages[cid].missing_criterion_ids)
+                        if cid in coverages
+                        else [],
+                        unresolved_conflicts=list(coverages[cid].unresolved_conflicts)
+                        if cid in coverages
+                        else [],
                     )
                 )
 
@@ -163,17 +241,19 @@ def run_candidates_v3(
         cid: str | None,
         message: str = "Invalid v3 candidate stage",
         error_code: str = "UPSTREAM_INVALID",
+        retryable: bool = False,
+        attempt: int = 1,
     ) -> WorkflowError:
         return WorkflowError(
             schema_version=schema_version,
-            error_id=f"v3:{run_id}:{index}:{stage}",
+            error_id=f"v3:{run_id}:{index}:{stage}:{attempt}",
             run_id=run_id,
             candidate_id=cid,
             node=stage,
             error_code=error_code,
             message_redacted=message,
-            retryable=False,
-            attempt=1,
+            retryable=retryable,
+            attempt=attempt,
             timestamp=clock(),
         )
 
@@ -197,6 +277,12 @@ def run_candidates_v3(
             failure_ids=[e.error_id for e in failures],
             summary_reason="; ".join(decision.reason_codes) if decision else status,
         )
+        timed("archive", candidate_id, lambda: None)
+
+    def advance(cid):
+        nonlocal index
+        index += 1
+        timed("advance", cid, lambda: None)
 
     try:
         discovered = [
@@ -238,6 +324,7 @@ def run_candidates_v3(
 
     for candidate in candidates:
         cid = candidate["candidate_id"]
+        retry_counts[cid] = 0
         eligibility = None
         stage = "research"
         try:
@@ -261,7 +348,7 @@ def run_candidates_v3(
                     cid,
                     eligibility,
                 )
-                index += 1
+                advance(cid)
                 continue
             stage = "collect"
             evidence = [
@@ -280,32 +367,187 @@ def run_candidates_v3(
                 for item in evidence
             ):
                 raise ValueError("invalid collected Evidence identity")
-            stage = "coverage"
-            coverage = timed(
-                "coverage",
-                cid,
-                lambda: check_coverage_v3(
+            initial_revision = eligibility.evidence_revision
+            evidence_revision = initial_revision
+            new_evidence_ids: set[str] = set()
+
+            def recompute_coverage():
+                conflicts = (
+                    stages.unresolved_conflicts(
+                        deepcopy(candidate), tuple(deepcopy(evidence))
+                    )
+                    if stages.unresolved_conflicts
+                    else sorted(
+                        {
+                            identifier
+                            for item in evidence
+                            if item.conflicts_with
+                            for identifier in (item.evidence_id, *item.conflicts_with)
+                        }
+                    )
+                )
+                result = timed(
+                    "coverage",
                     cid,
-                    evidence,
-                    catalog,
-                    evidence_revision=eligibility.evidence_revision,
-                    schema_version=schema_version,
-                    execution_mode="fixture",
-                    policy_version=policy.policy_version,
-                    support_check=support_check,
-                    applicability_assessments=applicability_assessments(cid),
-                    applicability_check=applicability_check,
-                    unresolved_conflict_ids=[],
-                ),
-                list(collected),
-            )
+                    lambda: check_coverage_v3(
+                        cid,
+                        evidence,
+                        catalog,
+                        evidence_revision=evidence_revision,
+                        schema_version=schema_version,
+                        execution_mode="fixture",
+                        policy_version=policy.policy_version,
+                        support_check=support_check,
+                        applicability_assessments=applicability_assessments(cid),
+                        applicability_check=applicability_check,
+                        unresolved_conflict_ids=conflicts,
+                    ),
+                    list(collected),
+                )
+                coverages[cid] = result.model_copy(deep=True)
+                if stages.gap_templates:
+                    templates = [
+                        ResearchGap.model_validate(g)
+                        for g in stages.gap_templates(
+                            deepcopy(candidate), result.model_copy(deep=True)
+                        )
+                    ]
+                    research_gaps[cid] = tuple(
+                        build_research_gaps_v3(
+                            result,
+                            catalog,
+                            templates,
+                            policy_version=policy.policy_version,
+                        )
+                    )
+                return result
+
+            stage = "coverage"
+            coverage = recompute_coverage()
+            last_research_failed = False
+            while not coverage.research_ready:
+                stage = "research_gate"
+                if (
+                    retry_counts[cid]
+                    == policy.research.additional_requests_per_candidate
+                ):
+                    if last_research_failed:
+                        stop_reasons[cid] = "failed_exhausted"
+                        raise ResearchLoopFailure("RESEARCH_FAILED_EXHAUSTED")
+                    stop_reasons[cid] = "exhausted"
+                    research_gaps[cid] = tuple(
+                        g.model_copy(deep=True, update={"status": "exhausted"})
+                        for g in research_gaps.get(cid, ())
+                    )
+                    timed("research_exhausted", cid, lambda: None)
+                    break
+                if stages.additional_research is None:
+                    stop_reasons[cid] = "callback_required"
+                    raise ResearchLoopFailure("RESEARCH_CALLBACK_REQUIRED")
+                retry_counts[cid] += 1
+                timed("research_gate", cid, lambda: None)
+                request = ResearchRequestV3(
+                    run_id,
+                    deepcopy(candidate),
+                    deepcopy(research),
+                    coverage.model_copy(deep=True),
+                    tuple(deepcopy(evidence)),
+                    retry_counts[cid],
+                    policy.research.additional_requests_per_candidate
+                    - retry_counts[cid],
+                    tuple(deepcopy(research_gaps.get(cid, ()))),
+                )
+                stage = "additional_research"
+                try:
+                    response = timed(
+                        stage,
+                        cid,
+                        lambda: stages.additional_research(request),
+                        list(collected),
+                    )
+                except RecoverableResearchFailure:
+                    failure = error(
+                        stage,
+                        cid,
+                        "Recoverable research failure (details redacted)",
+                        "RESEARCH_RECOVERABLE_FAILURE",
+                        True,
+                        retry_counts[cid],
+                    )
+                    errors.append(failure)
+                    last_research_failed = True
+                    timed("research_recoverable_failure", cid, lambda: None)
+                    continue
+                except Exception:
+                    stop_reasons[cid] = "terminal_failure"
+                    raise ResearchLoopFailure("RESEARCH_TERMINAL_FAILURE") from None
+                last_research_failed = False
+                if (
+                    not isinstance(response, ResearchResponseV3)
+                    or response.candidate_id != cid
+                    or response.base_evidence_revision != coverage.evidence_revision
+                ):
+                    raise ResearchLoopFailure("RESEARCH_RESPONSE_INVALID")
+                batch = [
+                    Evidence.model_validate(e, context={"execution_mode": "fixture"})
+                    for e in response.evidence
+                ]
+                if len({e.evidence_id for e in batch}) != len(batch) or any(
+                    e.schema_version != schema_version
+                    or not (
+                        (e.scope == "company" and e.candidate_id == cid)
+                        or (e.scope == "industry" and e.candidate_id is None)
+                    )
+                    or (
+                        e.evidence_id in collected
+                        and e.model_dump(mode="json") != collected[e.evidence_id]
+                    )
+                    for e in batch
+                ):
+                    raise ResearchLoopFailure("RESEARCH_RESPONSE_INVALID")
+                new = [e for e in batch if e.evidence_id not in collected]
+                if new:
+                    new_evidence_ids.update(e.evidence_id for e in new)
+                    evidence_revision += 1
+                    evidence.extend(new)
+                    collected.update(
+                        {e.evidence_id: e.model_dump(mode="json") for e in new}
+                    )
+                stage = "coverage"
+                coverage = recompute_coverage()
+            if coverage.research_ready:
+                stop_reasons[cid] = "ready"
+                timed("research_ready", cid, lambda: None)
             stage = "freeze"
-            snapshot = EvaluationSnapshot.model_validate(
-                stages.freeze(
-                    deepcopy(candidate), eligibility.model_copy(deep=True), coverage
-                ),
-                context={"execution_mode": "fixture"},
+            if (
+                evidence_revision != initial_revision
+                and stages.freeze_with_evidence is None
+            ):
+                raise ResearchLoopFailure("RESEARCH_FREEZE_REQUIRED")
+            freeze_eligibility = eligibility.model_copy(
+                deep=True, update={"evidence_revision": evidence_revision}
             )
+
+            def freeze_snapshot():
+                payload = (
+                    stages.freeze_with_evidence(
+                        deepcopy(candidate),
+                        freeze_eligibility,
+                        coverage.model_copy(deep=True),
+                        tuple(deepcopy(evidence)),
+                    )
+                    if stages.freeze_with_evidence
+                    else stages.freeze(
+                        deepcopy(candidate),
+                        freeze_eligibility,
+                        coverage.model_copy(deep=True),
+                    )
+                )
+                return EvaluationSnapshot.model_validate(
+                    payload, context={"execution_mode": "fixture"}
+                )
+
+            snapshot = timed("freeze", cid, freeze_snapshot, list(collected))
             if (
                 snapshot.run_id != run_id
                 or snapshot.candidate_id != cid
@@ -316,6 +558,8 @@ def run_candidates_v3(
             ):
                 raise ValueError("frozen snapshot generation mismatch")
             stage = "freeze_admission"
+            if not new_evidence_ids <= snapshot.evidence.keys():
+                raise ValueError("snapshot omitted admitted research Evidence")
             if any(
                 key not in collected or item.model_dump(mode="json") != collected[key]
                 for key, item in snapshot.evidence.items()
@@ -397,7 +641,7 @@ def run_candidates_v3(
                     raise ValueError("evaluation failure did not archive/advance once")
                 errors.extend(failures)
                 finish("failed", cid, failures=failures)
-                index += 1
+                advance(cid)
                 continue
             if (
                 evaluated["candidate_index"] != index
@@ -443,12 +687,19 @@ def run_candidates_v3(
                 eligibility,
                 decision,
             )
-        except ZeroDenominatorV3 as exc:
+        except (ZeroDenominatorV3, NoApplicableCriteria) as exc:
+            dimension = getattr(exc, "dimension", None) or "total"
             failure = error(
                 stage,
                 cid,
-                f"Zero applicable denominator: {exc.dimension or 'total'}",
+                f"Zero applicable denominator: {dimension}",
                 error_code="ZERO_APPLICABLE_DENOMINATOR",
+            )
+            errors.append(failure)
+            finish("failed", cid, failures=[failure])
+        except ResearchLoopFailure as exc:
+            failure = error(
+                stage, cid, error_code=exc.code, attempt=max(1, retry_counts[cid])
             )
             errors.append(failure)
             finish("failed", cid, failures=[failure])
@@ -462,7 +713,7 @@ def run_candidates_v3(
             )
             errors.append(failure)
             finish("failed", cid, failures=[failure])
-        index += 1
+        advance(cid)
 
     rows: list[dict[str, Any]] = []
     for cid in sorted(outcomes):
@@ -509,4 +760,8 @@ def run_candidates_v3(
         decisions,
         selection,
         tuple(errors),
+        research_retry_count=retry_counts,
+        research_stop_reasons=stop_reasons,
+        coverage_results=coverages,
+        research_gaps=research_gaps,
     )
