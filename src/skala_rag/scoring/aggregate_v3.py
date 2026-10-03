@@ -10,7 +10,7 @@ from skala_rag.contracts.v3 import (
     Evaluation,
     ScoreSummary,
 )
-from skala_rag.scoring.v3_policy import V3Policy
+from skala_rag.scoring.v3_policy import NumericPolicy, V3Criterion, V3Policy
 
 DIMENSIONS = ("founder", "market", "technology", "moat", "traction", "deal_terms")
 ApplicabilityVerifier = Callable[[CriterionAssessment, object | None], bool]
@@ -42,6 +42,26 @@ def aggregate_scores_v3(
     """
     if not isinstance(policy, V3Policy) or policy.execution_mode != "fixture":
         raise ValueError("approved fixture V3Policy required")
+    return _aggregate_scores_v3(
+        evaluations,
+        criteria=policy.criteria,
+        numeric=policy.numeric,
+        policy_version=policy.policy_version,
+        applicability_verifier=applicability_verifier,
+        snapshot=snapshot,
+    )
+
+
+def _aggregate_scores_v3(
+    evaluations: Sequence[Evaluation],
+    *,
+    criteria: tuple[V3Criterion, ...],
+    numeric: NumericPolicy,
+    policy_version: str,
+    applicability_verifier: ApplicabilityVerifier | None,
+    snapshot: object | None,
+) -> ScoreSummary:
+    """Shared pure core; entry points own admission, join owns attribution."""
     items = [Evaluation.model_validate(e.model_dump()) for e in evaluations]
     if len(items) != 6 or {e.dimension for e in items} != set(DIMENSIONS):
         raise ValueError("exactly six distinct dimensions required")
@@ -59,14 +79,14 @@ def aggregate_scores_v3(
         tuple(getattr(e, field) for field in identity_fields) != identity for e in items
     ):
         raise ValueError("mixed evaluation generation")
-    if items[0].policy_version != policy.policy_version:
+    if items[0].policy_version != policy_version:
         raise ValueError("evaluation policy generation mismatch")
     if snapshot is not None and any(
         getattr(snapshot, field) != getattr(items[0], field)
         for field in identity_fields
     ):
         raise ValueError("snapshot generation mismatch")
-    catalog = {c.criterion_id: c for c in policy.criteria}
+    catalog = {c.criterion_id: c for c in criteria}
     by_dimension = {e.dimension: e for e in items}
     points: dict[str, Decimal | None] = {}
     dimensions = {}
@@ -79,9 +99,7 @@ def aggregate_scores_v3(
         for dimension in DIMENSIONS:
             evaluation = by_dimension[dimension]
             assessments = evaluation.criteria
-            expected = {
-                c.criterion_id for c in policy.criteria if c.dimension == dimension
-            }
+            expected = {c.criterion_id for c in criteria if c.dimension == dimension}
             actual = [a.criterion_id for a in assessments]
             if len(actual) != len(set(actual)) or set(actual) != expected:
                 raise ValueError(
@@ -132,14 +150,13 @@ def aggregate_scores_v3(
             raise ZeroDenominatorV3(items[0].candidate_id, None)
         low = [
             d
-            for d in policy.numeric.low_dimension_scope
+            for d in numeric.low_dimension_scope
             if dimensions[d].observed_score * 100
-            <= policy.numeric.low_dimension_ratio_pct * dimensions[d].applicable_weight
+            <= numeric.low_dimension_ratio_pct * dimensions[d].applicable_weight
         ]
         hold = (
             ["WEIGHTED_MISSING"]
-            if total_missing * 100
-            >= policy.numeric.weighted_missing_pct * total_applicable
+            if total_missing * 100 >= numeric.weighted_missing_pct * total_applicable
             else []
         )
         hold += [f"LOW_{d.upper()}" for d in low]
@@ -149,14 +166,14 @@ def aggregate_scores_v3(
                 items[0].run_id,
                 items[0].candidate_id,
                 items[0].evaluation_round,
-                policy.policy_version,
+                policy_version,
             ),
             run_id=items[0].run_id,
             candidate_id=items[0].candidate_id,
             evaluation_round=items[0].evaluation_round,
             snapshot_id=items[0].snapshot_id,
             evidence_revision=items[0].evidence_revision,
-            policy_version=policy.policy_version,
+            policy_version=policy_version,
             criterion_points=points,
             dimension_scores=dimensions,
             observed_score=total_score,
