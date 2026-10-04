@@ -36,7 +36,9 @@ missing threshold is added or changed.
   the deterministic snapshot prompt includes the supplied context. Both paths
   retain validation, bounded structural repair and diagnostic redaction.
 - Founder and Market accept the exact approved `core-0.1.0` version, not future
-  versions merely labelled approved. Founder remains a draft-policy fixture entry.
+  versions merely labelled approved. Founder's legacy entry remains draft-policy;
+  its additive approved fixture consumer is exercised in the new five-implementation
+  matrix below, without altering the legacy guard.
 - Market returns baseline `EvaluationResult`; the existing
   `bind_baseline_evaluator_v3("market", ...)` converts its original terminal result
   to `EvaluationBranchResult` without re-running the evaluator. Its baseline
@@ -199,6 +201,111 @@ P1/P2 finding. Terminal timeout errors remain original; only raised review or
 preflight exceptions follow the graph's `UPSTREAM_INVALID` path. These are offline
 acceptance receipts, not actual RAG/runtime or publication acceptance.
 
+## Five real Python implementations, one pinned offline generation
+
+`test_five_real_implementations_one_pinned_frozen_graph` adds a separate bounded
+12-case matrix. Every callback invokes its existing evaluator implementation:
+
+- Founder: `evaluate_founder_approved_fixture`, original baseline result.
+- Market: `evaluate_market`, original baseline result.
+- Technology: `evaluate_technology_approved_fixture`, retained container/trace;
+  only explicit `.result` enters the baseline binder.
+- Moat: `evaluate_moat_approved_fixture`, original native v3 branch (not rebound).
+- Business & Deal: `evaluate_business_deal`, original atomic native v3 branch.
+
+There are **no injected terminal sibling envelopes** in this new matrix. Prior
+Market/four-synthetic, Market+Technology/three-synthetic and draft compatibility
+cases stay separate and unchanged. All five module paths are asserted to belong
+to this checkout. A five-party barrier starts the callbacks in parallel, each
+receiving a detached copy of the identical frozen operational snapshot.
+
+The fixture reuses the earlier common corpus/Market/Technology preparation and
+common Founder/Moat observations. It reads the exact approved Core and Finance
+artifacts without modifying status/version/content. `pinned_approval_registry`
+verifies policy and all artifact content through the approved-policy loader in
+fixture mode; Core uses the registry's explicit artifact receipt and resolver.
+Source/Chunk/RetrievalRecord/Evidence closure is prepared before any evaluator.
+The original schema, policy, corpus/index, run/candidate, snapshot, round and
+revision are not rewritten on returned results.
+
+Founder and Technology use exact typed synthetic reviewed anchors with external
+fixture resolution; Moat uses its implemented `ReviewedMoatAnchor` binding.
+All three bind the **whole original snapshot digest**, exact Core digest,
+criterion/rating/cited IDs; Founder additionally binds the explicit synthetic
+person set and Evidence/person map. Those caller-owned flags and resolvers are
+not authenticated human/semantic authority.
+
+Finance is not all-Missing: the existing approved gross-margin unit example is
+reused with synthetic reported FY2025 revenue 100 and cost 50, same entity/KRW/unit
+and period. Two `ReviewedFinancialFact` receipts are prepared before execution,
+with exact frozen Evidence and original identity. The actual Finance helper
+validates their metric roles, accounting entity, period/currency/unit and the
+approved **50% gross margin → rating 5** band. Other financial criteria remain
+honestly Missing; no N/A rule or fabricated investment finding is introduced.
+`ApprovedVerifiers` are explicitly synthetic caller assertions, not a semantic
+review service. The existing Business & Deal verifier API supplies a Finance-only
+Evidence projection; the test checks that exact projection and its unchanged
+original identity/source/chunk/record storage rather than inventing a whole-input
+verifier API. This is offline numeric validation, not authentic financial proof.
+
+The success case observes five distinct FakeLLMs generating once each (**five
+simulated calls, zero provider requests**), all five terminal results, one join
+and six dimensions. Original criterion IDs, statuses, ratings, rationales and
+Evidence references survive; Technology's full trace remains outside State.
+Every streamed State has six-or-zero promoted dimensions and frozen input/storage
+are unchanged.
+
+The matrix also covers terminal timeout from **each** of the five implementations,
+individually stale Founder/Technology/Moat whole-snapshot anchors after an
+unrelated Market claim change, valid traction plus invalid deal_terms output,
+Market's actual wrong-requested-schema response rejected by the binder without
+relabeling, and graph live preflight with zero callbacks/models/reviews. Every
+returned terminal error retains all original fields/IDs. Founder/Technology stale
+review raises and is observed as the graph's redacted `UPSTREAM_INVALID`; Moat's
+implemented stale-review path returns its own original terminal failure. No
+synthetic terminal is substituted for either contract. All returned graph failures
+promote zero dimensions and archive/advance exactly once; archive replay is a
+no-op. No scoring, investment rejection or report/PDF acceptance is claimed.
+
+Three additional parametrized actual-entry preflight cases cover Founder, Moat
+and Business & Deal; the existing Technology preflight remains. Approved entries
+deny before a deliberately nonexistent policy path, approval/review callbacks or
+FakeLLM; Business & Deal denies `execution_mode="real"` before verifier/model.
+No production retry/controller/policy changes were required.
+
+New coverage initially exposed test assumptions, not an implementation defect:
+Business & Deal passes the documented Finance projection, and common `LLMError`
+text is already redacted by its caller. The fixture/assertions were aligned with
+those existing APIs; no production workaround or manufactured RED is claimed.
+
+Scoped worker verification returned **15 passed, 28 deselected** for this increment
+and **894 passed, 3 opt-in live skipped** for all integrations plus relevant
+Founder (approved/legacy), Market, Technology (approved/legacy), Moat, Business &
+Deal, Finance verification, registry/policy, binder and common wrapper suites.
+This is not a full-suite/build or independent parent acceptance receipt.
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -p no:cacheprovider \
+  tests/integration/test_evaluation_v3_adapter.py \
+  -k 'five_real or five_implementation_actual' -q --tb=short
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -p no:cacheprovider \
+  tests/integration tests/unit/test_founder_approved.py tests/unit/test_founder.py \
+  tests/unit/test_market.py tests/unit/test_technology.py \
+  tests/unit/test_technology_approved.py tests/unit/test_moat.py \
+  tests/unit/test_business_deal.py tests/unit/test_finance_verification.py \
+  tests/unit/test_approval_registry.py tests/unit/test_approved_policy.py \
+  tests/unit/test_evaluation_v3_adapter.py tests/unit/test_evaluate_dimension.py -q -ra
+```
+
+**Parent offline acceptance of this increment passed:** full suite **3406 passed,
+3 opt-in live skipped**, zero failures/errors; Ruff, format (338 files) and
+sdist/wheel build passed. Sonnet independently executed the 15 new cases; Terra
+executed all 43 integration cases and the 15-case selection, with no reproduced
+P1/P2 findings. Parent also reran the 15-case selection successfully. Earlier
+counts above remain historical. This completes five-implementation offline
+consumer-wiring coverage, not actual-live evaluation, authenticated RAG/financial
+or person review, M3, publication or #59/#96/#168 completion.
+
 ## Preserved actual-execution gates
 
 Registry content matching is not runtime semantic acceptance: fixture diagnostics
@@ -208,20 +315,20 @@ establish authentic demand anchors, minimum-evidence adequacy or trusted current
 review of upstream target/link observations. Core values already have approval;
 that does not resolve remaining D05/D06/D08 admission/readiness/campaign choices.
 
-Founder's fixture path still depends on legacy `policy.status`, which the
-approved policy view does not expose; that separately owned compatibility gap
-remains a follow-up. Legacy `evaluate_technology(..., execution_mode="fixture")`
-also retains its draft-policy contract, but the newly merged approved fixture
-entry now supplies the loader-backed compatibility exercised above. Neither
-that entry nor Technology `real` mode is actual-runtime admission: the approved
-entry explicitly rejects `actual_runtime=True`. Moat's reviewed-anchor and
-Finance's semantic gates remain separate unchanged requirements. The existing
-outer workflow is fixture-only; this test does not
-expand its policy admission or authorize new corpus/model/policy/provider/budget
-choices.
+Founder's legacy fixture still depends on `policy.status`, which the approved
+policy view does not expose. The merged additive
+`evaluate_founder_approved_fixture` now supplies the loader-backed offline path
+exercised by the five-implementation matrix; the legacy guard is unchanged.
+Legacy `evaluate_technology(..., execution_mode="fixture")` retains its
+draft-policy contract, while its approved fixture entry supplies loader-backed
+compatibility. Both approved entries reject `actual_runtime=True`; neither is
+runtime admission. Moat's reviewed-anchor and Finance's semantic gates remain
+separate unchanged requirements. The existing outer workflow is fixture-only;
+these tests do not expand its policy admission or authorize new
+corpus/model/policy/provider/budget choices.
 
 Keep existing #59 / PR134 **Draft**, and #59/#96/#168 OPEN pending their actual
-acceptance work. This regression is one offline consumer-wiring increment, not
-M3, all-five real-evaluator acceptance, or an authenticated research → RAG →
-freeze → evaluation → report → PDF trace. No new live run is authorized or
-reported.
+acceptance work. This regression is five-implementation offline consumer wiring,
+not M3, parent acceptance of this increment, or an authenticated
+research → RAG → freeze → evaluation → report → PDF trace. No new live run is
+authorized or reported.
