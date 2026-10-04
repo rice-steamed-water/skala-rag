@@ -15,15 +15,25 @@ rubric 모두 허용한다. 실제 실행은 D14 core 승인 rubric이 있어야
 snapshot은 #55 Evidence 조사 산출물이어야 한다(Market #59와 같은 게이트).
 """
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from copy import deepcopy
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 from skala_rag.agents.evaluation import evaluate_dimension
+from skala_rag.agents.moat_verification import CoreArtifactApproval
+from skala_rag.agents.technology_verification import ReviewedTechnologyAnchor
 from skala_rag.contracts.evaluation import EvaluationResult, EvaluationSnapshot
 from skala_rag.contracts.evidence import Evidence
 from skala_rag.contracts.interfaces import Clock, StructuredLLM
 from skala_rag.prompts import technology_evaluation as prompt
+from skala_rag.scoring.approved_policy import (
+    ApprovalVerifier,
+    ApprovedScoringPolicy,
+    PolicyApprovals,
+    load_approved_policy,
+)
 from skala_rag.scoring.catalog import ScoringPolicy
 
 TECHNOLOGY_CRITERIA = frozenset(
@@ -53,7 +63,9 @@ class TechnologyEvaluation:
     trace: tuple[TraceEntry, ...]
 
 
-def _check_criteria(rubric: Mapping[str, object], policy: ScoringPolicy) -> None:
+def _check_criteria(
+    rubric: Mapping[str, object], policy: ScoringPolicy | ApprovedScoringPolicy
+) -> None:
     dims = rubric.get("dimensions")
     tech = dims.get("technology") if isinstance(dims, Mapping) else None
     criteria = tech.get("criteria") if isinstance(tech, Mapping) else None
@@ -144,6 +156,27 @@ def evaluate_technology(
 ) -> TechnologyEvaluation:
     _check_mode(execution_mode, rubric, policy)
     _check_criteria(rubric, policy)
+    return _run_technology(
+        snapshot,
+        rubric=rubric,
+        llm=llm,
+        policy=policy,
+        clock=clock,
+        schema_version=schema_version,
+        max_repairs=max_repairs,
+    )
+
+
+def _run_technology(
+    snapshot: EvaluationSnapshot,
+    *,
+    rubric: Mapping[str, object],
+    llm: StructuredLLM,
+    policy: ScoringPolicy | ApprovedScoringPolicy,
+    clock: Clock,
+    schema_version: str,
+    max_repairs: int,
+) -> TechnologyEvaluation:
     allowed = select_technology_evidence(snapshot)
     scoped = snapshot.model_copy(
         update={"evidence_ids": sorted(allowed), "evidence": allowed}, deep=True
@@ -166,3 +199,111 @@ def evaluate_technology(
         allowed_evidence_ids=tuple(sorted(allowed)),
         trace=build_trace(result, scoped),
     )
+
+
+def evaluate_technology_approved_fixture(
+    snapshot: EvaluationSnapshot,
+    *,
+    policy_path: str | Path,
+    approvals: PolicyApprovals,
+    approval_verifier: ApprovalVerifier,
+    rubric: Mapping[str, object],
+    llm: StructuredLLM,
+    clock: Clock,
+    schema_version: str,
+    verify_observation: Callable[[object, Mapping[str, Evidence]], object],
+    review_verifier: Callable[[ReviewedTechnologyAnchor], bool],
+    artifact_approval: CoreArtifactApproval,
+    artifact_verifier: Callable[[CoreArtifactApproval], bool],
+    actual_runtime: bool = False,
+) -> TechnologyEvaluation:
+    """Loader-backed fixture only; no runtime admission or semantic authority.
+
+    Review is post-baseline validation, never an additional model repair. The
+    caller must authenticate exact receipts with its external review registry.
+    """
+    from skala_rag.agents.moat_verification import validate_core_artifact
+    from skala_rag.agents.technology_verification import (
+        TechnologyReviewError,
+        checked_fixture_output,
+        checked_snapshot,
+        validate_technology_anchor,
+    )
+    from skala_rag.contracts.error_codes import ErrorCode
+    from skala_rag.contracts.interfaces import LLMError
+    from skala_rag.fakes import FakeLLM
+
+    if actual_runtime is not False:
+        raise ValueError("#168: actual runtime unavailable")
+    if type(llm) is not FakeLLM:
+        raise ValueError("Approved fixture requires exact FakeLLM")
+    try:
+        rubric = deepcopy(dict(rubric))
+        if rubric.get("status") != "approved":
+            raise ValueError("Approved Technology fixture requires approved Core")
+        snapshot = checked_snapshot(snapshot)
+        if schema_version != snapshot.schema_version:
+            raise ValueError("Snapshot schema mismatch")
+        if not callable(verify_observation) or not callable(review_verifier):
+            raise ValueError("External Technology review callbacks required")
+        validate_core_artifact(rubric, artifact_approval, artifact_verifier)
+        approvals = PolicyApprovals.model_validate(approvals.model_dump())
+        if artifact_approval.reference != approvals.core.reference:
+            raise ValueError("Core artifact and policy approval reference mismatch")
+        policy = load_approved_policy(
+            policy_path,
+            approvals=approvals,
+            approval_verifier=approval_verifier,
+            execution_mode="fixture",
+        )
+        if snapshot.policy_version != policy.policy_version:
+            raise ValueError("Snapshot policy mismatch")
+        _check_criteria(rubric, policy)
+    except Exception:
+        raise ValueError("Technology approved fixture preflight rejected") from None
+
+    class CheckedFixtureLLM:
+        def generate(self, **kwargs):
+            # Preserve upstream LLM errors; only local validation is redacted.
+            output = llm.generate(**kwargs)
+            try:
+                return checked_fixture_output(output)
+            except Exception:
+                raise LLMError(
+                    ErrorCode.LLM_OUTPUT_INVALID, "TECHNOLOGY_FIXTURE_OUTPUT_INVALID"
+                ) from None
+
+    result = _run_technology(
+        snapshot,
+        rubric=rubric,
+        llm=CheckedFixtureLLM(),
+        policy=policy,
+        clock=clock,
+        schema_version=schema_version,
+        max_repairs=0,
+    )
+    if result.result.status == "failure":
+        return result
+    # Detached callback arguments cannot mutate the original evaluation/snapshot.
+    try:
+        for criterion in result.result.evaluation.criteria:
+            if criterion.status != "observed":
+                continue
+            receipt = verify_observation(
+                criterion.model_copy(deep=True),
+                {
+                    eid: snapshot.evidence[eid].model_copy(deep=True)
+                    for eid in criterion.evidence_ids
+                },
+            )
+            if not validate_technology_anchor(
+                receipt,
+                rubric=rubric,
+                snapshot=snapshot,
+                criterion=criterion,
+                verifier=review_verifier,
+            ):
+                raise TechnologyReviewError("TECHNOLOGY_REVIEW_REJECTED")
+    except Exception:
+        raise TechnologyReviewError("TECHNOLOGY_REVIEW_REJECTED") from None
+    return result
