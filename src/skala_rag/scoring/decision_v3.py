@@ -2,7 +2,7 @@
 
 from skala_rag.contracts.ids import decision_id
 from skala_rag.contracts.v3 import InvestmentDecision, ScoreSummary
-from skala_rag.scoring.v3_policy import V3Policy
+from skala_rag.scoring.v3_policy import NumericPolicy, V3Policy
 
 
 def decide_v3(
@@ -18,14 +18,32 @@ def decide_v3(
     summary = ScoreSummary.model_validate(summary.model_dump())
     if not isinstance(policy, V3Policy) or policy.execution_mode != "fixture":
         raise ValueError("fixture V3Policy required")
-    if (
-        summary.policy_version != policy.policy_version
-        or summary.normalized_score is None
-    ):
+    return _decide_v3(
+        summary,
+        numeric=policy.numeric,
+        policy_version=policy.policy_version,
+        evidence_ids=evidence_ids,
+        rationale=rationale,
+        risks=risks,
+        limitations=limitations,
+    )
+
+
+def _decide_v3(
+    summary: ScoreSummary,
+    *,
+    numeric: NumericPolicy,
+    policy_version: str,
+    evidence_ids: tuple[str, ...] = (),
+    rationale: str = "Deterministic v3 policy decision",
+    risks: tuple[str, ...] = (),
+    limitations: tuple[str, ...] = (),
+) -> InvestmentDecision:
+    """Shared pure decision core; public entry points own policy admission."""
+    if summary.policy_version != policy_version or summary.normalized_score is None:
         raise ValueError("v3 score/policy mismatch or undefined score")
     if summary.applicable_weight is None or summary.applicable_weight <= 0:
         raise ValueError("undefined applicable denominator")
-    numeric = policy.numeric
     # Cross products retain exact boundaries even for repeating ratios.
     reasons = []
     if summary.missing_weight is None:
