@@ -2,11 +2,14 @@
 
 The approved Market cases execute PR134's real evaluator with synthetic facts and
 FakeLLM; their four sibling branches are explicitly synthetic terminal envelopes.
+Separate combined cases execute real Market and approved Technology with three
+synthetic siblings and caller-owned synthetic review authority (not actual RAG).
 Earlier draft-generation cases remain separate compatibility coverage.
 """
 
 from collections import Counter
 from copy import deepcopy
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Barrier, Lock
@@ -15,6 +18,7 @@ import pytest
 import yaml
 from tests.fixtures.loader import load_common_fixtures
 from tests.unit.test_market import Case as SyntheticMarketCase
+from tests.unit.test_technology_approved import case as synthetic_technology_case
 
 from skala_rag.agents.evaluation import output_from_evaluation
 from skala_rag.agents.evaluation_v3_adapter import (
@@ -658,3 +662,363 @@ def test_actual_market_approved_binder_five_way_offline(
             assert out["errors"][0]["error_code"] == "UPSTREAM_INVALID"
         else:
             assert terminals == []
+
+
+@pytest.fixture
+def approved_market_technology_case(approved_market_case):
+    """One synthetic frozen corpus, real pinned approval/content verification."""
+    from skala_rag.agents.technology_verification import checked_snapshot
+
+    snapshot, policy, rubric, market = approved_market_case
+    snapshot = snapshot.model_copy(deep=True)
+    # Close the synthetic Source/Chunk/Record/Evidence tree BEFORE either call.
+    # This is consistent fixture attribution, not execution of a RAG retriever.
+    for record in snapshot.retrieval_records.values():
+        record.evidence_ids = [
+            eid
+            for eid, e in snapshot.evidence.items()
+            if any(p.retrieval_id == record.retrieval_id for p in e.provenance)
+        ]
+    for e in snapshot.evidence.values():
+        for p in e.provenance:
+            if p.chunk_id is not None:
+                snapshot.chunks[p.chunk_id].text += "\n" + e.excerpt
+    snapshot = checked_snapshot(snapshot)
+    technology_output = synthetic_technology_case()[1]
+    assert {c.criterion_id for c in technology_output.criteria} == {
+        c.criterion_id for c in policy.criteria if c.dimension == "technology"
+    }
+    return snapshot, policy, rubric, market, technology_output
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        None,
+        "market_timeout",
+        "technology_timeout",
+        "stale_whole_snapshot",
+        "wrong_evidence",
+        "wrong_reference",
+        "nested_generation",
+        "review_exception",
+        "live",
+    ],
+)
+def test_actual_market_and_approved_technology_same_frozen_graph(
+    approved_market_technology_case, fault
+):
+    from skala_rag.agents.moat_verification import (
+        core_artifact_digest,
+        frozen_snapshot_digest,
+    )
+    from skala_rag.agents.technology import evaluate_technology_approved_fixture
+    from skala_rag.agents.technology_verification import (
+        ReviewedTechnologyAnchor,
+        TechnologyReviewError,
+    )
+
+    snapshot, policy, rubric, market, technology_output = (
+        approved_market_technology_case
+    )
+    registry = pinned_approval_registry(ROOT)
+    original_digest = frozen_snapshot_digest(snapshot)
+    if fault == "stale_whole_snapshot":
+        # Only unrelated Market content changes; all five see that same new input.
+        snapshot.evidence["ev-demand"].claim += " changed non-Technology fact"
+        assert frozen_snapshot_digest(snapshot) != original_digest
+    elif fault == "nested_generation":
+        snapshot.evidence["ev-demand"].schema_version = "synthetic-stale-generation"
+    frozen = snapshot.model_dump(mode="json")
+    market_llm = FakeLLM(
+        [
+            LLMError(ErrorCode.LLM_TIMEOUT, "Synthetic Market transport timeout")
+            if fault == "market_timeout"
+            else market.output()
+        ]
+    )
+    technology_llm = FakeLLM(
+        [
+            LLMError(ErrorCode.LLM_TIMEOUT, "Synthetic Technology transport timeout")
+            if fault == "technology_timeout"
+            else technology_output
+        ]
+    )
+    calls, reviews, resolutions = Counter(), [], []
+    market_results, technology_receipts, raised = [], [], []
+    sibling_terminals, review_registry = {}, {}
+    lock, barrier = Lock(), Barrier(5, timeout=5)
+
+    def arrive(branch, received):
+        with lock:
+            calls[branch] += 1
+        barrier.wait()
+        assert received.model_dump(mode="json") == frozen
+        assert received is not snapshot
+
+    def review(c, evidence):
+        reviews.append(c.criterion_id)
+        assert set(evidence) == set(c.evidence_ids)
+        assert all(e == snapshot.evidence[eid] for eid, e in evidence.items())
+        if fault == "review_exception":
+            raise RuntimeError("SECRET synthetic reviewer exception")
+        receipt = ReviewedTechnologyAnchor(
+            review_reference="synthetic-caller-review:" + c.criterion_id,
+            artifact_sha256=core_artifact_digest(rubric),
+            snapshot_sha256=original_digest,
+            criterion_id=c.criterion_id,
+            rating=c.rating,
+            evidence_ids=tuple(c.evidence_ids),
+            anchor_facts_reviewed=True,
+            minimum_evidence_reviewed=True,
+            direct_negative_facts_reviewed=True,
+            independent_corroboration_reviewed=True,
+        )
+        review_registry[receipt.review_reference] = receipt
+        if fault == "wrong_evidence":
+            return replace(receipt, evidence_ids=("ev-demand",))
+        if fault == "wrong_reference":
+            return replace(receipt, review_reference="synthetic-unregistered")
+        return receipt
+
+    def resolve(receipt):
+        resolutions.append(receipt)
+        return review_registry.get(receipt.review_reference) == receipt
+
+    def actual_market(received):
+        arrive("market", received)
+        result = evaluate_market(
+            received,
+            target_market=MarketTarget(
+                segment_id="kr-logistics-amr", geographies=("KR", "GLOBAL")
+            ),
+            market_links=market.links,
+            rubric=rubric,
+            llm=market_llm,
+            policy=policy,
+            clock=FakeClock(NOW),
+            schema_version=received.schema_version,
+        )
+        market_results.append(result)
+        return result
+
+    def actual_technology(received):
+        arrive("technology", received)
+        try:
+            receipt = evaluate_technology_approved_fixture(
+                received,
+                policy_path=ROOT / "configs/scoring.v3.json",
+                approvals=registry.policy_approvals(),
+                approval_verifier=registry.verify_policy,
+                rubric=rubric,
+                llm=technology_llm,
+                clock=FakeClock(NOW),
+                schema_version=received.schema_version,
+                verify_observation=review,
+                review_verifier=resolve,
+                artifact_approval=registry.core_approval(),
+                artifact_verifier=registry.verify_core,
+            )
+        except (ValueError, TechnologyReviewError) as exc:
+            raised.append(exc)
+            raise
+        technology_receipts.append(receipt)
+        return receipt.result  # Retain container locally; only RESULT enters binder.
+
+    def synthetic_callback(branch):
+        def callback(received):
+            arrive(branch, received)
+            terminal = synthetic_sibling_terminal(branch, received, policy)
+            sibling_terminals[branch] = terminal
+            return terminal
+
+        return callback
+
+    callbacks = {
+        branch: bind_baseline_evaluator_v3(
+            branch,
+            actual_market if branch == "market" else actual_technology,
+            criteria=policy.criteria,
+            industry_evidence_dimensions={"market"},
+        )
+        if branch in {"market", "technology"}
+        else synthetic_callback(branch)
+        for branch in BRANCH_DIMENSIONS
+    }
+    state = dict(
+        snapshot_v3=frozen,
+        current_candidate_id=snapshot.candidate_id,
+        evaluation_rounds={snapshot.candidate_id: snapshot.evaluation_round},
+        evidence_revisions={snapshot.candidate_id: snapshot.evidence_revision},
+        run_input={
+            "execution_mode": "live" if fault == "live" else "fixture",
+            "policy_version": policy.policy_version,
+        },
+        snapshots={snapshot.snapshot_id: deepcopy(frozen)},
+        candidates=[{"candidate_id": snapshot.candidate_id}],
+        candidate_index=0,
+        candidate_outcomes={},
+        candidate_status={},
+        errors=[],
+    )
+    before = deepcopy(state)
+    events = list(
+        build_evaluation_graph_v3(
+            callbacks,
+            criteria=policy.criteria,
+            policy_version=policy.policy_version,
+            run_id=snapshot.run_id,
+            schema_version=snapshot.schema_version,
+            industry_evidence_dimensions={"market"},
+            applicability_validator=None,
+            clock=lambda: NOW,
+        )
+        .compile()
+        .stream(state, stream_mode=["updates", "values"])
+    )
+    values = [v for mode, v in events if mode == "values"]
+    updates = [v for mode, v in events if mode == "updates"]
+    out = values[-1]
+    assert state == before
+    assert snapshot.model_dump(mode="json") == frozen
+    assert out["snapshot_v3"] == frozen
+    assert out["snapshots"] == before["snapshots"]
+    assert calls == (
+        Counter() if fault == "live" else Counter({b: 1 for b in BRANCH_DIMENSIONS})
+    )
+    assert len(market_llm.calls) == (0 if fault == "live" else 1)
+    assert len(technology_llm.calls) == (
+        0 if fault in {"live", "nested_generation"} else 1
+    )
+    assert sum("join_v3" in u for u in updates) == (0 if fault == "live" else 1)
+    assert set(sibling_terminals) == (
+        set() if fault == "live" else {"founder", "moat", "business_deal"}
+    )
+    stored = {r["branch_id"]: r for r in out.get("branch_results_v3", {}).values()}
+    for branch, terminal in sibling_terminals.items():
+        assert stored[branch] == terminal.model_dump(mode="json")
+    assert all(len(v.get("evaluations_v3", {})) in {0, 6} for v in values)
+    if fault is None:
+        assert out["evaluation_status_v3"] == "success"
+        assert len(out["evaluations_v3"]) == 6
+        assert len(market_results) == len(technology_receipts) == 1
+        receipt = technology_receipts[0]
+        assert len(reviews) == len(resolutions) == 4
+        assert set(reviews) == {c.criterion_id for c in technology_output.criteria}
+        assert all(type(r) is ReviewedTechnologyAnchor for r in resolutions)
+        assert all(r.snapshot_sha256 == original_digest for r in resolutions)
+        assert receipt.prompt_version and receipt.allowed_evidence_ids and receipt.trace
+        assert set(receipt.allowed_evidence_ids) == {
+            eid for c in technology_output.criteria for eid in c.evidence_ids
+        }
+        assert {(t.criterion_id, t.evidence_id) for t in receipt.trace} == {
+            (c.criterion_id, eid)
+            for c in technology_output.criteria
+            for eid in c.evidence_ids
+        }
+        for t in receipt.trace:
+            e = snapshot.evidence[t.evidence_id]
+            record = snapshot.retrieval_records[t.retrieval_id]
+            chunk = snapshot.chunks[t.chunk_id]
+            assert t.snapshot_id == snapshot.snapshot_id
+            assert (
+                t.chunk_id in record.chunk_ids and t.evidence_id in record.evidence_ids
+            )
+            assert chunk.source_id == e.source_id and e.source_id in record.source_ids
+            assert e.excerpt in chunk.text
+        for branch, result in (
+            ("market", market_results[0]),
+            ("technology", receipt.result),
+        ):
+            assert stored[branch]["evaluations"][branch] == V3Evaluation.model_validate(
+                result.evaluation.model_dump()
+            ).model_dump(mode="json")
+            for field in (
+                "schema_version",
+                "run_id",
+                "candidate_id",
+                "evaluation_round",
+                "snapshot_id",
+                "evidence_revision",
+                "policy_version",
+            ):
+                assert (
+                    stored[branch][field]
+                    == getattr(result, field)
+                    == getattr(snapshot, field)
+                )
+        assert out["candidate_index"] == 0
+        assert not any("archive_advance_v3" in u for u in updates)
+    else:
+        assert out["evaluation_status_v3"] == "failure"
+        assert out["evaluations_v3"] == {}
+        assert out["candidate_index"] == 1 and out["current_candidate_id"] is None
+        assert sum("archive_advance_v3" in u for u in updates) == 1
+        assert archive_advance_failure_v3(out) == {}
+        assert "score_summaries" not in out and "investment_decisions" not in out
+        assert "SECRET" not in str(out)
+        assert out["candidate_outcomes"][snapshot.candidate_id]["status"] == "failed"
+        assert (
+            out["candidate_outcomes"][snapshot.candidate_id]["failure_ids"]
+            == out["evaluation_failure_ids_v3"]
+        )
+        if fault in {"market_timeout", "technology_timeout"}:
+            result = (
+                market_results[0]
+                if fault == "market_timeout"
+                else technology_receipts[0].result
+            )
+            assert result.status == "failure" and result.evaluation is None
+            assert out["errors"] == [e.model_dump(mode="json") for e in result.errors]
+            assert out["evaluation_failure_ids_v3"] == [
+                e.error_id for e in result.errors
+            ]
+            assert raised == []
+            assert len(reviews) == (4 if fault == "market_timeout" else 0)
+            assert len(resolutions) == len(reviews)
+        elif fault != "live":
+            assert len(raised) == 1 and technology_receipts == []
+            assert isinstance(
+                raised[0],
+                ValueError if fault == "nested_generation" else TechnologyReviewError,
+            )
+            assert len(reviews) == (0 if fault == "nested_generation" else 1)
+            assert len(resolutions) == (1 if fault == "wrong_reference" else 0)
+            error = WorkflowError.model_validate(out["errors"][0])
+            assert error.node == "technology" and error.error_code == "UPSTREAM_INVALID"
+            assert error.retryable is False and error.attempt == 1
+            assert stored["technology"]["evaluations"] is None
+        else:
+            assert reviews == resolutions == technology_receipts == market_results == []
+
+
+def test_combined_technology_actual_runtime_gate_before_bad_path_and_callbacks(
+    approved_market_technology_case,
+):
+    from skala_rag.agents.technology import evaluate_technology_approved_fixture
+
+    snapshot, _, rubric, _, output = approved_market_technology_case
+    registry = pinned_approval_registry(ROOT)
+    llm, touched = FakeLLM([output]), []
+
+    def forbidden(*args):
+        touched.append(True)
+        raise AssertionError("Actual runtime must deny before path or verifier")
+
+    with pytest.raises(ValueError, match="actual runtime unavailable"):
+        evaluate_technology_approved_fixture(
+            snapshot,
+            actual_runtime=True,
+            policy_path=ROOT / "synthetic-nonexistent-policy.json",
+            approvals=registry.policy_approvals(),
+            approval_verifier=forbidden,
+            rubric=rubric,
+            llm=llm,
+            clock=FakeClock(NOW),
+            schema_version=snapshot.schema_version,
+            verify_observation=forbidden,
+            review_verifier=forbidden,
+            artifact_approval=registry.core_approval(),
+            artifact_verifier=forbidden,
+        )
+    assert llm.calls == touched == []

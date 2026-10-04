@@ -114,6 +114,91 @@ The subsequent parent full suite returned **3240 passed, 3 skipped**, with Ruff,
 format (332 files) and sdist/wheel build passing. This is offline integration
 evidence, not actual Market/provider execution or publication acceptance.
 
+## Separate offline Market + approved Technology → five-way graph regression
+
+`test_actual_market_and_approved_technology_same_frozen_graph` adds **two real
+evaluator implementations**, not two actual-runtime calls: Market and
+`evaluate_technology_approved_fixture`. The original eight Market/four-synthetic
+cases and earlier draft-generation cases remain separate and unchanged.
+Founder, Moat and Business & Deal are **three explicitly synthetic** sibling
+terminals; Business & Deal still contains both traction and deal_terms.
+
+The combined fixture reuses `SyntheticMarketCase` facts/output and the existing
+Technology unit-case output/typed-receipt pattern. Before evaluation, it closes
+its synthetic Source → Chunk → RetrievalRecord → Evidence attribution (including
+Market's allowed industry evidence) and freezes the full operational input.
+Both evaluators and every sibling receive detached copies of that identical
+snapshot, catalog and corpus generation. This preparation is not RAG retrieval:
+no document download, embedding, provider request or live search occurs. It does
+not stamp returned policy/schema/generation fields or change production code.
+The approved Core artifact is read unchanged; policy and content are verified
+with `pinned_approval_registry.verify_policy` / `verify_core`, not synthetic
+approval verifiers.
+
+Technology's external review registry, `ReviewedTechnologyAnchor` receipts and
+all four reviewed flags are **synthetic caller-owned assertions**, not trusted
+semantic review or actual review authority. The successful path authenticates
+four exact typed receipts through that fixture resolver against
+`frozen_snapshot_digest` of the original **whole** input and
+`core_artifact_digest` of the pinned Core. The test keeps the returned
+`TechnologyEvaluation` container, prompt version, allowed Evidence IDs and
+criterion → Evidence → retrieval/chunk → snapshot trace outside graph State;
+only its explicit `.result` enters the existing baseline binder. Both distinct
+FakeLLMs and both evaluators run once; all five callbacks run once, one join
+atomically promotes six dimensions, and the original baseline fields/citations
+remain exact. State and frozen storage remain unchanged.
+
+| Combined case | Regression boundary |
+| --- | --- |
+| Success | Two real implementations, two distinct FakeLLM calls, four resolved synthetic Technology review receipts, three synthetic siblings, six-or-zero promotion at every streamed State. |
+| Market terminal timeout | Original Market WorkflowError and failure IDs preserved; Technology still executes/reviews once; no binder/graph retry. |
+| Technology terminal timeout | One Technology FakeLLM call, zero review/resolver calls, original terminal WorkflowError preserved. |
+| Stale whole-snapshot review | Change only a non-Technology Market claim before the run; stale original full-snapshot receipt rejected, not validated against a Technology-only projection. |
+| Wrong review Evidence/reference | Wrong citation binding or unregistered external review reference rejects technically without model repair. |
+| Mixed nested generation | Non-Technology Evidence with a stale schema rejected by Technology full-snapshot preflight before its FakeLLM/review. |
+| Reviewer exception | Redacted `TechnologyReviewError` raises from the evaluator; no terminal model result or fabricated Missing/investment rejection. |
+| Graph live preflight | Zero callbacks, FakeLLM or reviewer calls. |
+| Technology actual-runtime preflight | Separate test passes `actual_runtime=True` and a nonexistent policy path; denial occurs before path access, any verifier/reviewer or FakeLLM call. |
+
+The current graph's `branch_node` catches evaluator exceptions and returns a
+redacted technical `WorkflowError(error_code="UPSTREAM_INVALID")`. The regression
+observes both the raised Technology review/preflight exception and that returned
+graph error; it does not invent an evaluator terminal receipt. For these returned
+graph failures, zero dimensions promote and the existing failure controller
+archives/advances exactly once; replay is a no-op. Nothing is scored or classified
+as an investment rejection. Technology model timeout is tested separately from
+post-model review rejection.
+
+Scoped verification (not a full-suite or parent acceptance receipt):
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -p no:cacheprovider \
+  tests/integration tests/unit/test_technology.py \
+  tests/unit/test_technology_approved.py tests/unit/test_market.py \
+  tests/unit/test_evaluation_v3_adapter.py tests/unit/test_approval_registry.py \
+  tests/unit/test_evaluate_dimension.py -q -ra
+.venv/bin/ruff check tests/integration/test_evaluation_v3_adapter.py
+.venv/bin/ruff format --check tests/integration/test_evaluation_v3_adapter.py
+git diff --check
+```
+
+Worker execution returned **655 passed, 3 skipped** (only the three opt-in live
+smokes skipped). A red test first kept Technology as the old synthetic sibling
+and failed on zero versus one required Technology FakeLLM call; enabling the
+approved evaluator made all nine combined graph cases pass. A separate
+process-local API-removal sabotage failed all ten new tests and restored the
+function in `finally`; no production file was patched for that probe. Ruff,
+format and diff checks are recorded in the worker receipt. A bounded seven-file
+graphify AST-only extraction ran offline in scratch (173 nodes, 447 edges), not
+semantic extraction or a repository graph rebuild. The parent subsequently ran
+the integrated full suite: **3319 passed, 3 opt-in live skipped**, zero failures
+or errors; Ruff check, format (335 files) and sdist/wheel build passed. Sonnet
+independently ran all 28 integration cases; Terra ran the 10 new cases, 69 approved
+Technology, 14 legacy Technology and 101 registry cases with no reproducible
+P1/P2 finding. Terminal timeout errors remain original; only raised review or
+preflight exceptions follow the graph's `UPSTREAM_INVALID` path. These are offline
+acceptance receipts, not actual RAG/runtime or publication acceptance.
+
 ## Preserved actual-execution gates
 
 Registry content matching is not runtime semantic acceptance: fixture diagnostics
@@ -123,11 +208,15 @@ establish authentic demand anchors, minimum-evidence adequacy or trusted current
 review of upstream target/link observations. Core values already have approval;
 that does not resolve remaining D05/D06/D08 admission/readiness/campaign choices.
 
-Founder and Technology's fixture paths still depend on legacy `policy.status`,
-which the approved policy view does not expose. That separately owned consumer
-compatibility gap is not fixed here, and Technology `real` mode is not a bypass.
-Moat's reviewed-anchor and Finance's semantic gates remain separate unchanged
-requirements. The existing outer workflow is fixture-only; this test does not
+Founder's fixture path still depends on legacy `policy.status`, which the
+approved policy view does not expose; that separately owned compatibility gap
+remains a follow-up. Legacy `evaluate_technology(..., execution_mode="fixture")`
+also retains its draft-policy contract, but the newly merged approved fixture
+entry now supplies the loader-backed compatibility exercised above. Neither
+that entry nor Technology `real` mode is actual-runtime admission: the approved
+entry explicitly rejects `actual_runtime=True`. Moat's reviewed-anchor and
+Finance's semantic gates remain separate unchanged requirements. The existing
+outer workflow is fixture-only; this test does not
 expand its policy admission or authorize new corpus/model/policy/provider/budget
 choices.
 
