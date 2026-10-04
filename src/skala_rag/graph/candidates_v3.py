@@ -548,64 +548,22 @@ def run_candidates_v3(
                 )
 
             snapshot = timed("freeze", cid, freeze_snapshot, list(collected))
-            if (
-                snapshot.run_id != run_id
-                or snapshot.candidate_id != cid
-                or snapshot.schema_version != schema_version
-                or snapshot.policy_version != policy.policy_version
-                or snapshot.evidence_revision != coverage.evidence_revision
-                or snapshot.evaluation_round < 1
-            ):
-                raise ValueError("frozen snapshot generation mismatch")
+            validate_snapshot_generation_v3(
+                snapshot,
+                run_id=run_id,
+                cid=cid,
+                schema_version=schema_version,
+                policy=policy,
+                coverage=coverage,
+            )
             stage = "freeze_admission"
-            if not new_evidence_ids <= snapshot.evidence.keys():
-                raise ValueError("snapshot omitted admitted research Evidence")
-            if any(
-                key not in collected or item.model_dump(mode="json") != collected[key]
-                for key, item in snapshot.evidence.items()
-            ):
-                raise ValueError("snapshot Evidence not admitted by collector")
-            for item in snapshot.evidence.values():
-                if item.source_id not in snapshot.sources:
-                    raise ValueError("snapshot missing Evidence Source")
-                if any(
-                    dep not in snapshot.evidence
-                    for dep in (*item.supporting_evidence_ids, *item.conflicts_with)
-                ):
-                    raise ValueError("snapshot missing related Evidence")
-                for path in item.provenance:
-                    record = snapshot.retrieval_records.get(path.retrieval_id)
-                    if (
-                        record is None
-                        or record.run_id != run_id
-                        or record.candidate_id not in (None, cid)
-                        or record.status != "ok"
-                        or record.started_at > record.finished_at
-                        or item.source_id not in record.source_ids
-                        or item.evidence_id not in record.evidence_ids
-                        or (
-                            path.chunk_id is not None
-                            and path.chunk_id not in record.chunk_ids
-                        )
-                    ):
-                        raise ValueError(
-                            "snapshot RetrievalRecord attribution mismatch"
-                        )
-                    if path.chunk_id is not None:
-                        chunk = snapshot.chunks.get(path.chunk_id)
-                        if (
-                            chunk is None
-                            or chunk.source_id != item.source_id
-                            or chunk.corpus_version != snapshot.corpus_version
-                            or chunk.locator != item.locator
-                            or chunk.scope != item.scope
-                            or item.excerpt not in chunk.text
-                            or (
-                                item.scope == "company"
-                                and cid not in chunk.candidate_ids
-                            )
-                        ):
-                            raise ValueError("snapshot Chunk attribution mismatch")
+            validate_snapshot_admission_v3(
+                snapshot,
+                run_id=run_id,
+                cid=cid,
+                new_evidence_ids=new_evidence_ids,
+                collected=collected,
+            )
             stage = "evaluate"
             frozen = snapshot.model_dump(mode="json")
             graph_state = dict(
@@ -765,3 +723,64 @@ def run_candidates_v3(
         coverage_results=coverages,
         research_gaps=research_gaps,
     )
+
+
+def validate_snapshot_generation_v3(
+    snapshot, *, run_id, cid, schema_version, policy, coverage
+):
+    """Pin the frozen generation before admitting its evidence closure."""
+    if (
+        snapshot.run_id != run_id
+        or snapshot.candidate_id != cid
+        or snapshot.schema_version != schema_version
+        or snapshot.policy_version != policy.policy_version
+        or snapshot.evidence_revision != coverage.evidence_revision
+        or snapshot.evaluation_round < 1
+    ):
+        raise ValueError("frozen snapshot generation mismatch")
+
+
+def validate_snapshot_admission_v3(
+    snapshot, *, run_id, cid, new_evidence_ids, collected
+):
+    """Reuse the collector-to-Source/Record/Chunk attribution admission gate."""
+    if not new_evidence_ids <= snapshot.evidence.keys():
+        raise ValueError("snapshot omitted admitted research Evidence")
+    if any(
+        key not in collected or item.model_dump(mode="json") != collected[key]
+        for key, item in snapshot.evidence.items()
+    ):
+        raise ValueError("snapshot Evidence not admitted by collector")
+    for item in snapshot.evidence.values():
+        if item.source_id not in snapshot.sources:
+            raise ValueError("snapshot missing Evidence Source")
+        if any(
+            dep not in snapshot.evidence
+            for dep in (*item.supporting_evidence_ids, *item.conflicts_with)
+        ):
+            raise ValueError("snapshot missing related Evidence")
+        for path in item.provenance:
+            record = snapshot.retrieval_records.get(path.retrieval_id)
+            if (
+                record is None
+                or record.run_id != run_id
+                or record.candidate_id not in (None, cid)
+                or record.status != "ok"
+                or record.started_at > record.finished_at
+                or item.source_id not in record.source_ids
+                or item.evidence_id not in record.evidence_ids
+                or (path.chunk_id is not None and path.chunk_id not in record.chunk_ids)
+            ):
+                raise ValueError("snapshot RetrievalRecord attribution mismatch")
+            if path.chunk_id is not None:
+                chunk = snapshot.chunks.get(path.chunk_id)
+                if (
+                    chunk is None
+                    or chunk.source_id != item.source_id
+                    or chunk.corpus_version != snapshot.corpus_version
+                    or chunk.locator != item.locator
+                    or chunk.scope != item.scope
+                    or item.excerpt not in chunk.text
+                    or (item.scope == "company" and cid not in chunk.candidate_ids)
+                ):
+                    raise ValueError("snapshot Chunk attribution mismatch")

@@ -1,0 +1,968 @@
+"""Fixture-only outer LangGraph, with node-local detached state.
+
+No discovery policy, live admission, model, provider, or checkpoint persistence is
+introduced. The Python controller remains the independent compatibility oracle.
+"""
+
+from collections.abc import Callable, Collection, Mapping, Sequence
+from copy import deepcopy
+from dataclasses import replace
+from datetime import datetime, timezone
+from time import perf_counter
+from typing import Any, TypedDict
+
+from langgraph.graph import END, START, StateGraph
+
+from skala_rag.contracts.candidates import Candidate, EligibilityResult
+from skala_rag.contracts.coverage import ResearchGap
+from skala_rag.contracts.errors import WorkflowError
+from skala_rag.contracts.evaluation import EvaluationSnapshot
+from skala_rag.contracts.evidence import Evidence
+from skala_rag.contracts.ids import evaluation_key
+from skala_rag.contracts.reports import CandidateOutcome
+from skala_rag.contracts.v3 import (
+    CoverageResult,
+    Evaluation,
+    InvestmentDecision,
+    ScoreSummary,
+)
+from skala_rag.graph.candidates_v3 import (
+    CandidateRunV3,
+    CandidateStagesV3,
+    RecoverableResearchFailure,
+    ResearchLoopFailure,
+    ResearchRequestV3,
+    ResearchResponseV3,
+    validate_snapshot_admission_v3,
+    validate_snapshot_generation_v3,
+)
+from skala_rag.graph.evaluation_v3 import build_evaluation_graph_v3
+from skala_rag.scoring.aggregate_v3 import (
+    ApplicabilityVerifier,
+    ZeroDenominatorV3,
+    aggregate_scores_v3,
+)
+from skala_rag.scoring.catalog import ScoringPolicy
+from skala_rag.scoring.coverage_v3 import (
+    ApplicabilityCheck,
+    NoApplicableCriteria,
+    build_research_gaps_v3,
+    check_coverage_v3,
+)
+from skala_rag.scoring.decision_v3 import decide_v3
+from skala_rag.scoring.selector_v3 import SelectionResultV3, select_best_v3
+from skala_rag.scoring.v3_policy import V3Policy
+
+
+class CandidateWorkflowStateV3(TypedDict, total=False):
+    data: dict
+    result: CandidateRunV3
+
+
+def candidate_recursion_limit_v3(candidate_count: int, policy: V3Policy) -> int:
+    """Execution guard from a finite supplied population, never a candidate cap.
+
+    One candidate takes at most eleven outer steps plus three per additional
+    request; add discovery, normalize, final iterator, selector, and slack.
+    Inner parallel graph has its own constant depth (< LangGraph default 25).
+    """
+    if type(candidate_count) is not int or candidate_count < 0:
+        raise ValueError("finite nonnegative candidate count required")
+    return 8 + candidate_count * (
+        16 + 3 * policy.research.additional_requests_per_candidate
+    )
+
+
+def _encode(value):
+    if hasattr(value, "model_dump"):
+        return value.model_dump(mode="json")
+    if isinstance(value, dict):
+        # Research is an opaque caller context in CandidateStagesV3, not a DTO
+        # owned by this controller. Preserve its Python type and detached-copy
+        # semantics; callbacks must never place clients or secrets in it.
+        return {
+            k: deepcopy(v) if k == "research" else _encode(v) for k, v in value.items()
+        }
+    if isinstance(value, (tuple, list, set)):
+        return [_encode(v) for v in value]
+    return deepcopy(value)
+
+
+def _decode(payload):
+    data = deepcopy(payload)
+    for key, model in (
+        ("eligibility", EligibilityResult),
+        ("coverage", CoverageResult),
+        ("snapshot", EvaluationSnapshot),
+        ("summary", ScoreSummary),
+        ("decision", InvestmentDecision),
+    ):
+        if data.get(key) is not None:
+            data[key] = model.model_validate(
+                data[key], context={"execution_mode": "fixture"}
+            )
+    for key, model in (
+        ("coverages", CoverageResult),
+        ("outcomes", CandidateOutcome),
+        ("scores", ScoreSummary),
+        ("decisions", InvestmentDecision),
+    ):
+        data[key] = {k: model.model_validate(v) for k, v in data.get(key, {}).items()}
+    data["research_gaps"] = {
+        k: tuple(ResearchGap.model_validate(g) for g in v)
+        for k, v in data.get("research_gaps", {}).items()
+    }
+    for key in ("errors", "failures"):
+        data[key] = [WorkflowError.model_validate(e) for e in data.get(key, [])]
+    data["evidence"] = [
+        Evidence.model_validate(e, context={"execution_mode": "fixture"})
+        for e in data.get("evidence", [])
+    ]
+    data["new_evidence_ids"] = set(data.get("new_evidence_ids", []))
+    return data
+
+
+def build_candidate_workflow_v3(
+    stages: CandidateStagesV3,
+    evaluators: Mapping[str, Callable],
+    *,
+    policy: V3Policy,
+    catalog: ScoringPolicy,
+    catalog_policy_version: str,
+    run_id: str,
+    schema_version: str,
+    support_check: Callable,
+    applicability_assessments: Callable,
+    applicability_check: ApplicabilityCheck,
+    applicability_verifier: ApplicabilityVerifier | None,
+    industry_evidence_dimensions: Collection[str],
+    clock: Callable[[], datetime],
+    trace_events: list[dict] | None = None,
+) -> StateGraph:
+    """Build the complete fixture graph, starting at discovery with no persistence."""
+    return _build_candidate_workflow_v3(
+        stages,
+        evaluators,
+        policy=policy,
+        catalog=catalog,
+        catalog_policy_version=catalog_policy_version,
+        run_id=run_id,
+        schema_version=schema_version,
+        support_check=support_check,
+        applicability_assessments=applicability_assessments,
+        applicability_check=applicability_check,
+        applicability_verifier=applicability_verifier,
+        industry_evidence_dimensions=industry_evidence_dimensions,
+        clock=clock,
+        trace_events=trace_events,
+        _entrypoint="discover",
+    )
+
+
+def _build_candidate_workflow_v3(
+    stages: CandidateStagesV3,
+    evaluators: Mapping[str, Callable],
+    *,
+    policy: V3Policy,
+    catalog: ScoringPolicy,
+    catalog_policy_version: str,
+    run_id: str,
+    schema_version: str,
+    support_check: Callable,
+    applicability_assessments: Callable,
+    applicability_check: ApplicabilityCheck,
+    applicability_verifier: ApplicabilityVerifier | None,
+    industry_evidence_dimensions: Collection[str],
+    clock: Callable[[], datetime],
+    trace_events: list[dict] | None = None,
+    _entrypoint: str,
+) -> StateGraph:
+    if _entrypoint not in ("discover", "candidate_iterator", "selector"):
+        raise ValueError("invalid internal outer graph entrypoint")
+    if not isinstance(policy, V3Policy) or policy.execution_mode != "fixture":
+        raise ValueError("fixture V3Policy required")
+    if not run_id.strip() or not schema_version.strip():
+        raise ValueError("run/schema required")
+    if (
+        catalog.policy_version != catalog_policy_version
+        or {c.criterion_id: (c.dimension, c.weight) for c in catalog.criteria}
+        != {c.criterion_id: (c.dimension, c.weight) for c in policy.criteria}
+        or catalog.dimension_weights
+        != {w.dimension: w.weight for w in policy.dimension_weights}
+    ):
+        raise ValueError("coverage catalog differs from v3 approved catalog")
+    graph = build_evaluation_graph_v3(
+        evaluators,
+        criteria=policy.criteria,
+        policy_version=policy.policy_version,
+        run_id=run_id,
+        schema_version=schema_version,
+        industry_evidence_dimensions=industry_evidence_dimensions,
+        applicability_validator=applicability_verifier,
+        clock=clock,
+    ).compile()
+
+    def helpers(data):
+        def timed(step, cid, operation: Callable, input_ids=()):
+            started_at = datetime.now(timezone.utc).isoformat()
+            started = perf_counter()
+            status = "failed"
+            output_ids = []
+            try:
+                value = operation()
+                if isinstance(value, CoverageResult):
+                    data["coverages"][cid] = value.model_copy(deep=True)
+                status = "ok"
+                if isinstance(value, dict):
+                    output_ids = list(value.get("evaluations_v3", {}))
+                    if value.get("evaluation_status_v3") == "failure":
+                        status = "failed"
+                        output_ids = list(value.get("evaluation_failure_ids_v3", []))
+                else:
+                    for field in ("score_summary_id", "decision_id", "candidate_id"):
+                        identifier = getattr(value, field, None)
+                        if identifier:
+                            output_ids.append(identifier)
+                    if isinstance(value, SelectionResultV3):
+                        output_ids = (
+                            [value.selected_candidate_id]
+                            if value.selected_candidate_id
+                            else []
+                        )
+                return value
+            finally:
+                if trace_events is not None:
+                    trace_events.append(
+                        dict(
+                            run_id=run_id,
+                            candidate_id=cid,
+                            step=step,
+                            started_at=started_at,
+                            duration_seconds=perf_counter() - started,
+                            input_ids=list(input_ids),
+                            output_ids=output_ids,
+                            status=status,
+                            execution_mode="fixture",
+                            research_retry_count=data["retry_counts"].get(cid, 0),
+                            research_stop_reason=data["stop_reasons"].get(cid),
+                            controller="langgraph",
+                            evidence_revision=data["coverages"][cid].evidence_revision
+                            if cid in data["coverages"]
+                            else None,
+                            missing_criterion_ids=list(
+                                data["coverages"][cid].missing_criterion_ids
+                            )
+                            if cid in data["coverages"]
+                            else [],
+                            unresolved_conflicts=list(
+                                data["coverages"][cid].unresolved_conflicts
+                            )
+                            if cid in data["coverages"]
+                            else [],
+                        )
+                    )
+
+        def error(
+            stage: str,
+            cid: str | None,
+            message: str = "Invalid v3 candidate stage",
+            error_code: str = "UPSTREAM_INVALID",
+            retryable: bool = False,
+            attempt: int = 1,
+        ) -> WorkflowError:
+            return WorkflowError(
+                schema_version=schema_version,
+                error_id=f"v3:{run_id}:{data['index']}:{stage}:{attempt}",
+                run_id=run_id,
+                candidate_id=cid,
+                node=stage,
+                error_code=error_code,
+                message_redacted=message,
+                retryable=retryable,
+                attempt=attempt,
+                timestamp=clock(),
+            )
+
+        def finish(
+            status: str,
+            candidate_id: str,
+            eligible: EligibilityResult | None = None,
+            decision: InvestmentDecision | None = None,
+            failures: Sequence[WorkflowError] = (),
+        ) -> None:
+            if candidate_id in data["outcomes"]:
+                raise ValueError("candidate archive conflict")
+            data["outcomes"][candidate_id] = CandidateOutcome(
+                schema_version=schema_version,
+                candidate_id=candidate_id,
+                status=status,
+                eligibility_result_id=eligible.eligibility_result_id
+                if eligible and (not failures)
+                else None,
+                decision_id=decision.decision_id if decision else None,
+                failure_ids=[e.error_id for e in failures],
+                summary_reason="; ".join(decision.reason_codes) if decision else status,
+            )
+            timed("archive", candidate_id, lambda: None)
+
+        return timed, error, finish
+
+    def discover(data, timed, error, finish):
+        data.clear()
+        data.update(
+            retry_counts={},
+            stop_reasons={},
+            coverages={},
+            research_gaps={},
+            outcomes={},
+            scores={},
+            decisions={},
+            errors=[],
+            index=0,
+            stage="discovery_normalize",
+            route="normalize",
+        )
+        data["discovered"] = [
+            Candidate.model_validate(
+                c, context={"execution_mode": "fixture"}
+            ).model_dump(mode="json")
+            for c in stages.discover()
+        ]
+
+    def normalize(data, timed, error, finish):
+        data["candidates"] = [
+            Candidate.model_validate(
+                c, context={"execution_mode": "fixture"}
+            ).model_dump(mode="json")
+            for c in stages.normalize(deepcopy(data["discovered"]))
+        ]
+        if len({c["candidate_id"] for c in data["candidates"]}) != len(
+            data["candidates"]
+        ):
+            raise ValueError("duplicate normalized candidate")
+        if not {c["candidate_id"] for c in data["candidates"]} <= {
+            c["candidate_id"] for c in data["discovered"]
+        }:
+            raise ValueError("normalize introduced unknown candidate")
+        data["route"] = "candidate_iterator"
+
+    def candidate_iterator(data, timed, error, finish):
+        if data["index"] == len(data["candidates"]):
+            data["route"] = "selector"
+            return
+        data["candidate"] = data["candidates"][data["index"]]
+        data["cid"] = data["candidate"]["candidate_id"]
+        data["retry_counts"][data["cid"]] = 0
+        data["eligibility"] = None
+        data["failures"] = []
+        data["terminal_status"] = None
+        for key in (
+            "snapshot",
+            "summary",
+            "decision",
+            "coverage",
+            "research",
+            "evaluated",
+            "request",
+            "dims",
+        ):
+            data.pop(key, None)
+        data["route"] = "research"
+
+    def research(data, timed, error, finish):
+        data["stage"] = "research"
+        data["research"] = stages.research(deepcopy(data["candidate"]))
+        data["route"] = "eligibility"
+
+    def eligibility_node(data, timed, error, finish):
+        data["stage"] = "eligibility"
+        data["eligibility"] = EligibilityResult.model_validate(
+            stages.eligibility(deepcopy(data["candidate"]), deepcopy(data["research"]))
+        )
+        if (
+            data["eligibility"].run_id != run_id
+            or data["eligibility"].schema_version != schema_version
+            or data["eligibility"].candidate_id != data["cid"]
+            or (data["eligibility"].policy_version != policy.policy_version)
+        ):
+            raise ValueError("eligibility generation mismatch")
+        if data["eligibility"].status != "eligible":
+            data["terminal_status"] = (
+                "ineligible"
+                if data["eligibility"].status == "ineligible"
+                else "eligibility_unknown"
+            )
+            data["route"] = "archive"
+        else:
+            data["route"] = "collect"
+
+    def collect(data, timed, error, finish):
+        data["stage"] = "collect"
+        data["evidence"] = [
+            Evidence.model_validate(item, context={"execution_mode": "fixture"})
+            for item in stages.collect(
+                deepcopy(data["candidate"]), deepcopy(data["research"])
+            )
+        ]
+        data["collected"] = {
+            item.evidence_id: item.model_dump(mode="json") for item in data["evidence"]
+        }
+        if len(data["collected"]) != len(data["evidence"]) or any(
+            (
+                item.schema_version != schema_version
+                or not (
+                    item.scope == "company"
+                    and item.candidate_id == data["cid"]
+                    or (item.scope == "industry" and item.candidate_id is None)
+                )
+                for item in data["evidence"]
+            )
+        ):
+            raise ValueError("invalid collected Evidence identity")
+        data["initial_revision"] = data["eligibility"].evidence_revision
+        data["evidence_revision"] = data["initial_revision"]
+        data["new_evidence_ids"]: set[str] = set()
+        data["last_research_failed"] = False
+        data["route"] = "coverage"
+
+    def coverage_node(data, timed, error, finish):
+        data["stage"] = "coverage"
+        conflicts = (
+            stages.unresolved_conflicts(
+                deepcopy(data["candidate"]), tuple(deepcopy(data["evidence"]))
+            )
+            if stages.unresolved_conflicts
+            else sorted(
+                {
+                    identifier
+                    for item in data["evidence"]
+                    if item.conflicts_with
+                    for identifier in (item.evidence_id, *item.conflicts_with)
+                }
+            )
+        )
+        result = timed(
+            "coverage",
+            data["cid"],
+            lambda: check_coverage_v3(
+                data["cid"],
+                data["evidence"],
+                catalog,
+                evidence_revision=data["evidence_revision"],
+                schema_version=schema_version,
+                execution_mode="fixture",
+                policy_version=policy.policy_version,
+                support_check=support_check,
+                applicability_assessments=applicability_assessments(data["cid"]),
+                applicability_check=applicability_check,
+                unresolved_conflict_ids=conflicts,
+            ),
+            list(data["collected"]),
+        )
+        data["coverages"][data["cid"]] = result.model_copy(deep=True)
+        if stages.gap_templates:
+            templates = [
+                ResearchGap.model_validate(g)
+                for g in stages.gap_templates(
+                    deepcopy(data["candidate"]), result.model_copy(deep=True)
+                )
+            ]
+            data["research_gaps"][data["cid"]] = tuple(
+                build_research_gaps_v3(
+                    result, catalog, templates, policy_version=policy.policy_version
+                )
+            )
+        data["coverage"] = result
+        data["route"] = "research_gate"
+
+    def research_gate(data, timed, error, finish):
+        data["stage"] = "research_gate"
+        if data["coverage"].research_ready:
+            data["stop_reasons"][data["cid"]] = "ready"
+            timed("research_ready", data["cid"], lambda: None)
+            data["route"] = "freeze"
+            return
+        if (
+            data["retry_counts"][data["cid"]]
+            == policy.research.additional_requests_per_candidate
+        ):
+            if data["last_research_failed"]:
+                data["stop_reasons"][data["cid"]] = "failed_exhausted"
+                raise ResearchLoopFailure("RESEARCH_FAILED_EXHAUSTED")
+            data["stop_reasons"][data["cid"]] = "exhausted"
+            data["research_gaps"][data["cid"]] = tuple(
+                (
+                    g.model_copy(deep=True, update={"status": "exhausted"})
+                    for g in data["research_gaps"].get(data["cid"], ())
+                )
+            )
+            timed("research_exhausted", data["cid"], lambda: None)
+            data["route"] = "freeze"
+            return
+        if stages.additional_research is None:
+            data["stop_reasons"][data["cid"]] = "callback_required"
+            raise ResearchLoopFailure("RESEARCH_CALLBACK_REQUIRED")
+        data["retry_counts"][data["cid"]] += 1
+        timed("research_gate", data["cid"], lambda: None)
+        data["route"] = "additional_research"
+
+    def additional_research(data, timed, error, finish):
+        data["stage"] = "additional_research"
+        request = ResearchRequestV3(
+            run_id,
+            deepcopy(data["candidate"]),
+            deepcopy(data["research"]),
+            data["coverage"].model_copy(deep=True),
+            tuple(deepcopy(data["evidence"])),
+            data["retry_counts"][data["cid"]],
+            policy.research.additional_requests_per_candidate
+            - data["retry_counts"][data["cid"]],
+            tuple(deepcopy(data["research_gaps"].get(data["cid"], ()))),
+        )
+        try:
+            response = timed(
+                data["stage"],
+                data["cid"],
+                lambda: stages.additional_research(request),
+                list(data["collected"]),
+            )
+        except RecoverableResearchFailure:
+            failure = error(
+                data["stage"],
+                data["cid"],
+                "Recoverable research failure (details redacted)",
+                "RESEARCH_RECOVERABLE_FAILURE",
+                True,
+                data["retry_counts"][data["cid"]],
+            )
+            data["errors"].append(failure)
+            data["last_research_failed"] = True
+            timed("research_recoverable_failure", data["cid"], lambda: None)
+            data["route"] = "research_gate"
+            return
+        except Exception:
+            data["stop_reasons"][data["cid"]] = "terminal_failure"
+            raise ResearchLoopFailure("RESEARCH_TERMINAL_FAILURE") from None
+        data["last_research_failed"] = False
+        if (
+            not isinstance(response, ResearchResponseV3)
+            or response.candidate_id != data["cid"]
+            or response.base_evidence_revision != data["coverage"].evidence_revision
+        ):
+            raise ResearchLoopFailure("RESEARCH_RESPONSE_INVALID")
+        batch = [
+            Evidence.model_validate(e, context={"execution_mode": "fixture"})
+            for e in response.evidence
+        ]
+        if len({e.evidence_id for e in batch}) != len(batch) or any(
+            (
+                e.schema_version != schema_version
+                or not (
+                    e.scope == "company"
+                    and e.candidate_id == data["cid"]
+                    or (e.scope == "industry" and e.candidate_id is None)
+                )
+                or (
+                    e.evidence_id in data["collected"]
+                    and e.model_dump(mode="json") != data["collected"][e.evidence_id]
+                )
+                for e in batch
+            )
+        ):
+            raise ResearchLoopFailure("RESEARCH_RESPONSE_INVALID")
+        new = [e for e in batch if e.evidence_id not in data["collected"]]
+        if new:
+            data["new_evidence_ids"].update((e.evidence_id for e in new))
+            data["evidence_revision"] += 1
+            data["evidence"].extend(new)
+            data["collected"].update(
+                {e.evidence_id: e.model_dump(mode="json") for e in new}
+            )
+        data["route"] = "coverage"
+
+    def freeze(data, timed, error, finish):
+        data["stage"] = "freeze"
+        if (
+            data["evidence_revision"] != data["initial_revision"]
+            and stages.freeze_with_evidence is None
+        ):
+            raise ResearchLoopFailure("RESEARCH_FREEZE_REQUIRED")
+        freeze_eligibility = data["eligibility"].model_copy(
+            deep=True, update={"evidence_revision": data["evidence_revision"]}
+        )
+
+        def freeze_snapshot():
+            payload = (
+                stages.freeze_with_evidence(
+                    deepcopy(data["candidate"]),
+                    freeze_eligibility,
+                    data["coverage"].model_copy(deep=True),
+                    tuple(deepcopy(data["evidence"])),
+                )
+                if stages.freeze_with_evidence
+                else stages.freeze(
+                    deepcopy(data["candidate"]),
+                    freeze_eligibility,
+                    data["coverage"].model_copy(deep=True),
+                )
+            )
+            return EvaluationSnapshot.model_validate(
+                payload, context={"execution_mode": "fixture"}
+            )
+
+        data["snapshot"] = timed(
+            "freeze", data["cid"], freeze_snapshot, list(data["collected"])
+        )
+        validate_snapshot_generation_v3(
+            data["snapshot"],
+            run_id=run_id,
+            cid=data["cid"],
+            schema_version=schema_version,
+            policy=policy,
+            coverage=data["coverage"],
+        )
+        data["stage"] = "freeze_admission"
+        validate_snapshot_admission_v3(
+            data["snapshot"],
+            run_id=run_id,
+            cid=data["cid"],
+            new_evidence_ids=data["new_evidence_ids"],
+            collected=data["collected"],
+        )
+        data["route"] = "evaluation_join"
+
+    def evaluation_join(data, timed, error, finish):
+        data["stage"] = "evaluate"
+        frozen = data["snapshot"].model_dump(mode="json")
+        graph_state = dict(
+            snapshot_v3=frozen,
+            current_candidate_id=data["cid"],
+            evaluation_rounds={data["cid"]: data["snapshot"].evaluation_round},
+            evidence_revisions={data["cid"]: data["snapshot"].evidence_revision},
+            run_input={
+                "execution_mode": "fixture",
+                "policy_version": policy.policy_version,
+            },
+            snapshots={data["snapshot"].snapshot_id: frozen},
+            candidates=data["candidates"],
+            candidate_index=data["index"],
+            candidate_outcomes={},
+            candidate_status={},
+            errors=[],
+        )
+        data["evaluated"] = timed(
+            "evaluation_join",
+            data["cid"],
+            lambda: graph.invoke(graph_state),
+            [data["snapshot"].snapshot_id],
+        )
+        if data["evaluated"]["evaluation_status_v3"] != "success":
+            failure_ids = set(data["evaluated"]["evaluation_failure_ids_v3"])
+            failures = [
+                WorkflowError.model_validate(e)
+                for e in data["evaluated"]["errors"]
+                if e["error_id"] in failure_ids and e.get("candidate_id") == data["cid"]
+            ]
+            if (
+                not failures
+                or data["evaluated"]["candidate_index"] != data["index"] + 1
+            ):
+                raise ValueError("evaluation failure did not archive/advance once")
+            data["errors"].extend(failures)
+            data["failures"] = failures
+            data["terminal_status"] = "failed"
+            data["route"] = "archive"
+            return
+        data["route"] = "score"
+
+    def score(data, timed, error, finish):
+        if (
+            data["evaluated"]["candidate_index"] != data["index"]
+            or len(data["evaluated"]["evaluations_v3"]) != 6
+        ):
+            raise ValueError("evaluation advanced or promoted partial dimensions")
+        data["dims"] = []
+        for dimension in (
+            "founder",
+            "market",
+            "technology",
+            "moat",
+            "traction",
+            "deal_terms",
+        ):
+            key = evaluation_key(
+                data["cid"], data["snapshot"].evaluation_round, dimension
+            )
+            data["dims"].append(
+                Evaluation.model_validate(data["evaluated"]["evaluations_v3"][key])
+            )
+        data["stage"] = "score"
+        data["summary"] = timed(
+            "score",
+            data["cid"],
+            lambda: aggregate_scores_v3(
+                data["dims"],
+                policy,
+                applicability_verifier=applicability_verifier,
+                snapshot=data["snapshot"],
+            ),
+            [data["snapshot"].snapshot_id],
+        )
+        data["route"] = "decision"
+
+    def decision_node(data, timed, error, finish):
+        data["decision"] = timed(
+            "decision",
+            data["cid"],
+            lambda: decide_v3(data["summary"], policy),
+            [data["summary"].score_summary_id],
+        )
+        data["scores"][data["cid"]] = data["summary"]
+        data["decisions"][data["cid"]] = data["decision"]
+        data["terminal_status"] = (
+            "recommend"
+            if data["decision"].label.startswith("RECOMMEND")
+            else data["decision"].label.lower()
+        )
+        data["route"] = "archive"
+
+    def archive(data, timed, error, finish):
+        finish(
+            data["terminal_status"],
+            data["cid"],
+            data["eligibility"],
+            data.get("decision"),
+            data["failures"],
+        )
+        data["route"] = "advance"
+
+    def advance(data, timed, error, finish):
+        data["index"] += 1
+        timed("advance", data["cid"], lambda: None)
+        data["route"] = "candidate_iterator"
+
+    def selector(data, timed, error, finish):
+        rows: list[dict[str, Any]] = []
+        for data["cid"] in sorted(data["outcomes"]):
+            data["summary"] = data["scores"].get(data["cid"])
+            data["decision"] = data["decisions"].get(data["cid"])
+            rows.append(
+                dict(
+                    candidate_id=data["cid"],
+                    eligibility_status="eligible" if data["summary"] else "unknown",
+                    status="evaluated"
+                    if data["summary"]
+                    else data["outcomes"][data["cid"]].status,
+                    label=data["decision"].label if data["decision"] else None,
+                    normalized_score=data["summary"].normalized_score
+                    if data["summary"]
+                    else None,
+                    weighted_missing_pct=data["summary"].weighted_missing_pct
+                    if data["summary"]
+                    else None,
+                    applicable_weight=data["summary"].applicable_weight
+                    if data["summary"]
+                    else None,
+                    score_summary_id=data["summary"].score_summary_id
+                    if data["summary"]
+                    else None,
+                )
+            )
+        selection = timed(
+            "selector",
+            None,
+            lambda: select_best_v3(
+                rows, policy, run_id=run_id, schema_version=schema_version
+            ),
+            [item.score_summary_id for item in data["scores"].values()],
+        )
+        if not data["candidates"]:
+            status = "no_candidates"
+        elif data["scores"]:
+            status = "ready_for_v3_reporting"
+        elif all((outcome.status == "failed" for outcome in data["outcomes"].values())):
+            status = "all_eligible_failed"
+        elif any((outcome.status == "failed" for outcome in data["outcomes"].values())):
+            status = "eligible_failed_no_success"
+        else:
+            status = "no_eligible_candidates"
+        data["result"] = CandidateRunV3(
+            schema_version,
+            run_id,
+            policy.policy_version,
+            status,
+            data["index"],
+            data["outcomes"],
+            data["scores"],
+            data["decisions"],
+            selection,
+            tuple(data["errors"]),
+            research_retry_count=data["retry_counts"],
+            research_stop_reasons=data["stop_reasons"],
+            coverage_results=data["coverages"],
+            research_gaps=data["research_gaps"],
+        )
+        if data.get("discovery_failed"):
+            data["result"] = replace(data["result"], status="discovery_failed")
+        data["route"] = "__end__"
+
+    operations = {
+        "discover": discover,
+        "normalize": normalize,
+        "candidate_iterator": candidate_iterator,
+        "research": research,
+        "eligibility": eligibility_node,
+        "collect": collect,
+        "coverage": coverage_node,
+        "research_gate": research_gate,
+        "additional_research": additional_research,
+        "freeze": freeze,
+        "evaluation_join": evaluation_join,
+        "score": score,
+        "decision": decision_node,
+        "archive": archive,
+        "advance": advance,
+        "selector": selector,
+    }
+
+    def node(name, operation):
+        def call(state):
+            data = _decode(state.get("data", {}))
+            timed, error, finish = helpers(data)
+            try:
+                operation(data, timed, error, finish)
+            except Exception as exc:
+                if name in ("discover", "normalize"):
+                    failure = error("discovery_normalize", None)
+                    data["errors"].append(failure)
+                    data["candidates"] = []
+                    data["discovery_failed"] = True
+                    data["route"] = "selector"
+                elif name in ("candidate_iterator", "archive", "advance", "selector"):
+                    raise
+                else:
+                    stage, cid = data["stage"], data["cid"]
+                    if isinstance(exc, (ZeroDenominatorV3, NoApplicableCriteria)):
+                        dimension = getattr(exc, "dimension", None) or "total"
+                        failure = error(
+                            stage,
+                            cid,
+                            f"Zero applicable denominator: {dimension}",
+                            error_code="ZERO_APPLICABLE_DENOMINATOR",
+                        )
+                    elif isinstance(exc, ResearchLoopFailure):
+                        failure = error(
+                            stage,
+                            cid,
+                            error_code=exc.code,
+                            attempt=max(1, data["retry_counts"][cid]),
+                        )
+                    else:
+                        failure = error(
+                            stage,
+                            cid,
+                            error_code="SNAPSHOT_INVALID"
+                            if stage in ("freeze", "freeze_admission")
+                            else "UPSTREAM_INVALID",
+                        )
+                    data["errors"].append(failure)
+                    data["failures"] = [failure]
+                    data["terminal_status"] = "failed"
+                    data["route"] = "archive"
+            result = data.pop("result", None)
+            update = {"data": _encode(data)}
+            if result is not None:
+                update["result"] = result
+            return update
+
+        return call
+
+    outer = StateGraph(CandidateWorkflowStateV3)
+    routes = {
+        "discover": ("normalize", "selector"),
+        "normalize": ("candidate_iterator", "selector"),
+        "candidate_iterator": ("research", "selector"),
+        "research": ("eligibility", "archive"),
+        "eligibility": ("collect", "archive"),
+        "collect": ("coverage", "archive"),
+        "coverage": ("research_gate", "archive"),
+        "research_gate": ("additional_research", "freeze", "archive"),
+        "additional_research": ("coverage", "research_gate", "archive"),
+        "freeze": ("evaluation_join", "archive"),
+        "evaluation_join": ("score", "archive"),
+        "score": ("decision", "archive"),
+        "decision": ("archive",),
+        "archive": ("advance",),
+        "advance": ("candidate_iterator",),
+        "selector": (END,),
+    }
+    for name, operation in operations.items():
+        outer.add_node(name, node(name, operation))
+        outer.add_conditional_edges(
+            name,
+            lambda state: state["data"]["route"],
+            {target: target for target in routes[name]},
+        )
+    outer.add_edge(START, _entrypoint)
+    return outer
+
+
+def run_candidate_workflow_v3(
+    stages: CandidateStagesV3,
+    evaluators: Mapping[str, Callable],
+    *,
+    graph_events: list | None = None,
+    **options,
+) -> CandidateRunV3:
+    """Execute the real outer flow with its exact normalized-population bound.
+
+    Stream discovery/normalize to a static interrupt without a checkpointer.
+    Hand the detached update to a fresh, non-persistent compilation of the same
+    node/edge flow starting at its next node. No callback is replayed; opaque
+    research contexts never enter checkpoint serialization. This is an in-process
+    handoff, not persistent resume. Events are unmodified LangGraph stream tuples.
+    """
+    graph = build_candidate_workflow_v3(stages, evaluators, **options).compile(
+        checkpointer=False
+    )
+    config = {"recursion_limit": 8}
+    result = None
+    state = None
+
+    def consume(graph, initial, **interrupts):
+        nonlocal result, state
+        for event in graph.stream(
+            initial,
+            config,
+            stream_mode="updates",
+            subgraphs=True,
+            **interrupts,
+        ):
+            if graph_events is not None:
+                graph_events.append(event)
+            namespace, updates = event
+            if not namespace:
+                for name, update in updates.items():
+                    if name != "__interrupt__":
+                        state = update
+                if "selector" in updates:
+                    result = updates["selector"]["result"]
+
+    # Discovery/normalization failure must also stop before selector: this keeps
+    # the handoff limited to the initial DTO/JSON population, never research.
+    consume(graph, {}, interrupt_after=["normalize"], interrupt_before=["selector"])
+    if state is None or state["data"]["route"] not in (
+        "candidate_iterator",
+        "selector",
+    ):
+        raise RuntimeError("outer graph did not reach normalized handoff")
+    config["recursion_limit"] = candidate_recursion_limit_v3(
+        len(state["data"]["candidates"]), options["policy"]
+    )
+    continuation = _build_candidate_workflow_v3(
+        stages, evaluators, _entrypoint=state["data"]["route"], **options
+    ).compile(checkpointer=False)
+    consume(continuation, deepcopy(state))
+    if result is None:
+        raise RuntimeError("outer graph did not reach terminal selector")
+    return result
