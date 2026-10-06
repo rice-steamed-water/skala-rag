@@ -81,6 +81,10 @@ PY
 
 [EvidenceResearch → snapshot v3 계약](evidence-snapshot-v3.md)은 기존 Python oracle와 public outer Graph에 선택적 `CandidateStagesV3.evidence_research` binding을 연결한다. CompanyResearch/Eligibility의 원래 근거와 전체 ResearchOutcome을 후보별 JSON State로 검증·보존한 뒤 기존 `freeze_snapshot`, fixture Technology callable, adapter, five-way join을 실행한다. binding이 없으면 기존 callback 경로를 유지한다. 이 연결은 fixture 검증이며 source-only eligible-not-ready, actual 평가/점수 승인 gate와 full-live 선행 조건은 바꾸지 않는다.
 
+## Offline outer → 보고서 직접 인계 (#213)
+
+[Offline 실행 범위와 예시](offline-execution.md)의 `run_candidate_report_v3(stages, evaluators, *, run_input, generate, judge, check_pdf=None, graph_events=None, run_profile=None, **options)`는 기존 public outer를 한 번 실행하고 원래 scored State snapshot을 기존 context와 보고서 pipeline으로 넘긴다. 반환은 `(CandidateRunV3, ReportContextV3, ReportRunV3)`다. 기존 fixture callable/CLI, explicit-snapshot API와 #211 artifact 경로는 보존한다. 이 연결의 검증은 가상 자료와 명시적 mock이며 실제 평가 authority, 유료 모델, source-only scoring, 정책이나 발행 gate를 열지 않는다. PDF callback 생략은 PDF 검증 성공이 아니다.
+
 ## 유지하는 검증·안전 gate
 
 - source/context/artifact hash, 실제 로드한 설정·policy·corpus·모델/prompt 버전, 코드 revision/uncommitted, trace·manifest·예산/사용량을 보존한다. manifest 자체는 자기 hash 목록에 포함하지 않는다.

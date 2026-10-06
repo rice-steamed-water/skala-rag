@@ -7,9 +7,15 @@ from dataclasses import asdict, dataclass
 from datetime import date
 
 from skala_rag.contracts.evaluation import EvaluationSnapshot
+from skala_rag.contracts.ids import snapshot_id
+from skala_rag.contracts.inputs import RunInput
 from skala_rag.contracts.reports import CandidateOutcome
 from skala_rag.contracts.v3 import InvestmentDecision, ScoreSummary
-from skala_rag.graph.candidates_v3 import CandidateRunV3
+from skala_rag.graph.candidates_v3 import (
+    CandidateRunV3,
+    validate_snapshot_admission_v3,
+)
+from skala_rag.graph.research_artifacts_v3 import _validate_contract_generation
 from skala_rag.rag.retrieval import source_date
 
 
@@ -215,4 +221,92 @@ def build_report_context_v3(
     )
     return ReportContextV3(
         "sha256:" + hashlib.sha256(payload.encode()).hexdigest(), payload
+    )
+
+
+def build_report_context_from_run_v3(
+    result: CandidateRunV3, *, run_input: RunInput, run_id: str
+) -> ReportContextV3:
+    """Read only the original scored State generations; never rebuild a snapshot.
+
+    This opt-in artifact handoff leaves the explicit-snapshot legacy API intact.
+    The public outer's actual/source-only refusal is not a scoring authorization.
+    """
+    run = RunInput.model_validate(run_input)
+    if (
+        run.execution_mode != "fixture"
+        or result.execution_mode != run.execution_mode
+        or (result.run_id, result.schema_version, result.policy_version)
+        != (run_id, run.schema_version, run.policy_version)
+    ):
+        raise ValueError("original run identity/mode mismatch")
+    # Only normal decision outcomes imply scoring, not unused State snapshots.
+    scored_outcomes = {
+        cid
+        for cid, outcome in result.outcomes.items()
+        if CandidateOutcome.model_validate(outcome).status
+        in ("recommend", "watchlist", "pass")
+    }
+    if scored_outcomes != set(result.scores) or scored_outcomes != set(
+        result.decisions
+    ):
+        raise ValueError("original scored outcome closure mismatch")
+    snapshots = {}
+    for cid, score in result.scores.items():
+        score = ScoreSummary.model_validate(score)
+        try:
+            state = result.research_artifacts[cid]["state"]
+            raw = state["snapshots"][score.snapshot_id]
+        except (KeyError, TypeError):
+            raise ValueError("missing original scored State snapshot") from None
+        if (
+            state.get("run_input") != run.model_dump(mode="json")
+            or state.get("current_candidate_id") != cid
+            or score.evaluation_round < 1
+            or state.get("evaluation_rounds", {}).get(cid) != score.evaluation_round
+            or state.get("evidence_revisions", {}).get(cid) != score.evidence_revision
+            or score.snapshot_id
+            != snapshot_id(
+                run_id,
+                cid,
+                score.evaluation_round,
+                score.evidence_revision,
+                run.policy_version,
+            )
+        ):
+            raise ValueError("original State generation/input mismatch")
+        # Original State snapshots are JSON, not caller-provided DTO sidecars.
+        try:
+            payload = json.loads(canonical(raw))
+        except (TypeError, ValueError):
+            raise ValueError("original State snapshot is not valid JSON") from None
+        snap = EvaluationSnapshot.model_validate(
+            payload, context={"execution_mode": run.execution_mode}
+        )
+        _validate_contract_generation(snap, run.schema_version)
+        validate_snapshot_admission_v3(
+            snap,
+            run_id=run_id,
+            cid=cid,
+            new_evidence_ids=set(snap.evidence),
+            collected=state["evidence"],
+        )
+        records = {r["retrieval_id"]: r for r in state["retrieval_history"]}
+        for frozen, original in (
+            (snap.sources, state["sources"]),
+            (snap.chunks, state["chunks"]),
+            (snap.retrieval_records, records),
+        ):
+            if any(
+                item.model_dump(mode="json") != original.get(key)
+                for key, item in frozen.items()
+            ):
+                raise ValueError("original State snapshot payload mismatch")
+        snapshots[cid] = snap
+    return build_report_context_v3(
+        result,
+        snapshots,
+        as_of=run.as_of,
+        corpus_version=run.corpus_version,
+        execution_mode=run.execution_mode,
     )
