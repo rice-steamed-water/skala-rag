@@ -40,7 +40,7 @@ HOME = (
     + NAME
     + " completed Series A. "
     + NAME
-    + " has not completed an acquisition or IPO exit."
+    + " has no history of an exit."
 )
 
 
@@ -235,7 +235,7 @@ def wired(tmp_path, monkeypatch):
                             "exit_completed",
                             False,
                             None,
-                            NAME + " has not completed an acquisition or IPO exit.",
+                            NAME + " has no history of an exit.",
                         ),
                     ]
                 ]
