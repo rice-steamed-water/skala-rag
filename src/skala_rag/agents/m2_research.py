@@ -6,10 +6,13 @@ the returned observations, never supplied as an eligible flag by the caller.
 
 import json
 import os
+import re
 from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
+
+from pydantic import ValidationError
 
 from skala_rag.agents.eligibility import check_eligibility
 from skala_rag.agents.evidence_extraction import verify_provenance
@@ -18,12 +21,16 @@ from skala_rag.contracts import (
     Candidate,
     CompanyResearchBundle,
     RunInput,
+    Source,
     ToolBudget,
     ToolResult,
 )
+from skala_rag.contracts.error_codes import ERROR_SPECS, ErrorCode
+from skala_rag.contracts.errors import WorkflowError
 from skala_rag.contracts.interfaces import ResearchCompany
 from skala_rag.contracts.state import InvestmentState, create_initial_state
-from skala_rag.tools.source_fetch import check_as_of
+from skala_rag.tools.company_research import EXTRACTOR_TOOL_ERRORS, TOOL_NAME
+from skala_rag.tools.source_fetch import check_as_of, snapshot_source_id
 
 
 @dataclass(frozen=True)
@@ -83,6 +90,115 @@ def assemble_research_state(
         technology_status="not_started",
     )
     if result.status in ("failed", "unavailable"):
+        for record in records.values():
+            args = record.arguments_without_secrets
+            # Reserved producer metadata is untyped JSON: validate its shape
+            # before a malformed marker can masquerade as an unmarked failure.
+            providers = args.get("providers", {})
+            if not isinstance(providers, dict):
+                raise TraceInvalid("research summary providers invalid")
+            for metadata in providers.values():
+                if not isinstance(metadata, dict):
+                    raise TraceInvalid("research summary provider invalid")
+                notes = metadata.get("notes")
+                if not isinstance(notes, list) or any(
+                    not isinstance(note, str) for note in notes
+                ):
+                    raise TraceInvalid("research summary provider notes invalid")
+            provider = providers.get("official-homepage")
+            if (
+                provider is not None
+                and provider.get("required") is True
+                and any(
+                    note.startswith("EXTRACTOR_FAILED:") for note in provider["notes"]
+                )
+                and ("extractor_error" not in args or "retained_sources" not in args)
+            ):
+                raise TraceInvalid("required extractor failure metadata omitted")
+            if "retained_sources" not in args and "extractor_error" not in args:
+                continue
+            if (
+                record.tool_name != TOOL_NAME
+                or record.status != result.status
+                or record.error_id not in {e.error_id for e in result.errors}
+                or args.get("as_of") != run_input.as_of.isoformat()
+            ):
+                raise TraceInvalid("retained research summary attribution mismatch")
+            payloads = args.get("retained_sources", {})
+            if not isinstance(payloads, dict) or set(payloads) != set(
+                record.source_ids
+            ):
+                raise TraceInvalid("retained research source map mismatch")
+            for sid, payload in payloads.items():
+                try:
+                    source = Source.model_validate(payload, context=context)
+                except ValidationError:
+                    raise TraceInvalid(
+                        "retained research source payload invalid"
+                    ) from None
+                if (
+                    sid != source.source_id
+                    or not re.fullmatch(r"sha256:[0-9a-f]{64}", source.content_hash)
+                    or sid
+                    != snapshot_source_id(
+                        source.url or source.local_path, source.content_hash
+                    )
+                    or not check_as_of(source, run_input.as_of).admitted
+                    or not any(
+                        fetch.tool_name.startswith(f"{TOOL_NAME}/")
+                        and fetch.status == "ok"
+                        and fetch.error_id is None
+                        and sid in fetch.source_ids
+                        and fetch.started_at <= source.retrieved_at <= fetch.finished_at
+                        for fetch in records.values()
+                    )
+                    or (sid in state["sources"] and state["sources"][sid] != payload)
+                ):
+                    raise TraceInvalid(
+                        "retained research source has no valid successful fetch"
+                    )
+                state["sources"][sid] = source.model_dump(mode="json")
+            if "extractor_error" in args:
+                try:
+                    original = WorkflowError.model_validate(args["extractor_error"])
+                    code = ErrorCode(original.error_code)
+                except (ValidationError, ValueError):
+                    raise TraceInvalid("retained extractor error invalid") from None
+                boundary = next(
+                    e for e in result.errors if e.error_id == record.error_id
+                )
+                providers = args.get("providers")
+                if not isinstance(providers, dict):
+                    raise TraceInvalid("retained extractor providers invalid")
+                provider = providers.get("official-homepage")
+                if not isinstance(provider, dict):
+                    raise TraceInvalid("retained extractor provider invalid")
+                if (
+                    original.run_id != run_id
+                    or original.candidate_id != cid
+                    or original.error_id != boundary.error_id
+                    or original.node != boundary.node
+                    or original.attempt != boundary.attempt
+                    or original.timestamp != boundary.timestamp
+                    or original.retryable != ERROR_SPECS[code].retryable
+                    or EXTRACTOR_TOOL_ERRORS.get(code, code).value
+                    != boundary.error_code
+                    or provider.get("required") is not True
+                    or provider.get("status") != result.status
+                    or provider.get("error_code") != boundary.error_code
+                    or provider.get("notes") != [f"EXTRACTOR_FAILED:{code.value}"]
+                ):
+                    raise TraceInvalid("retained extractor error attribution mismatch")
+                # Do not trust arbitrary error text from JSON metadata.
+                original.message_redacted = (
+                    "required official homepage eligibility extraction failed"
+                )
+                state["errors"] = [
+                    original.model_dump(mode="json")
+                    if e["error_id"] == original.error_id
+                    else e
+                    for e in state["errors"]
+                ]
         state["candidate_status"][cid] = "failed"
         state["workflow_status"] = "failed"
         state["run_outcome"] = "technical_failure"
@@ -161,7 +277,7 @@ def assemble_research_state(
     receipt["retrieval_ids"] = list(records)
     receipt["source_ids"] = sorted(state["sources"])
     receipt["evidence_ids"] = sorted(state["evidence"])
-    receipt["error_codes"] = [e.error_code for e in result.errors]
+    receipt["error_codes"] = [e["error_code"] for e in state["errors"]]
     receipt["providers"] = {
         name: status
         for record in records.values()
