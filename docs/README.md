@@ -6,6 +6,8 @@
 
 ## 먼저 할 일
 
+**현재 우선 목표 (#219):** [Offline v3 데모 패키지](implementation/offline-delivery.md)의 합성 데모 산출물과 재현 안내를 완성한다. 실제 기업 평가·M3 live·최종 발행이나 과제 전체 완료를 뜻하지 않는다. #96/#168, 원래 필수 요구와 아래 historical snapshot은 유지한다.
+
 **실행 인터페이스 후속 승인 #166:** [Python 직접 실행](implementation/python-execution.md)으로 마무리하며 신규 CLI·옵션·console-script·CLI UX 개발은 중단한다. 기존 #29 fixture callable/parser·테스트는 호환성으로 보존한다. 이 문서의 과거 pinned 구현 snapshot과 CLI2 승인 설명은 이력이며 현재 실행 완료 조건은 Python 상태/receipt·산출물 검증이다. 정책·예산/readiness·live 승인 범위는 바꾸지 않는다.
 
 1. 이 문서에서 목표와 필수 요구사항을 확인한다.
