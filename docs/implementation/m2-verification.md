@@ -15,10 +15,52 @@
 - 평가가 실패해도 저장한 조사 State는 유지한다. 연구 receipt의 `ready`는 평가 진입
   조건을 뜻하며 평가 성공을 뜻하지 않는다. Technology 결과는 기존 trace 함수가 검증한다.
 
-새 `tests/integration/test_m2_research_state.py`의 13개 synthetic 통합 테스트는
+`tests/integration/test_m2_research_state.py`의 synthetic 통합 테스트는
 적격성 세 상태의 분기, 저장 후 freeze, 실제 요청 이력 연결, 비밀 값·덮어쓰기·
 미래/타 기업 자료 거절, 429 provider 실패와 평가 실패 시 조사 State 보존을 검증한다.
 해당 테스트는 socket 연결을 차단한다.
+
+### #203 required Eligibility 추출 실패
+
+구성된 `OfficialHomepage` 추출기의 `LLMError`는 정상 `unknown`이 아니다.
+`OfficialHomepage → LiveResearchCompany → assemble_research_state /
+run_research_to_trace`에서 후보·workflow를 `failed`, `run_outcome`을
+`technical_failure`로 저장한다. Eligibility 결과, CompanyProfile, 점수나
+criterion Missing을 생성하지 않고 Technology callback도 호출하지 않는다.
+반면 `extractor=None`, 성공 빈 facts, homepage 미지정은 기존 자료 부재/unknown이다.
+선택 provider 오류와 HTTP fetch 오류의 기존 required/optional 구분은 그대로다.
+
+기존 `ToolResult` 검증은 `ERROR_SPECS.tool_status=None`인 LLM 코드를 오류로
+직접 넣을 수 없다. 계약을 완화하지 않고 이 도구 경계에서만
+`LLM_TIMEOUT → TOOL_TIMEOUT`, `LLM_OUTPUT_INVALID → TOOL_RESPONSE_INVALID`,
+`LLM_FAILED → TOOL_FAILED`로 표현한다. 인증 등 도구 코드의 상태는 그대로다.
+원래 추출 오류의 `WorkflowError` JSON을 기존 company-research 요약
+RetrievalRecord의 `arguments_without_secrets.extractor_error`에 보관한다.
+State 소비자는 요약·원래 오류·도구 오류의 run/candidate/error ID, 시각,
+attempt, provider required 상태와 코드 대응을 다시 검증한 뒤 원래 코드와
+`ERROR_SPECS`의 retryability를 State/연구 receipt에 복원한다.
+예를 들어 OUTPUT_INVALID의 State retryable은 true이며 경계의
+TOOL_RESPONSE_INVALID는 false다. 이는 실제 재시도 허용/실행이 아니다.
+임의 예외 원문은 보관하지 않고 고정 오류 설명만 저장한다.
+
+실패 `ToolResult.data`는 항상 None이다. 성공 HTTP Source snapshot은 기존 요약
+metadata의 `retained_sources`에 Source ID → JSON payload로 보존하며 성공 fetch
+RetrievalRecord를 실패 요청으로 바꾸거나 복제하지 않는다. State 소비자는 엄격한
+Source DTO, map key/내용 hash/snapshot ID, 기준일과 동일 run/candidate의 성공
+fetch 및 수집 시각 범위를 검증한다. 후행 required 실패 전 성공 provider의
+Source도 보존한다. 이 archive는 facts/Evidence admission이나 semantic 승인,
+원문 bytes 보관을 의미하지 않는다. malformed/mismatched payload는 저장 전에 거절한다.
+
+component wrapper는 note만 보고 terminal을 덮어쓰지 않는다. 저장한 ResearchState의
+`run_outcome=technical_failure`를 terminal status에도 반영하며 stage receipt와
+State/연구 receipt/terminal artifact의 read-back을 테스트한다.
+실제 401을 받는 기존 runtime의 `LLM_FAILED` 변환은 이 작업에서 바꾸지 않는다.
+
+검증은 MockTransport 및 mocked LLM 오류를 사용한 offline synthetic 검증이다.
+LLM timeout/output-invalid/auth/failure, Source hash/성공 요청·요청 예산 보존,
+설정된 가상 비밀 값 비노출, malformed retention 거절, 정상 unknown 회귀와
+cancellation 전파를 검사한다. 실제 기업 적격성 positive, 유료·provider·model·
+index 다운로드 호출, full-live 성공은 확인하지 않았다.
 
 `agents.m2_trace.run_technology_trace`는 호출자가 제공한 적격성 조사 State와
 검색 결과를 사용해 RAG segment → LLM Evidence 추출 → 이력 연결 → snapshot 동결 →
@@ -79,7 +121,7 @@ smoke 결과를 투자 추천·v3 전체 M2 성공으로 표시하지 않는다.
   이는 component trace용 선택이며 검색 품질 benchmark가 아니다.
 - 실제 요청/사용량·모델/prompt/schema version과 에러 코드는 `component-receipt.json`에
   저장한다. 실패 시에도 조사 State와 사용량을 보존한다. 필수 LLM 인증 실패는
-  `required_llm_failed`이며 정상 missing·성공으로 바꾸지 않는다.
+  저장한 State와 같은 `technical_failure`이며 정상 missing·성공으로 바꾸지 않는다.
 - 검증된 Technology State/trace는 `technology/` 아래 별도로 저장한다. live CLI에서
   성공 trace가 없으면 종료 코드 2다. receipt의 `whole_m2_verified`는 계속 false다.
 - 공식 [GPT-4.1 mini 문서](https://developers.openai.com/api/docs/models/gpt-4.1-mini)를

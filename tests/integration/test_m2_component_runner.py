@@ -50,7 +50,9 @@ def wired(tmp_path, monkeypatch):
         raise AssertionError("synthetic runner attempted real network")
 
     monkeypatch.setattr(socket.socket, "connect", deny)
+    monkeypatch.setattr(socket.socket, "connect_ex", deny)
     monkeypatch.setattr(socket, "create_connection", deny)
+    monkeypatch.setattr(socket, "getaddrinfo", deny)
     monkeypatch.setenv("OPENAI_API_KEY", KEY)
     monkeypatch.setenv("OPENDART_API_KEY", "synthetic-dart-secret")
     monkeypatch.setattr(runner, "Clock", lambda: FakeClock(NOW))
@@ -390,11 +392,26 @@ def test_required_llm_auth_failure_is_not_reported_as_missing_success(
         ),
     )
     receipt = runner.run(root=root, input_path=path, output_dir=output, live=True)
-    assert receipt["status"] == "required_llm_failed"
+    assert receipt["status"] == "technical_failure"
+    state = json.loads((output / "research-state.json").read_text())
+    stage = json.loads((output / "research-receipt.json").read_text())
+    terminal = json.loads((output / "component-receipt.json").read_text())
+    assert receipt == terminal
+    assert receipt["stage_receipt"] == stage
+    assert receipt["status"] == state["run_outcome"]
+    assert state["candidate_status"]["co-synthetic"] == "failed"
+    assert state["eligibility_results"] == {} and state["evidence"] == {}
+    assert len(state["sources"]) == 1
+    assert state["retrieval_history"][0]["status"] == "ok"
+    assert state["errors"][0]["error_code"] == "LLM_FAILED"
+    assert state["errors"][0]["retryable"] is False
+    assert stage["eligibility_status"] is None
+    assert len(seen["http"]) == 1  # No optional request after required failure.
     assert len(calls) == 1
     assert receipt["llm_runtime"]["ledger"]["calls"] == 1
     assert seen["retrieval"] == []
     assert KEY not in (output / "component-receipt.json").read_text()
+    assert KEY not in (output / "research-state.json").read_text()
 
 
 @pytest.mark.parametrize("all_over_bound", [False, True])
