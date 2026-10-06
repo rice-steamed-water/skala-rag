@@ -80,12 +80,13 @@ class SourceOnlyV3:
     discovery_json: str
     budget_json: str
     run_profile: run_settings.RunProfile
-    provider: str
+    provider: str | None
     replay_scope: str
-    fetcher_factory: Callable[[], SafeFetcher]
+    fetcher_factory: Callable[[], SafeFetcher] | None
     clock: Clock
     research_replays_json: str = "{}"
     input_binding_sha256: str = ""
+    fixed_candidate_json: str | None = None
 
     def binding_digest(self):
         # Integrity only: a hash is not a signature, approval or source authority.
@@ -100,6 +101,13 @@ class SourceOnlyV3:
                     provider=self.provider,
                     replay_scope=self.replay_scope,
                     research_replays=json.loads(self.research_replays_json),
+                    **(
+                        dict(
+                            fixed_candidate_input=json.loads(self.fixed_candidate_json)
+                        )
+                        if self.fixed_candidate_json is not None
+                        else {}
+                    ),
                 )
             ).encode()
         ).hexdigest()
@@ -110,9 +118,19 @@ class SourceOnlyV3:
 
     @property
     def discovery_result(self):
+        if self.fixed_candidate_json is not None:
+            raise ValueError("fixed candidate input is not a Discovery ToolResult")
         return ToolResult[DiscoveryBundle].model_validate_json(
             self.discovery_json, context={"execution_mode": "live"}
         )
+
+    @property
+    def candidate_bundle(self):
+        if self.fixed_candidate_json is not None:
+            return DiscoveryBundle.model_validate_json(
+                self.fixed_candidate_json, context={"execution_mode": "live"}
+            )
+        return self.discovery_result.data
 
     @property
     def budget(self):
@@ -123,9 +141,22 @@ class SourceOnlyV3:
             raise ValueError("source-only pinned input binding mismatch")
         run = self.run_input
         run_settings._validate_profile(self.run_profile)
-        if self.provider in EXCLUDED_PROVIDERS or self.provider != "official-homepage":
+        fixed = self.fixed_candidate_json is not None
+        if fixed:
+            if (
+                self.replay_scope != "fixed_candidate_input"
+                or self.provider is not None
+                or self.fetcher_factory is not None
+                or self.discovery_json != "null"
+            ):
+                raise ValueError(
+                    "offline source-only requires fixed input and no provider"
+                )
+        elif (
+            self.provider in EXCLUDED_PROVIDERS or self.provider != "official-homepage"
+        ):
             raise ValueError("source-only provider excluded or not supported")
-        if self.replay_scope != "discovery_bundle_replay":
+        if not fixed and self.replay_scope != "discovery_bundle_replay":
             raise ValueError(
                 "new Discovery producer is not configured; bundle replay required"
             )
@@ -150,12 +181,10 @@ class SourceOnlyV3:
         registry = pinned_approval_registry(ROOT)
         if not registry.verify_policy(registry.policy_approvals().operational, policy):
             raise ValueError("source-only pinned operational content mismatch")
-        outcome = self.accept_discovery()
-        candidates = (
-            {c.candidate_id: c for c in outcome.bundle.candidates}
-            if outcome.bundle
-            else {}
-        )
+        bundle = self.candidate_bundle if fixed else self.accept_discovery().bundle
+        if fixed:
+            self.validate_candidate_bundle(bundle)
+        candidates = {c.candidate_id: c for c in bundle.candidates} if bundle else {}
         captures = json.loads(self.research_replays_json)
         if not isinstance(captures, dict) or not captures.keys() <= candidates.keys():
             raise ValueError("source-only replay candidate closure mismatch")
@@ -171,9 +200,7 @@ class SourceOnlyV3:
         run = self.run_input
         if candidate is None:
             candidate = next(
-                c
-                for c in self.discovery_result.data.candidates
-                if c.candidate_id == cid
+                c for c in self.candidate_bundle.candidates if c.candidate_id == cid
             )
         names = {candidate.canonical_name, *candidate.aliases}
         _schema_closure(result.model_dump(mode="json"), run.schema_version)
@@ -263,14 +290,16 @@ class SourceOnlyV3:
             if error.run_id != self.run_id or error.candidate_id not in (None, *ids):
                 raise ValueError("source-only discovery error attribution mismatch")
         if outcome.bundle:
-            if any(c.country not in run.countries for c in outcome.bundle.candidates):
-                raise ValueError("source-only discovery country mismatch")
-            if any(
-                not check_as_of(s, run.as_of).admitted
-                for s in outcome.bundle.sources.values()
-            ):
-                raise ValueError("source-only discovery cutoff mismatch")
+            self.validate_candidate_bundle(outcome.bundle)
         return outcome
+
+    def validate_candidate_bundle(self, bundle):
+        run = self.run_input
+        _schema_closure(bundle.model_dump(mode="json"), run.schema_version)
+        if any(c.country not in run.countries for c in bundle.candidates):
+            raise ValueError("source-only discovery country mismatch")
+        if any(not check_as_of(s, run.as_of).admitted for s in bundle.sources.values()):
+            raise ValueError("source-only discovery cutoff mismatch")
 
     def validate_fresh_admission(self):
         """Timing admission for new no-publication-date fetches, never replay facts."""
@@ -292,6 +321,10 @@ class SourceOnlyV3:
                 captured, context={"execution_mode": "live"}
             )
         else:
+            if self.fixed_candidate_json is not None:
+                raise ValueError(
+                    "offline source-only selected research capture missing"
+                )
             self.validate_fresh_admission()
             if on_provider_call is not None:
                 on_provider_call()
@@ -320,6 +353,8 @@ class SourceOnlyV3:
 
     def make_tool(self, *, on_configuration_attempt=None):
         # Called only after policy/run/budget/exclusions and selection are pinned.
+        if self.fixed_candidate_json is not None:
+            raise ValueError("offline source-only provider configuration forbidden")
         self.validate_fresh_admission()
         if on_configuration_attempt is not None:
             on_configuration_attempt()
@@ -386,6 +421,60 @@ def prepare_source_only_v3(
                 for cid, value in (research_replays or {}).items()
             }
         ),
+    )
+    boundary = replace(boundary, input_binding_sha256=boundary.binding_digest())
+    boundary.validate(
+        policy=load_v3_policy(
+            ROOT / "configs/scoring.v3.json", execution_mode="fixture"
+        ),
+        run_id=run_id,
+        schema_version=run.schema_version,
+        run_profile=run_profile,
+    )
+    return boundary
+
+
+def prepare_offline_source_only_v3(
+    *,
+    run_id: str,
+    run_input: RunInput,
+    candidate_bundle: DiscoveryBundle,
+    research_captures: Mapping[str, ToolResult[CompanyResearchBundle]],
+    run_profile: run_settings.RunProfile,
+    budget: ToolBudget,
+    clock: Clock,
+) -> SourceOnlyV3:
+    """Pin caller-owned fixed candidates and original captures; never collect."""
+    run = RunInput.model_validate(run_input.model_dump(mode="python", warnings="error"))
+    bundle = DiscoveryBundle.model_validate(
+        candidate_bundle.model_dump(mode="python", warnings="error"),
+        context={"execution_mode": "live"},
+    )
+    budget = ToolBudget.model_validate(
+        budget.model_dump(mode="python", warnings="error")
+    )
+    boundary = SourceOnlyV3(
+        run_id=run_id,
+        run_input_json=run.model_dump_json(),
+        discovery_json="null",
+        budget_json=budget.model_dump_json(),
+        run_profile=deepcopy(run_profile),
+        provider=None,
+        replay_scope="fixed_candidate_input",
+        fetcher_factory=None,
+        clock=clock,
+        research_replays_json=_json(
+            {
+                cid: ToolResult[CompanyResearchBundle]
+                .model_validate(
+                    value.model_dump(mode="python", warnings="error"),
+                    context={"execution_mode": "live"},
+                )
+                .model_dump(mode="json")
+                for cid, value in research_captures.items()
+            }
+        ),
+        fixed_candidate_json=bundle.model_dump_json(),
     )
     boundary = replace(boundary, input_binding_sha256=boundary.binding_digest())
     boundary.validate(
@@ -489,7 +578,7 @@ def save_source_only_v3(
         budget=result.source_only_detail["budget"],
         budget_scope=result.source_only_detail["budget_scope"],
         replay_budget_scope=result.source_only_detail["replay_budget_scope"],
-        provider="official-homepage",
+        provider=result.source_only_detail.get("provider", "official-homepage"),
         profile=result.source_only_detail["profile"],
         input_binding_sha256=result.source_only_detail["input_binding_sha256"],
         capture_replay=result.source_only_detail["capture_replay"],

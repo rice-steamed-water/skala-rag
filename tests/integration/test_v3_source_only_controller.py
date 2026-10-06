@@ -1298,3 +1298,479 @@ def test_factory_clock_rollover_does_not_count_uninvoked_provider(inputs, tmp_pa
     assert result.source_only_detail["usage"]["provider_configuration_attempts"] == 1
     assert result.candidate_index == 5
     assert result.status == "source_only_technical_failure"
+
+
+# #215: additive synthetic fixed-input regressions; original prefix stays frozen.
+def offline_inputs(inputs, mode="eligible"):
+    from unittest.mock import Mock
+
+    from tests.integration import test_m2_research_state as fixtures
+
+    from skala_rag.contracts.error_codes import ErrorCode
+    from skala_rag.contracts.interfaces import LLMError
+    from skala_rag.tools.official_homepage import OfficialHomepage
+
+    options, configured, requests = inputs
+    candidate, _, tool, budget, _ = fixtures.research.__wrapped__()
+    tool._run_id = options["run_id"]
+    candidate.discovery_source_ids = list(options["discovery_result"].data.sources)
+    bundle = options["discovery_result"].data.model_copy(deep=True)
+    if mode == "empty":
+        candidate.homepage_url = None
+    if mode in ("required_failure", "optional_note"):
+        provider = tool._providers[0]
+        if mode == "optional_note":
+            provider = OfficialHomepage(
+                provider._fetcher,
+                schema_version="test",
+                clock=options["clock"],
+                extractor=None,
+            )
+            provider.name = "synthetic-optional"
+            provider.required = False
+            tool._providers.append(provider)
+            budget.max_calls = 2
+        provider._extractor = Mock(
+            version="synthetic-error-no-model",
+            side_effect=LLMError(ErrorCode.LLM_TIMEOUT, "synthetic-redacted"),
+        )
+    bundle.candidates = [candidate]
+    captured = tool(candidate, budget)  # Existing synthetic producer, MockTransport.
+    return (
+        dict(
+            run_id=options["run_id"],
+            run_input=options["run_input"],
+            candidate_bundle=bundle,
+            research_captures={candidate.candidate_id: captured},
+            run_profile=options["run_profile"],
+            budget=options["budget"],
+            clock=options["clock"],
+        ),
+        configured,
+        requests,
+    )
+
+
+@pytest.fixture
+def offline_guard(monkeypatch):
+    from unittest.mock import Mock
+
+    from skala_rag.agents import m2_research
+    from skala_rag.agents.eligibility_extraction import LLMEligibilityExtractor
+    from skala_rag.tools.company_research import LiveResearchCompany
+    from skala_rag.tools.official_homepage import OfficialHomepage
+    from skala_rag.tools.runtime_llm import RuntimeStructuredLLM
+    from skala_rag.tools.structured_llm import OpenAIStructuredLLM
+
+    def install():
+        api = source_api()
+        forbidden = Mock(
+            side_effect=AssertionError("offline capture-only no-call guard")
+        )
+        for target, name in (
+            (api.SourceOnlyV3, "make_tool"),
+            (LiveResearchCompany, "__init__"),
+            (LiveResearchCompany, "__call__"),
+            (OfficialHomepage, "__init__"),
+            (OfficialHomepage, "__call__"),
+            (SafeFetcher, "__init__"),
+            (SafeFetcher, "fetch"),
+            (LLMEligibilityExtractor, "__call__"),
+            (OpenAIStructuredLLM, "__init__"),
+            (OpenAIStructuredLLM, "generate"),
+            (RuntimeStructuredLLM, "__init__"),
+            (RuntimeStructuredLLM, "generate"),
+            (outer, "build_evaluation_graph_v3"),
+            (outer, "check_coverage_v3"),
+            (outer.snapshot_module, "freeze_snapshot"),
+            (outer, "aggregate_scores_v3"),
+            (outer, "decide_v3"),
+            (outer, "run_candidate_report_v3"),
+        ):
+            monkeypatch.setattr(target, name, forbidden)
+        observed = {
+            "outer": Mock(wraps=outer.run_candidate_workflow_v3),
+            "assembler": Mock(wraps=api.assemble_research_state),
+            "eligibility": Mock(wraps=m2_research.check_eligibility),
+            "selection": Mock(wraps=run_settings.normalize_and_select),
+            "selector": Mock(wraps=outer.select_source_only_terminal_v3),
+        }
+        monkeypatch.setattr(outer, "run_candidate_workflow_v3", observed["outer"])
+        monkeypatch.setattr(api, "assemble_research_state", observed["assembler"])
+        monkeypatch.setattr(m2_research, "check_eligibility", observed["eligibility"])
+        monkeypatch.setattr(run_settings, "normalize_and_select", observed["selection"])
+        monkeypatch.setattr(
+            outer, "select_source_only_terminal_v3", observed["selector"]
+        )
+        return forbidden, observed
+
+    return install
+
+
+def test_offline_fixed_public_consumer_and_saved_originals(
+    inputs, tmp_path, offline_guard
+):
+    api = source_api()
+    assert callable(getattr(api, "prepare_offline_source_only_v3", None)), (
+        "missing public offline fixed Candidate/Source admission"
+    )
+    options, configured, requests = offline_inputs(inputs)
+    cid, captured = next(iter(options["research_captures"].items()))
+    captured.data.profile.is_listed = None
+    original = captured.model_dump(mode="json")
+    bundle = options["candidate_bundle"].model_dump(mode="json")
+    options["clock"].current = datetime(2026, 10, 6, tzinfo=UTC)
+    options["budget"].deadline = datetime(2026, 9, 29, tzinfo=UTC)
+    forbidden, observed = offline_guard()
+    boundary = api.prepare_offline_source_only_v3(**options)
+    events = []
+    result = api.run_source_only_v3(
+        boundary, output_dir=tmp_path / "offline", graph_events=events
+    )
+    assert boundary.provider is boundary.fetcher_factory is None
+    with pytest.raises(ValueError, match="not a Discovery ToolResult"):
+        _ = boundary.discovery_result
+    assert result.status == "no_eligible_candidates"
+    assert result.outcomes[cid].status == "eligibility_unknown"
+    assert result.selection.reason == "NO_ELIGIBLE_RESULTS"
+    assert result.candidate_index == 1
+    assert result.execution_mode == "live"
+    assert result.replay_scope == "fixed_candidate_input"
+    assert result.scores == result.decisions == result.coverage_results == {}
+    assert not result.errors
+    detail = result.source_only_detail
+    assert detail["discovery"] == dict(origin="fixed_candidate_input", bundle=bundle)
+    assert detail["research"][cid]["result"] == original
+    assert (
+        detail["research"][cid]["state"]["eligibility_results"][cid]["status"]
+        == "unknown"
+    )
+    assert detail["capture_replay_inputs"] == {cid: original}
+    assert detail["usage"]["provider_company_research_calls"] == 0
+    assert detail["usage"]["provider_configuration_attempts"] == 0
+    assert detail["usage"]["captured_replays"] == 1
+    assert detail["usage"]["physical_http_requests"] == "unmeasured"
+    nodes = Counter(
+        name
+        for ns, updates in events
+        if not ns
+        for name in updates
+        if name != "__interrupt__"
+    )
+    assert nodes == Counter(
+        discover=1,
+        normalize=1,
+        candidate_iterator=2,
+        research=1,
+        eligibility=1,
+        archive=1,
+        advance=1,
+        selector=1,
+    )
+    assert {key: value.call_count for key, value in observed.items()} == dict(
+        outer=1, assembler=1, eligibility=1, selection=1, selector=1
+    )
+    forbidden.assert_not_called()
+    assert configured == requests == []
+    manifest = json.loads((tmp_path / "offline" / "manifest.json").read_text())
+    assert manifest["replay_scope"] == "fixed_candidate_input"
+    assert manifest["provider"] is None
+    assert manifest["evaluation"] == manifest["scoring"] == "not_started"
+    assert manifest["semantic_review"] == "unreviewed"
+    assert manifest["publication_allowed"] is False
+    saved = json.loads((tmp_path / "offline" / "candidate-run.json").read_text())
+    assert saved["source_only_detail"] == detail
+    for name, digest in manifest["artifacts"].items():
+        assert (
+            hashlib.sha256((tmp_path / "offline" / name).read_bytes()).hexdigest()
+            == digest
+        )
+
+
+def test_offline_missing_selected_capture_rejects_before_first_research(
+    inputs, tmp_path, offline_guard
+):
+    api = source_api()
+    options, configured, requests = offline_inputs(inputs)
+    options["candidate_bundle"].candidates.append(
+        inputs[0]["discovery_result"].data.candidates[0]
+    )
+    forbidden, observed = offline_guard()
+    boundary = api.prepare_offline_source_only_v3(**options)
+    with pytest.raises(ValueError, match="selected research capture missing"):
+        api.run_source_only_v3(boundary, output_dir=tmp_path / "missing")
+    assert observed["selection"].call_count == 1
+    events = observed["outer"].call_args.kwargs["graph_events"]
+    nodes = Counter(name for ns, updates in events if not ns for name in updates)
+    assert nodes["discover"] == nodes["normalize"] == 1
+    assert nodes["research"] == 0
+    observed["assembler"].assert_not_called()
+    observed["eligibility"].assert_not_called()
+    observed["selector"].assert_not_called()
+    forbidden.assert_not_called()
+    assert configured == requests == []
+    assert not (tmp_path / "missing").exists()
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [
+        "ineligible",
+        "empty",
+        "required_failure",
+        "optional_note",
+        "eligible",
+        "empty_candidates",
+    ],
+)
+def test_offline_original_capture_statuses_in_real_consumers(
+    inputs, tmp_path, offline_guard, mode
+):
+    api = source_api()
+    options, configured, requests = offline_inputs(inputs, mode)
+    cid, captured = next(iter(options["research_captures"].items()))
+    if mode == "ineligible":
+        captured.data.profile.is_listed = True
+    elif mode == "empty_candidates":
+        options["candidate_bundle"].candidates = []
+        options["research_captures"] = {}
+    original = captured.model_dump(mode="json")
+    forbidden, observed = offline_guard()
+    events = []
+    result = api.run_source_only_v3(
+        api.prepare_offline_source_only_v3(**options),
+        output_dir=tmp_path / mode,
+        graph_events=events,
+    )
+    assert result.scores == result.decisions == result.coverage_results == {}
+    forbidden.assert_not_called()
+    assert configured == requests == []
+    nodes = Counter(name for ns, updates in events if not ns for name in updates)
+    count = 0 if mode == "empty_candidates" else 1
+    assert (
+        result.candidate_index
+        == nodes["research"]
+        == nodes["archive"]
+        == nodes["advance"]
+        == count
+    )
+    assert observed["assembler"].call_count == count
+    assert observed["selector"].call_count == nodes["selector"] == 1
+    assert observed["selection"].call_count == observed["outer"].call_count == 1
+    if mode == "empty_candidates":
+        assert result.status == "no_candidates" and not result.errors
+        assert result.outcomes == result.source_only_detail["research"] == {}
+        assert result.selection.reason == "NO_ELIGIBLE_RESULTS"
+        return
+    detail = result.source_only_detail["research"][cid]
+    assert detail["result"] == original
+    assert captured.model_dump(mode="json") == original
+    assert detail["input_scope"] == "captured_result_replay"
+    state = detail["state"]
+    if mode == "required_failure":
+        assert result.status == "source_only_technical_failure"
+        assert result.outcomes[cid].status == "failed"
+        assert [e.error_code for e in result.errors] == ["LLM_TIMEOUT"]
+        error = original["retrieval_records"][-1]["arguments_without_secrets"][
+            "extractor_error"
+        ]
+        assert result.errors[0].model_dump(mode="json") == error
+        assert (
+            state["sources"]
+            == original["retrieval_records"][-1]["arguments_without_secrets"][
+                "retained_sources"
+            ]
+        )
+        assert state["run_outcome"] == "technical_failure"
+        assert state["eligibility_results"] == state["evidence"] == {}
+        observed["eligibility"].assert_not_called()
+    else:
+        expected = (
+            "ineligible"
+            if mode == "ineligible"
+            else "unknown"
+            if mode == "empty"
+            else "eligible"
+        )
+        assert state["eligibility_results"][cid]["status"] == expected
+        assert observed["eligibility"].call_count == 1
+        row = observed["selector"].call_args.args[0][0]
+        assert row["eligibility_status"] == expected
+        assert row["normalized_score"] is None
+        if expected == "eligible":
+            assert result.outcomes[cid].status == "failed"
+            assert [e.error_code for e in result.errors] == [
+                "SOURCE_ONLY_EVALUATION_NOT_READY"
+            ]
+            assert result.status == "source_only_technical_failure"
+        else:
+            assert result.status == "no_eligible_candidates" and not result.errors
+            assert result.selection.reason == "NO_ELIGIBLE_RESULTS"
+        if mode == "empty":
+            assert original["status"] == "empty"
+            assert state["sources"] == state["evidence"] == {}
+        if mode == "optional_note":
+            assert original["status"] == "ok" and original["errors"] == []
+            provider = detail["receipt"]["providers"]["synthetic-optional"]
+            assert provider["required"] is False
+            assert provider["notes"] == ["EXTRACTOR_FAILED:LLM_TIMEOUT"]
+
+
+@pytest.mark.parametrize("selected_only", [False, True])
+def test_offline_selection_dedup_unused_and_detached_inputs(
+    inputs, tmp_path, offline_guard, selected_only
+):
+    from copy import deepcopy
+
+    api = source_api()
+    original_options, configured, requests = inputs
+    options, _, _ = offline_inputs(inputs)
+    bundle = original_options["discovery_result"].data.model_copy(deep=True)
+    duplicate = bundle.candidates[0].model_copy(
+        deep=True, update={"candidate_id": "duplicate"}
+    )
+    bundle.candidates.append(duplicate)
+    selected = deepcopy(
+        run_settings.normalize_and_select(
+            bundle.candidates, profile=options["run_profile"], execution_mode="live"
+        ).receipt
+    )
+    captures = {
+        c.candidate_id: failure_capture(original_options, c)
+        for c in bundle.candidates
+        if not selected_only or c.candidate_id in selected.selected_ids
+    }
+    originals = {
+        cid: capture.model_dump(mode="json") for cid, capture in captures.items()
+    }
+    bundle_original = bundle.model_dump(mode="json")
+    options.update(candidate_bundle=bundle, research_captures=captures)
+    configured.clear()
+    requests.clear()
+    forbidden, observed = offline_guard()
+    boundary = api.prepare_offline_source_only_v3(**options)
+    bundle.candidates.clear()
+    next(iter(captures.values())).retrieval_records.clear()
+    captures.clear()
+    options["run_input"].corpus_version = "caller-mutation"
+    options["budget"].max_calls = 0
+    object.__setattr__(options["run_profile"], "seed", 9)
+    result = api.run_source_only_v3(boundary, output_dir=tmp_path / "detached")
+    assert tuple(result.outcomes) == selected.selected_ids
+    assert result.selection_receipt == selected
+    assert len(result.outcomes) == result.candidate_index == 5
+    assert not (set(selected.excluded_ids) | {"duplicate"}) & result.outcomes.keys()
+    assert result.source_only_detail["discovery"]["bundle"] == bundle_original
+    assert result.source_only_detail["capture_replay_inputs"] == originals
+    assert all(count == 0 for count in result.research_retry_count.values())
+    audit = result.source_only_detail["capture_replay"]
+    assert set(audit["attempted_ids"]) == set(selected.selected_ids)
+    assert set(audit["unused_ids"]) == set(originals) - set(selected.selected_ids)
+    assert set(audit["excluded_ids"]) == set(originals) & set(selected.excluded_ids)
+    assert audit["dedup_merged_ids"] == ([] if selected_only else ["duplicate"])
+    assert observed["selection"].call_count == observed["selector"].call_count == 1
+    assert observed["assembler"].call_count == 5
+    forbidden.assert_not_called()
+    assert configured == requests == []
+
+
+@pytest.mark.parametrize(
+    "poison",
+    [
+        "unrelated_id",
+        "declared_corpus",
+        "declared_name",
+        "record_candidate",
+        "fixed_source_closure",
+        "capture_source_closure",
+        "fixed_cutoff",
+        "schema",
+    ],
+)
+def test_offline_declared_identity_and_source_refusals(
+    inputs, tmp_path, offline_guard, poison
+):
+    api = source_api()
+    options, configured, requests = offline_inputs(inputs)
+    cid, captured = next(iter(options["research_captures"].items()))
+    if poison == "unrelated_id":
+        options["research_captures"]["unrelated"] = captured
+    elif poison.startswith("declared_"):
+        field, value = (
+            ("corpus_version", "other")
+            if poison == "declared_corpus"
+            else ("canonical_name", "Other candidate")
+        )
+        captured.retrieval_records[-1].arguments_without_secrets[field] = value
+    elif poison == "record_candidate":
+        captured.retrieval_records[0].candidate_id = "other"
+    elif poison == "fixed_source_closure":
+        options["candidate_bundle"].sources.clear()
+    elif poison == "capture_source_closure":
+        captured.data.sources.clear()
+    elif poison == "fixed_cutoff":
+        next(
+            iter(options["candidate_bundle"].sources.values())
+        ).retrieved_at = datetime(2026, 10, 1, tzinfo=UTC)
+    else:
+        captured.data.profile.schema_version = "other"
+    forbidden, observed = offline_guard()
+    with pytest.raises(ValueError):
+        api.run_source_only_v3(
+            api.prepare_offline_source_only_v3(**options),
+            output_dir=tmp_path / "denied",
+        )
+    observed["assembler"].assert_not_called()
+    forbidden.assert_not_called()
+    assert configured == requests == []
+    assert not (tmp_path / "denied").exists()
+
+
+@pytest.mark.parametrize("poison", ["missing_record_source", "late_research_source"])
+def test_offline_original_assembler_rejects_bad_record_or_source(
+    inputs, tmp_path, offline_guard, poison
+):
+    api = source_api()
+    options, configured, requests = offline_inputs(inputs)
+    cid, captured = next(iter(options["research_captures"].items()))
+    if poison == "missing_record_source":
+        captured.retrieval_records[0].source_ids = []
+    else:
+        next(iter(captured.data.sources.values())).retrieved_at = datetime(
+            2026, 10, 1, tzinfo=UTC
+        )
+    original = captured.model_dump(mode="json")
+    forbidden, observed = offline_guard()
+    result = api.run_source_only_v3(
+        api.prepare_offline_source_only_v3(**options),
+        output_dir=tmp_path / "invalid-capture",
+    )
+    assert result.outcomes[cid].status == "failed"
+    assert [e.error_code for e in result.errors] == ["UPSTREAM_INVALID"]
+    assert result.source_only_detail["research"] == {}
+    assert result.source_only_detail["capture_replay_inputs"] == {cid: original}
+    assert result.candidate_index == 1
+    assert result.scores == result.decisions == {}
+    assert observed["assembler"].call_count == 1
+    observed["eligibility"].assert_not_called()
+    forbidden.assert_not_called()
+    assert configured == requests == []
+
+
+@pytest.mark.parametrize("field", ["fixed_candidate_json", "research_replays_json"])
+def test_offline_pinned_payload_mutation_is_refused(
+    inputs, tmp_path, offline_guard, field
+):
+    from dataclasses import replace
+
+    api = source_api()
+    options, configured, requests = offline_inputs(inputs)
+    forbidden, observed = offline_guard()
+    boundary = api.prepare_offline_source_only_v3(**options)
+    forged = replace(boundary, **{field: "{}"})
+    with pytest.raises(ValueError, match="pinned input binding mismatch"):
+        api.run_source_only_v3(forged, output_dir=tmp_path / "tampered")
+    observed["assembler"].assert_not_called()
+    forbidden.assert_not_called()
+    assert configured == requests == []
+    assert not (tmp_path / "tampered").exists()

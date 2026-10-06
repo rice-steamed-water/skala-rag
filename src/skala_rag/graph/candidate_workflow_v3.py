@@ -400,7 +400,9 @@ def _build_candidate_workflow_v3(
             selection_receipt=None,
         )
         if source_only is not None:
-            outcome = source_only.accept_discovery()
+            fixed = source_only.fixed_candidate_json is not None
+            outcome = None if fixed else source_only.accept_discovery()
+            bundle = source_only.candidate_bundle if fixed else outcome.bundle
             data["source_only_detail"] = dict(
                 run_input=source_only.run_input.model_dump(mode="json"),
                 budget=source_only.budget.model_dump(mode="json"),
@@ -408,7 +410,13 @@ def _build_candidate_workflow_v3(
                 replay_budget_scope="no_new_network_not_charged_to_fresh_fetch_deadline",
                 profile=asdict(source_only.run_profile),
                 input_binding_sha256=source_only.input_binding_sha256,
+                **(dict(provider=None) if fixed else {}),
                 discovery=dict(
+                    origin="fixed_candidate_input",
+                    bundle=bundle.model_dump(mode="json"),
+                )
+                if fixed
+                else dict(
                     result=source_only.discovery_result.model_dump(mode="json"),
                     status=outcome.status,
                 ),
@@ -423,12 +431,11 @@ def _build_candidate_workflow_v3(
                 ),
             )
             data["discovered"] = (
-                [c.model_dump(mode="json") for c in outcome.bundle.candidates]
-                if outcome.bundle
-                else []
+                [c.model_dump(mode="json") for c in bundle.candidates] if bundle else []
             )
-            data["errors"].extend(outcome.errors)
-            if outcome.status == "failed":
+            if outcome is not None:
+                data["errors"].extend(outcome.errors)
+            if outcome is not None and outcome.status == "failed":
                 data["candidates"] = []
                 data["discovery_failed"] = True
                 data["route"] = "selector"
@@ -507,6 +514,10 @@ def _build_candidate_workflow_v3(
             if source_only.has_replay(data["cid"]):
                 usage["captured_replays"] += 1
                 candidate_usage["captured_replays"] += 1
+            elif source_only.fixed_candidate_json is not None:
+                raise ValueError(
+                    "offline source-only selected research capture missing"
+                )
             elif research_tool is None:
                 if research_tool_configuration_failed:
                     raise ValueError("source-only provider configuration failed")
@@ -1304,6 +1315,8 @@ def run_candidate_workflow_v3(
         for c in state["data"]["candidates"]
     ):
         # Selection is already pinned. Old captures do not spend a fresh deadline.
+        if source_only.fixed_candidate_json is not None:
+            raise ValueError("offline source-only selected research capture missing")
         source_only.validate_fresh_admission()
     config["recursion_limit"] = candidate_recursion_limit_v3(
         len(state["data"]["candidates"]), options["policy"]
