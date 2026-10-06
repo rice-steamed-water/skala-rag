@@ -4,6 +4,8 @@ Physical AI / Robotics 스타트업의 투자 가능성을 조사·평가하는 
 
 ## Overview
 
+**현재 우선 목표 (#219):** [Offline v3 데모 패키지와 재현 안내](docs/implementation/offline-delivery.md). 기존 public graph/원래 snapshot/승인 산술/보고서를 합성 fixture로 연결하고 실제 ReportLab PDF와 원본 DTO/trace/hash를 저장한다. 실제 기업 평가·M3 live·최종 발행 완료는 아니며 #96/#168과 아래 과거 로컬 데모 이력은 보존한다.
+
 - **Objective:** 비상장·Seed~Series C·Exit 미완료 스타트업을 대상으로 창업자, 시장성, 제품·기술력, 경쟁 우위, 실적, 투자조건을 분석한다.
 - **Method:** AI Agent의 역할 분담과 Agentic RAG를 결합한다. PDF·웹·API에서 수집한 근거로 LLM이 항목별 분석을 작성하고, 점수 계산·후보 선정·인용 검증은 코드가 수행한다.
 - **평가 기준:** 창업자 5 / 시장성 30 / 제품·기술력 25 / 경쟁 우위 20 / 실적 10 / 투자조건 10의 가중치를 사용한다. 자료가 부족한 항목은 결측으로 보존하고, 적용 제외 근거가 있는 항목만 계산 분모에서 제외한다.
