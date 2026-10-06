@@ -73,6 +73,10 @@ PY
 
 기존 `exit_code=0/2/1`과 policy의 CLI 관련 필드명은 호환성 구현 사실로 보존한다([기존 매핑](fixture-cli.md#기존-exit-code-매핑)). #166은 이를 삭제/이름 변경하거나 새로운 enum·스키마를 승인하지 않는다. 신규 실행 완료 조건은 CLI 기능이나 종료 코드가 아니라 Python 상태/receipt 및 근거 산출물이다.
 
+## v3 source-only 직접 호출 (#209)
+
+[Source-only v3 계약](source-only-v3.md)은 기존 outer의 Discovery 캡처 재생, CompanyResearch, Eligibility, archive/advance, no-selection handoff를 별도로 연결한다. 기본 fixture callable은 바꾸지 않는다. 입력의 `execution_mode="live"`는 live DTO 검증 경계이며 실제 HTTP, 새 주제 Discovery, 기업 사실 확인, 평가/점수/보고서 발행 승인을 뜻하지 않는다. source-only는 `eligible`도 명시적 not-ready 실패로 보존하고 full scoring/live evaluation의 기존 승인 gate를 열지 않는다.
+
 ## 유지하는 검증·안전 gate
 
 - source/context/artifact hash, 실제 로드한 설정·policy·corpus·모델/prompt 버전, 코드 revision/uncommitted, trace·manifest·예산/사용량을 보존한다. manifest 자체는 자기 hash 목록에 포함하지 않는다.

@@ -126,6 +126,9 @@ class CandidateRunV3:
     coverage_results: dict[str, CoverageResult] = field(default_factory=dict)
     research_gaps: dict[str, tuple[ResearchGap, ...]] = field(default_factory=dict)
     selection_receipt: run_settings.SelectionReceipt | None = None
+    execution_mode: str = "fixture"
+    replay_scope: str | None = None
+    source_only_detail: dict = field(default_factory=dict)
 
 
 def run_candidates_v3(
