@@ -3,9 +3,8 @@
 ``Candidate.homepage_url``을 ``SafeFetcher``로 한 번 받아 Source snapshot으로 만든다.
 원문에서 적격성 사실을 읽는 일은 주입한 ``SourceFactExtractor``가 한다(LLM 구현은
 ``agents.eligibility_extraction``). 추출기가 없으면 Source만 남기고 관측을 만들지
-않는다. 추출기의 ``LLMError``는 도구 실패가 아니라 추출 실패
-note(``EXTRACTOR_FAILED:<code>``)다.
-받은 Source는 남기고 사실은 만들지 않는다(모름을 false로 바꾸지 않음).
+않는다. 구성된 추출기의 ``LLMError``는 required provider 실패다.
+성공 fetch의 Source/이력과 원래 오류 코드를 남기되 사실은 만들지 않는다.
 
 - homepage가 없으면 요청 없이 ``empty``(skipped=NO_HOMEPAGE). 자료 부재이지 실패가
   아니다.
@@ -22,6 +21,7 @@ from skala_rag.contracts.error_codes import ERROR_SPECS, ErrorCode
 from skala_rag.contracts.interfaces import Clock, LLMError
 from skala_rag.contracts.sources import Source
 from skala_rag.tools.company_research import (
+    EXTRACTOR_TOOL_ERRORS,
     CallBudget,
     FieldObservation,
     ProviderCall,
@@ -120,6 +120,7 @@ class OfficialHomepage:
         )
         observations: tuple[FieldObservation, ...] = ()
         notes: list[str] = []
+        extractor_error_code = None
         if self._extractor is None:
             notes.append("EXTRACTOR_NOT_CONFIGURED")
         else:
@@ -128,6 +129,7 @@ class OfficialHomepage:
                     candidate, source, raw.content, raw.content_type
                 )
             except LLMError as exc:
+                extractor_error_code = exc.error_code
                 notes.append(f"EXTRACTOR_FAILED:{exc.error_code.value}")
             else:
                 observations, notes = facts.observations, [*notes, *facts.notes]
@@ -149,6 +151,17 @@ class OfficialHomepage:
             finished_at=self._clock.now(),
             source_ids=(source.source_id,),
         )
+        if extractor_error_code is not None:
+            code = EXTRACTOR_TOOL_ERRORS.get(extractor_error_code, extractor_error_code)
+            return ProviderOutcome(
+                status=ERROR_SPECS[code].tool_status,
+                sources=(source,),
+                calls=(call,),
+                error_code=code,
+                message="official homepage eligibility extraction failed",
+                notes=tuple(notes),
+                extractor_error_code=extractor_error_code,
+            )
         return ProviderOutcome(
             status="ok",
             sources=(source,),

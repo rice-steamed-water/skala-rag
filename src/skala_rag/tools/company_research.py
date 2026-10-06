@@ -47,6 +47,14 @@ from skala_rag.tools.source_fetch import check_as_of
 TOOL_NAME = "company-research"
 NODE = "company_research"
 
+# ToolResult only accepts codes with an ERROR_SPECS tool_status. Preserve the
+# original LLM WorkflowError in existing summary metadata for the State consumer.
+EXTRACTOR_TOOL_ERRORS = {
+    ErrorCode.LLM_TIMEOUT: ErrorCode.TOOL_TIMEOUT,
+    ErrorCode.LLM_OUTPUT_INVALID: ErrorCode.TOOL_RESPONSE_INVALID,
+    ErrorCode.LLM_FAILED: ErrorCode.TOOL_FAILED,
+}
+
 ToolStatus = Literal["ok", "empty", "unavailable", "failed"]
 IdentityBasis = Literal["legal_identifier", "official_domain", "name_only"]
 EvidenceKind = Literal["reported", "derived", "estimated"]
@@ -166,6 +174,7 @@ class ProviderOutcome:
     message: str | None = None
     skipped: str | None = None
     notes: tuple[str, ...] = ()
+    extractor_error_code: ErrorCode | None = None
 
     def __post_init__(self) -> None:
         failed = self.status in ("unavailable", "failed")
@@ -574,6 +583,8 @@ class LiveResearchCompany:
                 "skipped": outcome.skipped,
                 "notes": list(outcome.notes),
             }
+            if outcome.status in ("ok", "empty") or provider.required:
+                sources.extend(outcome.sources)
             if outcome.error_code is not None and provider.required:
                 return self._failure(
                     candidate,
@@ -583,10 +594,12 @@ class LiveResearchCompany:
                     outcome.error_code,
                     f"required provider {provider.name}: {outcome.message}",
                     summary,
+                    sources=sources,
+                    requests_used=calls.used,
+                    extractor_error_code=outcome.extractor_error_code,
                 )
             if outcome.status not in ("ok", "empty"):
                 continue
-            sources.extend(outcome.sources)
             for obs in outcome.observations:
                 if obs.source_id not in source_record:
                     raise ValueError(
@@ -698,6 +711,10 @@ class LiveResearchCompany:
         code: ErrorCode,
         message: str,
         summary: Mapping[str, JSONMap] | None = None,
+        *,
+        sources: Sequence[Source] = (),
+        requests_used: int = 0,
+        extractor_error_code: ErrorCode | None = None,
     ) -> ToolResult[CompanyResearchBundle]:
         spec = ERROR_SPECS[code]
         error = WorkflowError(
@@ -712,17 +729,35 @@ class LiveResearchCompany:
             attempt=1,
             timestamp=started_at,
         )
+        retained_sources = {
+            source.source_id: source.model_dump(mode="json")
+            for source in sources
+            if check_as_of(source, self._as_of).admitted
+        }
         arguments: JSONMap = {
             "as_of": self._as_of.isoformat(),
             "providers": dict(summary or {}),
+            "requests_used": requests_used,
+            "retained_sources": retained_sources,
         }
+        if extractor_error_code is not None:
+            original = error.model_copy(
+                update={
+                    "error_code": extractor_error_code.value,
+                    "retryable": ERROR_SPECS[extractor_error_code].retryable,
+                    "message_redacted": (
+                        "required official homepage eligibility extraction failed"
+                    ),
+                }
+            )
+            arguments["extractor_error"] = original.model_dump(mode="json")
         summary_record = self._summary_record(
             candidate,
             started_at,
             prefix,
             spec.tool_status,
             arguments,
-            source_ids=[],
+            source_ids=sorted(retained_sources),
             evidence_ids=[],
             error_id=error.error_id,
         )

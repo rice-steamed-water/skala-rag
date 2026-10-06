@@ -282,13 +282,8 @@ def run(*, root: Path, input_path: Path, output_dir: Path, live: bool = False):
         )
         terminal["stage_receipt"] = outcome.receipt
         if isinstance(outcome, ResearchState):
-            notes = (
-                outcome.receipt.get("providers", {})
-                .get("official-homepage", {})
-                .get("notes", [])
-            )
-            if any(note.startswith("EXTRACTOR_FAILED:") for note in notes):
-                terminal["status"] = "required_llm_failed"
+            if outcome.state.get("run_outcome") == "technical_failure":
+                terminal["status"] = "technical_failure"
         return terminal
     finally:
         terminal["llm_runtime"] = llms.observations()
