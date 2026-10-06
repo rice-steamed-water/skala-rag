@@ -1,7 +1,9 @@
 """Technology review claims, not production semantic authority or retrieval."""
 
+import re
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from copy import deepcopy
+from dataclasses import dataclass, replace
 
 from pydantic import BaseModel
 
@@ -211,3 +213,179 @@ def validate_technology_anchor(
         ):
             return False
     return callable(verifier) and verifier(receipt) is True
+
+
+def _checked_adjudication(adjudication: object, rubric: Mapping[str, object]):
+    """Accept only a supported, rated #201 integration adjudication result."""
+    from skala_rag.agents.source_fact_verification import IntegrationAdjudication
+
+    def distinct_texts(values: object) -> bool:
+        return (
+            type(values) is tuple
+            and bool(values)
+            and all(type(v) is str and bool(v.strip()) for v in values)
+            and len(set(values)) == len(values)
+        )
+
+    if (
+        type(adjudication) is not IntegrationAdjudication
+        or type(adjudication.criterion_id) is not str
+        or adjudication.criterion_id != "technology.integration"
+        or type(adjudication.status) is not str
+        or adjudication.status != "supported"
+        or type(adjudication.rating) is not int
+        or adjudication.rating not in (3, 4, 5)
+        or adjudication.minimum_evidence_supported is not True
+        or type(adjudication.anchor_text) is not str
+        or not adjudication.anchor_text.strip()
+        or not distinct_texts(adjudication.evidence_ids)
+        or not distinct_texts(adjudication.admitted_fact_ids)
+        or type(adjudication.denied) is not tuple
+        or any(
+            type(d) is not tuple
+            or len(d) != 2
+            or any(type(v) is not str or not v.strip() for v in d)
+            for d in adjudication.denied
+        )
+        or len({d[0] for d in adjudication.denied}) != len(adjudication.denied)
+        or set(adjudication.admitted_fact_ids) & {d[0] for d in adjudication.denied}
+        or any(
+            type(v) is not str or re.fullmatch(r"[0-9a-f]{64}", v) is None
+            for v in (adjudication.snapshot_sha256, adjudication.rubric_sha256)
+        )
+    ):
+        raise TechnologyReviewError("TECHNOLOGY_REVIEW_REJECTED")
+    try:
+        spec = rubric["dimensions"]["technology"]["criteria"][adjudication.criterion_id]
+        anchors = {int(k): v for k, v in spec["anchors"].items()}
+        if (
+            adjudication.rubric_sha256 != core_artifact_digest(rubric)
+            or adjudication.anchor_text != anchors[adjudication.rating]
+        ):
+            raise ValueError("anchor/rubric mismatch")
+    except Exception:
+        raise TechnologyReviewError("TECHNOLOGY_REVIEW_REJECTED") from None
+    return adjudication
+
+
+def anchor_from_integration_adjudication(
+    adjudication: object, review_reference: str, *, rubric: Mapping[str, object]
+) -> ReviewedTechnologyAnchor:
+    """Format a coherent result as an untrusted anchor assertion.
+
+    Public result construction is not authority. Only the separate input-bound
+    resolver re-establishes the minimum, anchor and independent-source checks.
+    """
+    checked = _checked_adjudication(adjudication, rubric)
+    if type(review_reference) is not str or not review_reference.strip():
+        raise TechnologyReviewError("TECHNOLOGY_REVIEW_REJECTED")
+    return ReviewedTechnologyAnchor(
+        review_reference=review_reference,
+        artifact_sha256=checked.rubric_sha256,
+        snapshot_sha256=checked.snapshot_sha256,
+        criterion_id=checked.criterion_id,
+        rating=checked.rating,
+        evidence_ids=tuple(checked.evidence_ids),
+        anchor_facts_reviewed=checked.anchor_text is not None,
+        minimum_evidence_reviewed=checked.minimum_evidence_supported,
+        direct_negative_facts_reviewed=checked.rating >= 3,
+        # Rating 5 is only produced after an admitted independent-source fact.
+        independent_corroboration_reviewed=checked.anchor_text is not None,
+    )
+
+
+def integration_adjudication_resolver(
+    snapshot: EvaluationSnapshot,
+    rubric: Mapping[str, object],
+    artifact: object,
+    *,
+    sources: Mapping[str, object],
+    registry: object,
+) -> Callable[[ReviewedTechnologyAnchor], bool]:
+    """Re-adjudicate captured original controller inputs, not a public result DTO.
+
+    Source paths/provenance and review authority are controller-owned. Capture
+    detached, validated copies; each verification re-reads the approved local
+    source bytes and applies the narrow correspondence/structure checks again.
+    No token or freely constructed result authenticates a semantic claim.
+    """
+    from skala_rag.agents.source_fact_verification import (
+        TrustedReviewRegistry,
+        _check_artifact,
+        adjudicate_technology_integration,
+    )
+
+    try:
+        _check_artifact(artifact, registry)
+        frozen = checked_snapshot(snapshot)
+        pinned_rubric = deepcopy(dict(rubric))
+        pinned_artifact = replace(
+            artifact,
+            anchor_texts=dict(artifact.anchor_texts),
+            facts=deepcopy(artifact.facts),
+            reviews=deepcopy(artifact.reviews),
+        )
+        pinned_registry = TrustedReviewRegistry(
+            {k: frozenset(v) for k, v in registry.accepted.items()}
+        )
+        pinned_sources = {
+            key: replace(
+                value,
+                source=value.source.model_copy(deep=True),
+                document=value.document.model_copy(deep=True),
+                approved_chunks=tuple(
+                    c.model_copy(deep=True) for c in value.approved_chunks
+                ),
+            )
+            for key, value in sources.items()
+        }
+    except Exception:
+        raise TechnologyReviewError("TECHNOLOGY_REVIEW_REJECTED") from None
+
+    def recheck() -> ReviewedTechnologyAnchor:
+        try:
+            result = adjudicate_technology_integration(
+                frozen,
+                pinned_rubric,
+                pinned_artifact,
+                sources=pinned_sources,
+                registry=pinned_registry,
+            )
+            return anchor_from_integration_adjudication(
+                result, "resolver", rubric=pinned_rubric
+            )
+        except Exception:
+            raise TechnologyReviewError("TECHNOLOGY_REVIEW_REJECTED") from None
+
+    recheck()  # Deny unsupported or invalid controller inputs at construction.
+
+    def resolve(receipt: ReviewedTechnologyAnchor) -> bool:
+        if (
+            type(receipt) is not ReviewedTechnologyAnchor
+            or type(receipt.review_reference) is not str
+            or not receipt.review_reference.strip()
+            or type(receipt.rating) is not int
+            or type(receipt.evidence_ids) is not tuple
+            or any(type(e) is not str or not e.strip() for e in receipt.evidence_ids)
+            or len(set(receipt.evidence_ids)) != len(receipt.evidence_ids)
+        ):
+            return False
+        expected = recheck()
+        return (
+            receipt.criterion_id == expected.criterion_id
+            and receipt.rating == expected.rating
+            and receipt.artifact_sha256 == expected.artifact_sha256
+            and receipt.snapshot_sha256 == expected.snapshot_sha256
+            and set(receipt.evidence_ids) == set(expected.evidence_ids)
+            and all(
+                getattr(receipt, name) is True and getattr(expected, name) is True
+                for name in (
+                    "anchor_facts_reviewed",
+                    "minimum_evidence_reviewed",
+                    "direct_negative_facts_reviewed",
+                    "independent_corroboration_reviewed",
+                )
+            )
+        )
+
+    return resolve
