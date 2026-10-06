@@ -1,4 +1,4 @@
-# 실행 한정 권장 설정과 후보 선정 receipt (#199)
+# 실행 한정 권장 설정과 후보 선정 receipt (#199 / #204)
 
 [문서 홈](../README.md) · [공통 계약](contracts.md) · [결정 목록](decisions.md)
 
@@ -12,10 +12,11 @@ D05/D06/D08 설정이다. `recommended_profile(...)` 호출에는 `run_id`,
 검증을 대신하지 않는다. `code_version=None`도 명시적 선택이다.
 
 이 모듈이 **실행하는 것**은 기존 `agents.discovery.normalize_candidates`를
-통과하는 후보 dedup·선정과 receipt replay뿐이다. Controller 전체 연결, 실제
-fact verifier, research/evaluation/provider 호출, 최종 scoring/selector,
-manifest 연결, live admission은 구현 범위 밖이다. 기존 fixture/live gate를
-우회하지 않으며 새로운 CLI는 없다.
+통과하는 후보 dedup·선정과 receipt replay뿐이다. #204는 이 기존 API를 fixture-only
+v3 controller의 normalize → Iterator 경계와 기존 source runner의 outer callable에
+연결한다. 실제 fact verifier/provider, manifest 연결, live admission 또는 전체
+RunProfile enforcement를 구현한 것은 아니다. 기존 fixture/live gate를 우회하지
+않으며 새로운 CLI는 없다.
 
 ## 선택한 immutable profile
 
@@ -38,8 +39,9 @@ run/candidate ID는 이 profile에서만 printable ASCII, 공백 없는 원문 �
 허용범위는 바꾸지 않는다. 권한/출처/정책 문자열도 nonblank strict 문자열로
 보존한다.
 
-D06에서 unknown reason/evidence를 보존해 archive/advance하고 collection/evaluation을
-하지 않는 동작은 **후속 controller 책임**이다. 최초 research1은 provider의
+D06에서 기존 controller는 unknown을 archive/advance하고 collection/evaluation과
+추가 retry를 하지 않는다. unknown 원래 reason/evidence/checks payload의 완전한
+보존은 아직 후속이며 #204에서 결과 schema를 확대하지 않는다. 최초 research1은 provider의
 내부 처리를 HTTP 1회로 제한한다는 의미가 아니다. `enforcement`는 항상
 `controller_handoff_only`이며 paid0가 기존 모든 adapter 경로에 연결·강제됐다는
 주장은 하지 않는다. 이 API는 adapter/research/evaluation callback을 받지 않으며
@@ -120,6 +122,63 @@ raw receipt 생성자는 replay 검증이나 서명 인증을 대신하지 않�
 
 ## 직접 Python 예제 — synthetic, 외부 호출 없음
 
+### #204 기존 controller / source runner의 명시 opt-in
+
+`run_candidates_v3(...)`, `build_candidate_workflow_v3(...)`,
+`run_candidate_workflow_v3(...)`, `fixture_runner.run_fixture(...)`는 모두
+`run_profile=None`을 기본값으로 받는다. None이면 기존 `stages.normalize` callback과
+legacy source runner의 Python oracle 경로를 유지하며 자동 cap/선정은 설치하지 않는다.
+명시 profile이면 기존 `_validate_profile(profile)`로 무결성과 controller `run_id`의
+**원문 exact 일치**를 callback 전에 확인하고 실행용 복사본을 고정한다. profile 참조
+문자열은 여전히 caller 선언이며 인증된 source/policy 승인으로 승격하지 않는다.
+
+profile 경로의 normalize node만 `normalize_and_select(..., execution_mode="fixture")`를
+한 번 호출하며 legacy `stages.normalize`를 호출하지 않는다. `.candidates` 순서를
+그대로 Iterator/Company Research에 넘긴다. 비선정/merged 후보는 callback/outcome에
+추가하지 않으며 unknown·ineligible·실패를 보충하지 않는다. 모든 선정 후보를 처리한
+뒤 기존 deterministic final selector를 한 번 호출한다.
+
+기존 `CandidateRunV3.selection_receipt`는 기존 `SelectionReceipt | None`이다.
+이는 **평가 전 조사 모집단 선정** 기록이고 `CandidateRunV3.selection`의 최종
+`SelectionResultV3`와 별개다. 실제 outer callable는 최초 normalize에서 만든 receipt를
+in-process handoff/continuation/결과까지 보존한다. continuation에서 normalize/sample/
+replay를 다시 하지 않고 recursion bound는 선정 후 모집단으로 계산한다. checkpoint
+지속 저장이나 manifest/보고서 receipt 연결은 추가하지 않는다.
+
+source runner의 profile opt-in은 실제 `run_candidate_workflow_v3`를 호출한다.
+이 경로에서만 각 synthetic firm에 서로 다른 `fixture_registry` 법인 ID와
+`fixture://company-N/homepage`를 부여한다. 기존 ID-only template clones는 동일 법인/
+homepage여서 normalizer를 단순히 켜면 하나로 merge되는 함정이 있다. legacy fixture
+identity는 바꾸지 않으며 controller 테스트의 의도적 duplicate는 실제 같은 synthetic
+법인/homepage를 공유한다. discovery/Eligibility/support/evaluation은 여전히 synthetic
+fixture이고 factual verification, 실제 기업 적격성 또는 유료 호출/비용 enforcement의
+증거가 아니다. 기존 fixture trace 표시, fixture policy 및 live 거절도 유지한다.
+
+```python
+from skala_rag.fixture_runner import run_fixture
+from skala_rag.run_settings import recommended_profile
+
+profile = recommended_profile(
+    run_id="run-204-example",
+    selection_source="synthetic-example",
+    authority_reference="caller-declared-example-not-attestation",
+    policy_references=("v3-operational-1.0.0",),
+    code_version=None,
+)
+result, calls = run_fixture(
+    statuses=("eligible",) * 7,
+    ratings=(5,) * 7,
+    run_id="run-204-example",
+    run_profile=profile,
+)
+assert result.selection_receipt is not None
+assert tuple(result.outcomes) == result.selection_receipt.selected_ids
+assert result.candidate_index == len(result.scores) == 5
+assert len(calls) == 25  # five synthetic branches per selected candidate
+```
+
+### #199 normalization / replay만 실행하는 예제
+
 저장소의 uv 환경에서 다음 코드를 Python으로 실행한다. Candidate constructor는
 현재 DTO shape를 사용한다. 가상 후보의 ID/source 참조는 실제 수집·출처 검증 증거가
 아니며 BGE retrieval 또는 전체 live flow를 실행하는 예제가 아니다.
@@ -169,6 +228,11 @@ uv sync --frozen --offline
 uv run --no-sync --offline pytest -q tests/unit/test_run_settings.py tests/integration/test_run_settings.py tests/unit/test_discovery.py tests/unit/test_v3_coverage.py tests/unit/test_select_v3.py tests/unit/test_approved_scoring_consumers.py
 uv run --no-sync --offline ruff check src/skala_rag/run_settings.py tests/unit/test_run_settings.py tests/integration/test_run_settings.py
 uv run --no-sync --offline ruff format --check src/skala_rag/run_settings.py tests/unit/test_run_settings.py tests/integration/test_run_settings.py
+
+# #204 offline controller/source consumer regressions (전체 suite/build 아님)
+uv run --no-sync --offline pytest -q tests/integration/test_v3_profile_controller.py tests/integration/test_run_settings.py tests/integration/test_v3_candidates.py tests/integration/test_v3_outer_graph.py tests/integration/test_v3_research_loop.py tests/unit/test_run_settings.py tests/unit/test_approved_scoring_consumers.py
+uv run --no-sync --offline ruff check src/skala_rag/graph/candidates_v3.py src/skala_rag/graph/candidate_workflow_v3.py src/skala_rag/fixture_runner.py tests/integration/test_v3_profile_controller.py
+uv run --no-sync --offline ruff format --check src/skala_rag/graph/candidates_v3.py src/skala_rag/graph/candidate_workflow_v3.py src/skala_rag/fixture_runner.py tests/integration/test_v3_profile_controller.py
 ```
 
 신규 API 부재 RED와 실제 normalizer callthrough GREEN, 0/1/5/6+·dedup/callback bypass·
@@ -176,3 +240,13 @@ uv run --no-sync --offline ruff format --check src/skala_rag/run_settings.py tes
 interpreter/profile mismatch 회귀를 분리한다. 이는 offline synthetic normalization
 증거이며 실제 기업 eligibility/semantic support/provider 호출 또는 전체 actual admission
 검증 증거가 아니다. 전체 테스트/build와 별도 리뷰는 부모의 통합 gate에서 수행한다.
+
+#204는 public oracle/outer builder/outer callable의 0/1/5·6+·dedup5 RNG bypass,
+정확한 receipt/research 순서, excluded/merged callback0, unknown retry/평가0/no refill,
+선정 후 recursion bound와 continuation 재선정0, 전 후보 처리/final selector1 및
+atomic failure/generation/0분모 guard를 검증한다. source runner의 실제 outer 호출과
+legacy None 경로, oracle 동등성도 별도 검증한다. 신규 미연결 API/consumer의 관측
+RED→GREEN과 이미 동작하는 회귀 coverage는 구별한다. 공통 graph 변경의 영향은
+fixture·테스트·이 문서에 함께 반영하며 #96/#168 관련 열린 이슈 통지와 PR 공통 파일
+설명, 전체 통합 gate/독립 리뷰/graphify 갱신은 부모 담당이다. 이 작은 완료 범위는
+**offline controller profile/selection consumer wired**이며 full-live 완료가 아니다.

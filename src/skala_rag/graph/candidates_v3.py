@@ -1,8 +1,9 @@
 """All-candidate fixture v3 controller using #20 coverage and #24 LangGraph.
 
-This is deliberately separate from baseline candidates.py and ReportInput. It does
-not implement discovery policy, reporting, CLI or live providers. Research control
-is Python; only the five-way evaluation subgraph is LangGraph.
+This is deliberately separate from baseline candidates.py and ReportInput. It
+consumes existing candidate selection only with an explicit run profile; reporting,
+CLI and live providers remain outside this controller. Research control is Python;
+only the five-way evaluation subgraph is LangGraph.
 """
 
 from collections.abc import Callable, Collection, Mapping, Sequence
@@ -12,6 +13,7 @@ from datetime import datetime, timezone
 from time import perf_counter
 from typing import Any, TypeVar
 
+from skala_rag import run_settings
 from skala_rag.contracts.candidates import Candidate, EligibilityResult
 from skala_rag.contracts.coverage import ResearchGap
 from skala_rag.contracts.errors import WorkflowError
@@ -123,6 +125,7 @@ class CandidateRunV3:
     research_stop_reasons: dict[str, str] = field(default_factory=dict)
     coverage_results: dict[str, CoverageResult] = field(default_factory=dict)
     research_gaps: dict[str, tuple[ResearchGap, ...]] = field(default_factory=dict)
+    selection_receipt: run_settings.SelectionReceipt | None = None
 
 
 def run_candidates_v3(
@@ -141,16 +144,24 @@ def run_candidates_v3(
     industry_evidence_dimensions: Collection[str],
     clock: Callable[[], datetime],
     trace_events: list[dict] | None = None,
+    run_profile: run_settings.RunProfile | None = None,
 ) -> CandidateRunV3:
     """Process every normalized candidate; #24 graph performs the five-way barrier.
 
     An unsuccessful candidate advances once. Only terminal successful six-dimension
     promotions reach scoring. Callbacks are fixture-bound and receive detached data.
+    An explicit run profile selects once before research; None preserves legacy
+    normalization. Profile declarations do not attest source/policy authority.
     """
     if not isinstance(policy, V3Policy) or policy.execution_mode != "fixture":
         raise ValueError("fixture V3Policy required")
     if not run_id.strip() or not schema_version.strip():
         raise ValueError("run/schema required")
+    if run_profile is not None:
+        run_settings._validate_profile(run_profile)
+        if run_profile.run_id != run_id:
+            raise ValueError("profile/controller run_id mismatch")
+        run_profile = deepcopy(run_profile)
     if (
         catalog.policy_version != catalog_policy_version
         or {c.criterion_id: (c.dimension, c.weight) for c in catalog.criteria}
@@ -284,6 +295,7 @@ def run_candidates_v3(
         index += 1
         timed("advance", cid, lambda: None)
 
+    selection_receipt = None
     try:
         discovered = [
             Candidate.model_validate(
@@ -291,11 +303,24 @@ def run_candidates_v3(
             ).model_dump(mode="json")
             for c in stages.discover()
         ]
+        if run_profile is not None:
+            selected = run_settings.normalize_and_select(
+                [
+                    Candidate.model_validate(c, context={"execution_mode": "fixture"})
+                    for c in discovered
+                ],
+                profile=run_profile,
+                execution_mode="fixture",
+            )
+            selection_receipt = selected.receipt
+            normalized = selected.candidates
+        else:
+            normalized = stages.normalize(deepcopy(discovered))
         candidates = [
             Candidate.model_validate(
                 c, context={"execution_mode": "fixture"}
             ).model_dump(mode="json")
-            for c in stages.normalize(deepcopy(discovered))
+            for c in normalized
         ]
         if len({c["candidate_id"] for c in candidates}) != len(candidates):
             raise ValueError("duplicate normalized candidate")
@@ -722,6 +747,7 @@ def run_candidates_v3(
         research_stop_reasons=stop_reasons,
         coverage_results=coverages,
         research_gaps=research_gaps,
+        selection_receipt=selection_receipt,
     )
 
 

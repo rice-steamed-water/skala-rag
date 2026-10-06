@@ -6,11 +6,13 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
+from skala_rag import run_settings
 from skala_rag.contracts.v3 import (
     BRANCH_DIMENSIONS,
     ApplicabilityAssessment,
     EvaluationBranchResult,
 )
+from skala_rag.graph.candidate_workflow_v3 import run_candidate_workflow_v3
 from skala_rag.graph.candidates_v3 import CandidateStagesV3, run_candidates_v3
 from skala_rag.scoring.catalog import load_policy
 from skala_rag.scoring.v3_policy import load_v3_policy
@@ -33,7 +35,13 @@ def run_fixture(
     snapshots=None,
     policy_path="configs/scoring.v3.json",
     catalog_path="configs/scoring.draft.json",
+    run_profile: run_settings.RunProfile | None = None,
 ):
+    if run_profile is not None:
+        run_settings._validate_profile(run_profile)
+        if run_profile.run_id != run_id:
+            raise ValueError("profile/controller run_id mismatch")
+        run_profile = deepcopy(run_profile)
     policy = load_v3_policy(policy_path, execution_mode="fixture")
     catalog = load_policy(catalog_path, execution_mode="fixture")
     if catalog_mutation:
@@ -52,6 +60,16 @@ def run_fixture(
         {**candidate_template, "candidate_id": cid, "discovery_source_ids": []}
         for cid in ids
     ]
+    if run_profile is not None:
+        # Profile dedup must see distinct synthetic firms, not ID-only clones of
+        # the template's single legal entity. Preserve the legacy fixture path.
+        for candidate in candidates:
+            cid = candidate["candidate_id"]
+            candidate.update(
+                canonical_name=f"Synthetic {cid}",
+                homepage_url=f"fixture://{cid}/homepage",
+                legal_identifiers={"fixture_registry": f"synthetic-{cid}"},
+            )
     calls = []
     from threading import Lock
     from time import perf_counter
@@ -265,7 +283,8 @@ def run_fixture(
             if getattr(stages, name) is not None
         },
     )
-    result = run_candidates_v3(
+    runner = run_candidate_workflow_v3 if run_profile is not None else run_candidates_v3
+    result = runner(
         stages,
         {b: traced(b, lambda snap, b=b: evaluate(b, snap)) for b in BRANCH_DIMENSIONS},
         policy=policy,
@@ -292,5 +311,6 @@ def run_fixture(
         industry_evidence_dimensions=set(),
         clock=lambda: datetime(2026, 9, 1, tzinfo=timezone.utc),
         trace_events=trace,
+        run_profile=run_profile,
     )
     return result, calls
