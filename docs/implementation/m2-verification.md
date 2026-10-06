@@ -62,6 +62,147 @@ LLM timeout/output-invalid/auth/failure, Source hash/성공 요청·요청 예�
 cancellation 전파를 검사한다. 실제 기업 적격성 positive, 유료·provider·model·
 index 다운로드 호출, full-live 성공은 확인하지 않았다.
 
+### #207 상장·Exit 제안값과 원문 대조
+
+`LLMEligibilityExtractor._check`는 `is_listed`와 `exit_completed`를 원문의
+지원 문장과 대조한다. 대상 기업명·별칭 또는 1인칭 주어에 상태·완료·부정
+표현이 직접 연결되어야 한다. 모델의 `claim`이나 주제어 존재만으로 값을
+받지 않는다. 반대로 제안한 값은 고치지 않고 거절한다.
+
+발췌가 들어 있는 모든 원문 문장과 같은 출처의 다른 대상 문장도 검사한다.
+반복된 발췌를 유리한 위치에만 연결하거나, 앞의 부정·뒤의 조건을 빼고
+사실로 받지 않는다. 서로 반대인 상태, 질문·가정·계획·미완료·미확인 표현,
+고객·파트너 사건과 대상 기업의 매수자 역할은 근거로 받지 않는다.
+상장 진술과 Exit 이력 없음이 함께 있으면 Exit 제안을 거절한다. 기존
+추출 prompt가 상장·IPO를 Exit에 포함하기 때문이다. 별도 문장의
+`listed on NASDAQ`, `listed on NYSE`, `publicly listed company`도 Exit 맥락
+검사에 포함한다. 주제어만 보고 충돌로 정하지 않고 지원하는 대상 기업의
+상장 진술이 실제 `True`일 때 거절한다. 미지원 상장 문장은 미확인으로
+거절한다. 상장 진술로 Exit 관측을 만들지는 않으며, 비상장만으로 Exit
+없음도 만들지 않는다.
+
+| 원문과 제안 | 추출·판정 결과 |
+| --- | --- |
+| 지원하는 비상장·Exit 이력 없음 진술 + `false` | 해당 관측을 만들고 기존 composer와 Eligibility에 전달 |
+| 지원하는 상장·Exit 완료 진술 + `true` | 해당 관측을 만들고 기존 Eligibility의 부적격 조건으로 전달 |
+| 지원 문장과 반대인 boolean | `SOURCE_POLARITY_MISMATCH`, 해당 제안의 관측·Evidence 없음 |
+| 불명확하거나 지원하지 않는 문장·한정 표현 | `SOURCE_POLARITY_UNVERIFIED` |
+| 원문 내 상태 충돌·상장과 Exit 없음의 충돌 | `SOURCE_POLARITY_CONFLICT` |
+| 입력 상한 절단·생략 표시(`…`, `...`)·디코딩 대체 문자 | `SOURCE_CONTEXT_UNAVAILABLE` |
+
+거절은 정상 자료 부족이다. 성공 fetch의 Source와 요청 이력을 유지하고,
+다른 유효 관측이 없으면 해당 profile 필드를 `None`으로 남겨 판정을
+`unknown`으로 만든다. 다른 provider가 제공한 유효 관측은 기존 composer
+규칙대로 남는다. 예를 들어 원래 재현 사례의 OpenDART `E`는 독립적인
+`is_listed=False` 근거로 남지만, 상장 원문의 반대 제안은 Evidence에 들어가지
+않는다. 그 사례의 Exit 제안도 충돌로 거절되어 `eligible`이 되지 않는다.
+거절 note에는 필드와 사유 코드만 넣는다. #203의 `LLMError`, 원래 오류 코드,
+실패 `data=None` 및 Source 보존 처리는 바꾸지 않는다.
+
+지원 범위는 코드의 닫힌 KR/EN 문장 형태다. 현재 비상장·상장 기업 진술,
+명시적 상장 완료, Exit 이력 없음·완료, 피인수 수동태 등을 검사하며 문장이
+`.` 또는 `。`로 끝나야 한다. 기존 GOOD의 같은 주어를 잇는 `이며` 문장도
+지원한다. 특정 거래소에 상장되지 않았다는 표현만으로 전체 비상장을
+확정하지 않는다. 지원하지 않는 표·인용·축약·복잡한 절이나 매수자 이름은
+정확한 사실이어도 거절될 수 있다. 별도 문장의 한정 표현을 놓치지 않도록
+일부 가정·미확인 표시가 원문 어디에 있어도 두 필드의 제안을 거절하므로,
+관련 없는 설명 때문에 자료 부족이 늘어날 수도 있다. 같은 보수적 거절에
+마침표로 끝나는 네 문장 `This is not true.`, `That is false.`,
+`This statement is withdrawn.`, `We withdraw that claim.`도 포함한다.
+이 문장이 무엇을 가리키는지 해석하지 않으며 다른 표현으로 확대하지 않는다.
+`가정` veto는 `가정용 로봇` 같은 자기 설명에도 걸려 정상 상장·Exit 제안을 거절할 수 있다.
+
+이 검사는 일반적인 의미 증명이나 독립 사실 검증이 아니다. 외부에서 이미
+잘린 자료에 생략 표시가 없으면 원래 맥락을 복원할 수 없다. 임의의 표현과
+대명사·부정 관계를 모두 해석하지 않으며, 공식 홈페이지 자기 진술이라는
+기존 한계를 유지한다. `domain_match`·business·stage의 일반 의미 검증,
+`claim` 문장 전체의 정당화, 법인 동일성·최소 Evidence 정책은 범위 밖이다.
+Source/DTO·공통 계약·정책·prompt version은 변경하지 않았다.
+
+검증은 socket을 차단한 synthetic fixture로 실제
+`OfficialHomepage → LLMEligibilityExtractor → LiveResearchCompany → check_eligibility`
+경로를 실행했다. KR/EN의 올바른 양방향 관측과 반대값 거절, 발췌의 맥락 누락,
+반복 위치·상충·미래·매수자 역할·입력 절단을 검사한다. 첫 구현 검증에서는
+추출기 테스트 157개, 기존 Eligibility·composer 및 #203 필수 추출 실패 회귀까지
+포함한 아래 범위 239개가 통과했다. 실제 기업·provider·모델 응답이나 전체 M2
+live 성공을 확인한 결과는 아니다.
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:. UV_OFFLINE=1 uv run --no-sync pytest \
+  -p no:cacheprovider \
+  --basetemp=/Users/luk/.hermes/cache/scratch/skala-207-worker-pytest \
+  tests/unit/test_eligibility_extraction.py \
+  tests/unit/test_eligibility.py tests/unit/test_company_research.py \
+  tests/integration/test_m2_research_state.py::test_required_extractor_failure_persists_technical_failure -q
+```
+
+### #207 부모 검증 후 보완
+
+2026-10-06 부모 검증에서 영어 상장 문장이 별도로 있으면 Exit 맥락 검사에서
+빠지는 경로를 확인했다. 보완 전 실제 consumer 회귀는 `8 failed, 9 passed`였다.
+KR/EN 별도 문장과 역순, NASDAQ/NYSE/publicly listed 충돌, 미지원 상장 문장,
+비상장과 명시적 Exit 없음의 정상 조합을 검사했다. truth-denial/withdrawal
+회귀는 보완 전 `16 failed, 9 passed`였고 네 문장에만 보수적 거절을 추가했다.
+
+기존 component 전체 파일에서는 `2 failed, 8 passed`를 재현했다. 긍정 fixture의
+`Synthetic Robot has not completed an acquisition or IPO exit.`는 지원 형태가
+아니므로 `unknown`이었다. 이를 받도록 추출 규칙을 완화하지 않았다.
+`tests/integration/test_m2_component_runner.py`의 HOME 본문과 모델 발췌 두 문자열만
+`Synthetic Robot has no history of an exit.`로 맞췄다. 기존 assertion, 호출 횟수,
+공유 사용량, 실패 시 admission/terminal 보존 검사는 그대로다. consumer 단위
+회귀에서도 새 문장은 `eligible`, 옛 문장은 계속 `unknown`임을 확인했다.
+
+보완 후 추출기와 component 전체 파일은 `209 passed`였다. 아래 scoped 검증은
+`363 passed`, 실패·오류·skip 0건이었다. #203의 기술 실패, `data=None`, Source 보존,
+정상 unknown과 State 회귀도 포함한다. 수정하지 않은 부모의 4-case polarity 및
+영어 충돌 probe는 모두 exit 0이었다. 영어 probe는 OpenDART `E`의 독립 근거인
+`is_listed=False`를 유지하고 `exit_completed=None`, Eligibility `unknown`이었다.
+Ruff check, Python 세 파일의 format check와 `git diff --check`도 통과했다.
+전체 suite/build/독립 review/graphify/CI/merge는 이 보완에서 재실행하지 않았다.
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src:. UV_OFFLINE=1 uv run --no-sync pytest \
+  -p no:cacheprovider \
+  --basetemp=/Users/luk/.hermes/cache/scratch/skala-207-postreview-scoped-tmp \
+  --junitxml=/Users/luk/.hermes/cache/scratch/skala-207-postreview-scoped.xml \
+  tests/unit/test_eligibility_extraction.py tests/unit/test_eligibility.py \
+  tests/unit/test_company_research.py tests/integration/test_m2_component_runner.py \
+  tests/integration/test_m2_research_state.py tests/integration/test_reducer_state.py \
+  tests/contract/test_state.py -q --tb=short
+```
+
+### #207 Exit 사건 어휘 누락 보완
+
+부모의 수정하지 않은 consumer probe에서 `We merged with Beta in 2022.`,
+`We went public in 2022.`, `We were sold to Beta in 2022.`와 별도 Exit 이력
+없음 진술이 함께 있으면 `exit_completed=False`, `eligible`로 잘못 허용됐다.
+세 문장의 주제어가 기존 Exit 검사에서 빠졌기 때문이다.
+
+Exit 주제 검사에 `merge/merged/merging/merger`, `go/went public`,
+`public offering`, sale/sell/sold, buy/bought, purchase/purchased, takeover와
+관련 활용형, 한국어 `매수`, `매입`, `공모`, `기업공개`를 포함했다.
+대상 기업명·별칭·1인칭이 있는 문장을 기존 거절 검사로 보내기 위한 어휘다.
+지원하지 않는 완료·계획·불명확 사건 문장은 `SOURCE_POLARITY_UNVERIFIED`로
+거절한다. `_source_assertions`와 기존 지원 술어는 바꾸지 않았으며 새 어휘로
+`True`나 `False` 관측을 만들지 않는다. OpenDART `E`의 독립 비상장 근거와
+business/domain/stage 관측은 유지한다.
+
+어휘 사전 밖 표현이나 다른 문장 대명사의 의미를 모두 해석하는 검사는 아니다.
+대상 기업을 언급한 제품 판매·구매나 파트너 설명도 보수적으로 거절될 수 있다.
+이런 false-negative를 줄이려고 기존 veto나 지원 문장 규칙을 완화하지 않았다.
+기존 component HOME/발췌의 두 문자열과 검증된 테스트 본문은 그대로 유지했다.
+
+같은 31개 사건 문장의 순서 양방향 consumer 회귀와 boolean 제안 양방향 거절,
+기존 지원 진술 및 다른 기업 사건 controls를 먼저 추가했다. 생산 코드 수정 전
+`112 failed, 23 passed`를 확인했고 보완 후 새 범위는 `135 passed`였다.
+component와 #203을 포함한 기존 7개 파일 scoped 검증은 `498 passed`,
+실패·오류·skip 0건이었다. 수정하지 않은 부모 probe 세 파일, Ruff/format,
+`git diff --check`도 통과했다. 증거는 scratch의 `skala-207-vocabulary-*`에
+저장했다. 전체 suite/build/graphify/독립 review와 live 호출은 재실행하지 않았다.
+
+후속 보완은 `acquisition(s)`, `buyout(s)/buy-out(s)/buy out(s)`, `takeover(s)/take-over(s)/take over(s)` 명사형도 거절 검사에 연결한다.
+부분 어휘 검사이며 일반 NLP 의미 증명이나 사실 판단 권한은 아니다. 기존 지원 assertion과 routing은 유지한다.
+
 `agents.m2_trace.run_technology_trace`는 호출자가 제공한 적격성 조사 State와
 검색 결과를 사용해 RAG segment → LLM Evidence 추출 → 이력 연결 → snapshot 동결 →
 Technology 평가를 연결한다. 적격성을 만들어 넣거나 전체 M2 완료를 선언하지 않는다.
