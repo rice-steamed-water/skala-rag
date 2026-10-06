@@ -15,6 +15,7 @@ from time import perf_counter
 from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
+from pydantic import TypeAdapter
 
 from skala_rag import run_settings
 from skala_rag.contracts.candidates import Candidate, EligibilityResult
@@ -30,6 +31,7 @@ from skala_rag.contracts.v3 import (
     InvestmentDecision,
     ScoreSummary,
 )
+from skala_rag.graph import snapshot as snapshot_module
 from skala_rag.graph.candidates_v3 import (
     CandidateRunV3,
     CandidateStagesV3,
@@ -41,6 +43,14 @@ from skala_rag.graph.candidates_v3 import (
     validate_snapshot_generation_v3,
 )
 from skala_rag.graph.evaluation_v3 import build_evaluation_graph_v3
+from skala_rag.graph.research_artifacts_v3 import (
+    ArtifactResearchFailure,
+    CompanyResearchArtifactsV3,
+    active_evidence_v3,
+    consume_outcome_v3,
+    initialize_artifacts_v3,
+    retain_outcome_errors_v3,
+)
 from skala_rag.scoring.aggregate_v3 import (
     ApplicabilityVerifier,
     ZeroDenominatorV3,
@@ -79,6 +89,12 @@ def candidate_recursion_limit_v3(candidate_count: int, policy: V3Policy) -> int:
 
 
 def _encode(value):
+    if type(value) is CompanyResearchArtifactsV3:
+        return {
+            "_artifact_seed_v3": TypeAdapter(CompanyResearchArtifactsV3).dump_python(
+                value, mode="json"
+            )
+        }
     if hasattr(value, "model_dump"):
         return value.model_dump(mode="json")
     if isinstance(value, dict):
@@ -86,7 +102,10 @@ def _encode(value):
         # owned by this controller. Preserve its Python type and detached-copy
         # semantics; callbacks must never place clients or secrets in it.
         return {
-            k: deepcopy(v) if k == "research" else _encode(v) for k, v in value.items()
+            k: deepcopy(v)
+            if k == "research" and type(v) is not CompanyResearchArtifactsV3
+            else _encode(v)
+            for k, v in value.items()
         }
     if isinstance(value, (tuple, list, set)):
         return [_encode(v) for v in value]
@@ -95,6 +114,9 @@ def _encode(value):
 
 def _decode(payload):
     data = deepcopy(payload)
+    research = data.get("research")
+    if type(research) is dict and set(research) == {"_artifact_seed_v3"}:
+        data["research"] = CompanyResearchArtifactsV3(**research["_artifact_seed_v3"])
     for key, model in (
         ("eligibility", EligibilityResult),
         ("coverage", CoverageResult),
@@ -216,6 +238,15 @@ def _build_candidate_workflow_v3(
     elif stages is None:
         raise ValueError("fixture stages required")
     execution_mode = "live" if source_only else "fixture"
+    binding = (
+        stages.evidence_research.pin(
+            run_id=run_id,
+            schema_version=schema_version,
+            policy_version=policy.policy_version,
+        )
+        if stages is not None and stages.evidence_research
+        else None
+    )
     research_tool = None
     research_tool_configuration_failed = False
     if (
@@ -353,6 +384,7 @@ def _build_candidate_workflow_v3(
             stop_reasons={},
             coverages={},
             research_gaps={},
+            research_artifacts={},
             outcomes={},
             scores={},
             decisions={},
@@ -556,12 +588,31 @@ def _build_candidate_workflow_v3(
 
     def collect(data, timed, error, finish):
         data["stage"] = "collect"
-        data["evidence"] = [
-            Evidence.model_validate(item, context={"execution_mode": "fixture"})
-            for item in stages.collect(
-                deepcopy(data["candidate"]), deepcopy(data["research"])
+        if binding:
+            owned = initialize_artifacts_v3(
+                data["research"], data["eligibility"], data["candidate"], binding
             )
-        ]
+            data["research_artifacts"][data["cid"]] = owned
+            outcome = binding.research.run(
+                Candidate.model_validate(
+                    data["candidate"], context={"execution_mode": "fixture"}
+                ),
+                (),
+                binding.budget.model_copy(deep=True),
+            )
+            consume_outcome_v3(owned, outcome, binding, data["cid"], initial=True)
+            data["errors"] = retain_outcome_errors_v3(data["errors"], owned)
+            data["evidence"] = [
+                Evidence.model_validate(e, context={"execution_mode": "fixture"})
+                for e in active_evidence_v3(owned, binding, data["cid"]).values()
+            ]
+        else:
+            data["evidence"] = [
+                Evidence.model_validate(item, context={"execution_mode": "fixture"})
+                for item in stages.collect(
+                    deepcopy(data["candidate"]), deepcopy(data["research"])
+                )
+            ]
         data["collected"] = {
             item.evidence_id: item.model_dump(mode="json") for item in data["evidence"]
         }
@@ -578,7 +629,11 @@ def _build_candidate_workflow_v3(
         ):
             raise ValueError("invalid collected Evidence identity")
         data["initial_revision"] = data["eligibility"].evidence_revision
-        data["evidence_revision"] = data["initial_revision"]
+        data["evidence_revision"] = (
+            owned["state"]["evidence_revisions"][data["cid"]]
+            if binding
+            else data["initial_revision"]
+        )
         data["new_evidence_ids"]: set[str] = set()
         data["last_research_failed"] = False
         data["route"] = "coverage"
@@ -657,7 +712,7 @@ def _build_candidate_workflow_v3(
             timed("research_exhausted", data["cid"], lambda: None)
             data["route"] = "freeze"
             return
-        if stages.additional_research is None:
+        if stages.additional_research is None and binding is None:
             data["stop_reasons"][data["cid"]] = "callback_required"
             raise ResearchLoopFailure("RESEARCH_CALLBACK_REQUIRED")
         data["retry_counts"][data["cid"]] += 1
@@ -677,6 +732,39 @@ def _build_candidate_workflow_v3(
             - data["retry_counts"][data["cid"]],
             tuple(deepcopy(data["research_gaps"].get(data["cid"], ()))),
         )
+        if binding:
+            if not request.research_gaps:
+                raise ResearchLoopFailure("RESEARCH_RESPONSE_INVALID")
+            owned = data["research_artifacts"][data["cid"]]
+            owned["state"]["research_retry_count"][data["cid"]] = request.attempt
+            outcome = timed(
+                data["stage"],
+                data["cid"],
+                lambda: binding.research.run(
+                    Candidate.model_validate(
+                        data["candidate"], context={"execution_mode": "fixture"}
+                    ),
+                    request.research_gaps,
+                    binding.budget.model_copy(deep=True),
+                ),
+                list(data["collected"]),
+            )
+            changed = consume_outcome_v3(
+                owned, outcome, binding, data["cid"], initial=False
+            )
+            data["errors"] = retain_outcome_errors_v3(data["errors"], owned)
+            data["new_evidence_ids"].update(changed)
+            data["evidence_revision"] = owned["state"]["evidence_revisions"][
+                data["cid"]
+            ]
+            data["collected"] = active_evidence_v3(owned, binding, data["cid"])
+            data["new_evidence_ids"].intersection_update(data["collected"])
+            data["evidence"] = [
+                Evidence.model_validate(e, context={"execution_mode": "fixture"})
+                for e in data["collected"].values()
+            ]
+            data["route"] = "coverage"
+            return
         try:
             response = timed(
                 data["stage"],
@@ -743,6 +831,7 @@ def _build_candidate_workflow_v3(
         if (
             data["evidence_revision"] != data["initial_revision"]
             and stages.freeze_with_evidence is None
+            and binding is None
         ):
             raise ResearchLoopFailure("RESEARCH_FREEZE_REQUIRED")
         freeze_eligibility = data["eligibility"].model_copy(
@@ -750,6 +839,19 @@ def _build_candidate_workflow_v3(
         )
 
         def freeze_snapshot():
+            if binding:
+                owned = data["research_artifacts"][data["cid"]]
+                return snapshot_module.freeze_snapshot(
+                    data["cid"],
+                    owned["state"],
+                    binding.run_input,
+                    run_id=run_id,
+                    index_version=binding.index_version,
+                    schema_version=schema_version,
+                    allowed_source_ids=binding.allowed_source_ids,
+                    industry_evidence_ids=binding.industry_evidence_ids,
+                    clock=clock,
+                )
             payload = (
                 stages.freeze_with_evidence(
                     deepcopy(data["candidate"]),
@@ -1014,6 +1116,7 @@ def _build_candidate_workflow_v3(
             execution_mode=execution_mode,
             replay_scope=source_only.replay_scope if source_only else None,
             source_only_detail=deepcopy(data.get("source_only_detail", {})),
+            research_artifacts=deepcopy(data.get("research_artifacts", {})),
         )
         if data.get("discovery_failed"):
             data["result"] = replace(data["result"], status="discovery_failed")
@@ -1057,6 +1160,12 @@ def _build_candidate_workflow_v3(
                 else:
                     operation(data, timed, error, finish)
             except Exception as exc:
+                if isinstance(exc, ArtifactResearchFailure):
+                    data["errors"].extend(exc.errors)
+                    data["failures"] = list(exc.errors)
+                    data["terminal_status"] = "failed"
+                    data["route"] = "archive"
+                    return {"data": _encode(data)}
                 if name in ("discover", "normalize"):
                     failure = error("discovery_normalize", None)
                     data["errors"].append(failure)

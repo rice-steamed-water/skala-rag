@@ -6,7 +6,7 @@
 
 구현 확인 기준은 `5bebad436ec5fe032f23b0c5bf4b503bbc4a7a27`이다. #29/PR #118에서 병합된 [`skala_rag.cli.run`](../../src/skala_rag/cli.py)은 이미 존재하며 `pathlib.Path`(해당 실행의 산출물 디렉터리)를 반환한다. 아래 예시는 모듈 이름에 `cli`가 남아 있는 **기존 Python callable 재사용**이지 `main()`/argparse 실행이 아니다. 새 `app.py`/`run.py`나 `RunResult` 반환 API를 구현했다고 주장하지 않는다. `python -m skala_rag.cli`는 [기존 CLI 호환 경로](fixture-cli.md)다.
 
-이번 변경은 문서뿐이다. runner 추출/이동, runtime schema·정책 필드 변경, #96 live 통합, 평가 정책·provider 변경·유료 실행 승인·모델 다운로드는 포함하지 않는다. `pyproject.toml`과 `uv.lock`은 위 기준 tree에 추적되어 있으며 설치 절차는 그대로 유지한다.
+#166 당시 변경은 문서뿐이었다. 아래 #211의 fixture 연결은 별도 코드 변경이다. #166에는 runner 추출/이동, runtime schema·정책 필드 변경, #96 live 통합, 평가 정책·provider 변경·유료 실행 승인·모델 다운로드가 포함되지 않았다. `pyproject.toml`과 `uv.lock`은 위 기준 tree에 추적되어 있으며 설치 절차는 그대로 유지한다.
 
 ## 저장소 루트에서 실행하는 offline fixture
 
@@ -76,6 +76,10 @@ PY
 ## v3 source-only 직접 호출 (#209)
 
 [Source-only v3 계약](source-only-v3.md)은 기존 outer의 Discovery 캡처 재생, CompanyResearch, Eligibility, archive/advance, no-selection handoff를 별도로 연결한다. 기본 fixture callable은 바꾸지 않는다. 입력의 `execution_mode="live"`는 live DTO 검증 경계이며 실제 HTTP, 새 주제 Discovery, 기업 사실 확인, 평가/점수/보고서 발행 승인을 뜻하지 않는다. source-only는 `eligible`도 명시적 not-ready 실패로 보존하고 full scoring/live evaluation의 기존 승인 gate를 열지 않는다.
+
+## v3 EvidenceResearch artifact fixture 호출 (#211)
+
+[EvidenceResearch → snapshot v3 계약](evidence-snapshot-v3.md)은 기존 Python oracle와 public outer Graph에 선택적 `CandidateStagesV3.evidence_research` binding을 연결한다. CompanyResearch/Eligibility의 원래 근거와 전체 ResearchOutcome을 후보별 JSON State로 검증·보존한 뒤 기존 `freeze_snapshot`, fixture Technology callable, adapter, five-way join을 실행한다. binding이 없으면 기존 callback 경로를 유지한다. 이 연결은 fixture 검증이며 source-only eligible-not-ready, actual 평가/점수 승인 gate와 full-live 선행 조건은 바꾸지 않는다.
 
 ## 유지하는 검증·안전 gate
 

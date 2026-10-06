@@ -27,7 +27,19 @@ from skala_rag.contracts.v3 import (
     InvestmentDecision,
     ScoreSummary,
 )
+from skala_rag.graph import snapshot as snapshot_module
 from skala_rag.graph.evaluation_v3 import build_evaluation_graph_v3
+from skala_rag.graph.research_artifacts_v3 import (
+    ArtifactResearchFailure,
+    EvidenceResearchBindingV3,
+    active_evidence_v3,
+    consume_outcome_v3,
+    initialize_artifacts_v3,
+    retain_outcome_errors_v3,
+)
+from skala_rag.graph.research_artifacts_v3 import (
+    CompanyResearchArtifactsV3 as CompanyResearchArtifactsV3,
+)
 from skala_rag.scoring.aggregate_v3 import (
     ApplicabilityVerifier,
     ZeroDenominatorV3,
@@ -102,6 +114,7 @@ class CandidateStagesV3:
     gap_templates: (
         Callable[[dict, CoverageResult], Sequence[ResearchGap | dict]] | None
     ) = None
+    evidence_research: EvidenceResearchBindingV3 | None = None
 
 
 @dataclass(frozen=True)
@@ -129,6 +142,7 @@ class CandidateRunV3:
     execution_mode: str = "fixture"
     replay_scope: str | None = None
     source_only_detail: dict = field(default_factory=dict)
+    research_artifacts: dict[str, dict] = field(default_factory=dict)
 
 
 def run_candidates_v3(
@@ -188,6 +202,16 @@ def run_candidates_v3(
     stop_reasons: dict[str, str] = {}
     coverages: dict[str, CoverageResult] = {}
     research_gaps: dict[str, tuple[ResearchGap, ...]] = {}
+    research_artifacts: dict[str, dict] = {}
+    binding = (
+        stages.evidence_research.pin(
+            run_id=run_id,
+            schema_version=schema_version,
+            policy_version=policy.policy_version,
+        )
+        if stages.evidence_research
+        else None
+    )
 
     def timed(step, cid, operation: Callable[[], T], input_ids=()) -> T:
         started_at = datetime.now(timezone.utc).isoformat()
@@ -379,10 +403,29 @@ def run_candidates_v3(
                 advance(cid)
                 continue
             stage = "collect"
-            evidence = [
-                Evidence.model_validate(item, context={"execution_mode": "fixture"})
-                for item in stages.collect(deepcopy(candidate), deepcopy(research))
-            ]
+            if binding:
+                owned = initialize_artifacts_v3(
+                    research, eligibility, candidate, binding
+                )
+                research_artifacts[cid] = owned
+                outcome = binding.research.run(
+                    Candidate.model_validate(
+                        candidate, context={"execution_mode": "fixture"}
+                    ),
+                    (),
+                    binding.budget.model_copy(deep=True),
+                )
+                consume_outcome_v3(owned, outcome, binding, cid, initial=True)
+                errors = retain_outcome_errors_v3(errors, owned)
+                evidence = [
+                    Evidence.model_validate(e, context={"execution_mode": "fixture"})
+                    for e in active_evidence_v3(owned, binding, cid).values()
+                ]
+            else:
+                evidence = [
+                    Evidence.model_validate(item, context={"execution_mode": "fixture"})
+                    for item in stages.collect(deepcopy(candidate), deepcopy(research))
+                ]
             collected = {
                 item.evidence_id: item.model_dump(mode="json") for item in evidence
             }
@@ -396,7 +439,11 @@ def run_candidates_v3(
             ):
                 raise ValueError("invalid collected Evidence identity")
             initial_revision = eligibility.evidence_revision
-            evidence_revision = initial_revision
+            evidence_revision = (
+                owned["state"]["evidence_revisions"][cid]
+                if binding
+                else initial_revision
+            )
             new_evidence_ids: set[str] = set()
 
             def recompute_coverage():
@@ -469,7 +516,7 @@ def run_candidates_v3(
                     )
                     timed("research_exhausted", cid, lambda: None)
                     break
-                if stages.additional_research is None:
+                if stages.additional_research is None and binding is None:
                     stop_reasons[cid] = "callback_required"
                     raise ResearchLoopFailure("RESEARCH_CALLBACK_REQUIRED")
                 retry_counts[cid] += 1
@@ -486,6 +533,39 @@ def run_candidates_v3(
                     tuple(deepcopy(research_gaps.get(cid, ()))),
                 )
                 stage = "additional_research"
+                if binding:
+                    if not request.research_gaps:
+                        raise ResearchLoopFailure("RESEARCH_RESPONSE_INVALID")
+                    owned["state"]["research_retry_count"][cid] = retry_counts[cid]
+                    outcome = timed(
+                        stage,
+                        cid,
+                        lambda: binding.research.run(
+                            Candidate.model_validate(
+                                candidate, context={"execution_mode": "fixture"}
+                            ),
+                            request.research_gaps,
+                            binding.budget.model_copy(deep=True),
+                        ),
+                        list(collected),
+                    )
+                    changed = consume_outcome_v3(
+                        owned, outcome, binding, cid, initial=False
+                    )
+                    errors = retain_outcome_errors_v3(errors, owned)
+                    new_evidence_ids.update(changed)
+                    evidence_revision = owned["state"]["evidence_revisions"][cid]
+                    collected = active_evidence_v3(owned, binding, cid)
+                    new_evidence_ids.intersection_update(collected)
+                    evidence = [
+                        Evidence.model_validate(
+                            e, context={"execution_mode": "fixture"}
+                        )
+                        for e in collected.values()
+                    ]
+                    stage = "coverage"
+                    coverage = recompute_coverage()
+                    continue
                 try:
                     response = timed(
                         stage,
@@ -550,6 +630,7 @@ def run_candidates_v3(
             if (
                 evidence_revision != initial_revision
                 and stages.freeze_with_evidence is None
+                and binding is None
             ):
                 raise ResearchLoopFailure("RESEARCH_FREEZE_REQUIRED")
             freeze_eligibility = eligibility.model_copy(
@@ -557,6 +638,18 @@ def run_candidates_v3(
             )
 
             def freeze_snapshot():
+                if binding:
+                    return snapshot_module.freeze_snapshot(
+                        cid,
+                        owned["state"],
+                        binding.run_input,
+                        run_id=run_id,
+                        index_version=binding.index_version,
+                        schema_version=schema_version,
+                        allowed_source_ids=binding.allowed_source_ids,
+                        industry_evidence_ids=binding.industry_evidence_ids,
+                        clock=clock,
+                    )
                 payload = (
                     stages.freeze_with_evidence(
                         deepcopy(candidate),
@@ -673,6 +766,9 @@ def run_candidates_v3(
                 eligibility,
                 decision,
             )
+        except ArtifactResearchFailure as exc:
+            errors.extend(exc.errors)
+            finish("failed", cid, failures=exc.errors)
         except (ZeroDenominatorV3, NoApplicableCriteria) as exc:
             dimension = getattr(exc, "dimension", None) or "total"
             failure = error(
@@ -751,6 +847,7 @@ def run_candidates_v3(
         coverage_results=coverages,
         research_gaps=research_gaps,
         selection_receipt=selection_receipt,
+        research_artifacts=deepcopy(research_artifacts),
     )
 
 
