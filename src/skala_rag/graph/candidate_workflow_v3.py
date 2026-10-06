@@ -12,7 +12,7 @@ from copy import deepcopy
 from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from time import perf_counter
-from typing import Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from pydantic import TypeAdapter
@@ -24,6 +24,7 @@ from skala_rag.contracts.errors import WorkflowError
 from skala_rag.contracts.evaluation import EvaluationSnapshot
 from skala_rag.contracts.evidence import Evidence
 from skala_rag.contracts.ids import evaluation_key
+from skala_rag.contracts.inputs import RunInput
 from skala_rag.contracts.reports import CandidateOutcome
 from skala_rag.contracts.v3 import (
     CoverageResult,
@@ -67,6 +68,10 @@ from skala_rag.scoring.decision_v3 import decide_v3
 from skala_rag.scoring.selector_v3 import SelectionResultV3, select_best_v3
 from skala_rag.scoring.v3_policy import V3Policy
 from skala_rag.source_only_v3 import SourceOnlyV3, select_source_only_terminal_v3
+
+if TYPE_CHECKING:
+    from skala_rag.reporting.v3_context import ReportContextV3
+    from skala_rag.reporting.v3_pipeline import ReportRunV3
 
 
 class CandidateWorkflowStateV3(TypedDict, total=False):
@@ -1314,3 +1319,65 @@ def run_candidate_workflow_v3(
     if result is None:
         raise RuntimeError("outer graph did not reach terminal selector")
     return result
+
+
+def run_candidate_report_v3(
+    stages: CandidateStagesV3 | None,
+    evaluators: Mapping[str, Callable],
+    *,
+    run_input: RunInput,
+    generate: Callable,
+    judge: Callable,
+    check_pdf: Callable | None = None,
+    graph_events: list | None = None,
+    run_profile: run_settings.RunProfile | None = None,
+    **options,
+) -> tuple[CandidateRunV3, "ReportContextV3", "ReportRunV3"]:
+    """Original public outer once -> original scored State -> existing report.
+
+    Explicit callbacks retain their own runtime/approval responsibilities. No
+    default models, persistence, new revision loop or final publication is added.
+    Input errors propagate; report technical failures retain ReportRunV3 semantics.
+    """
+    run = RunInput.model_validate(run_input)
+    if run.execution_mode != "fixture" or options.get("source_only") is not None:
+        raise ValueError("report composite requires fixture mode without source-only")
+
+    # Lazy imports avoid context -> CandidateRunV3 module dependencies at startup.
+    from skala_rag.reporting.v3_context import build_report_context_from_run_v3
+    from skala_rag.reporting.v3_pipeline import run_report_v3
+
+    run = run.model_copy(deep=True)
+    pinned: dict[str, Any] = {
+        key: value if callable(value) or key == "trace_events" else deepcopy(value)
+        for key, value in options.items()
+    }
+    if (run.schema_version, run.policy_version) != (
+        pinned["schema_version"],
+        pinned["policy"].policy_version,
+    ):
+        raise ValueError("explicit run/controller identity mismatch")
+    if stages is not None and stages.evidence_research is not None:
+        binding = stages.evidence_research
+        if run.model_dump(mode="json") != binding.run_input.model_dump(mode="json"):
+            raise ValueError("explicit run/research binding mismatch")
+        stages = replace(
+            stages,
+            evidence_research=replace(
+                binding,
+                run_input=run.model_copy(deep=True),
+                budget=binding.budget.model_copy(deep=True),
+            ),
+        )
+    result = run_candidate_workflow_v3(
+        stages,
+        dict(evaluators),
+        graph_events=graph_events,
+        run_profile=deepcopy(run_profile),
+        **pinned,
+    )
+    context = build_report_context_from_run_v3(
+        result, run_input=run, run_id=pinned["run_id"]
+    )
+    report = run_report_v3(context, generate=generate, judge=judge, check_pdf=check_pdf)
+    return result, context, report
