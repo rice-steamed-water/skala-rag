@@ -11,6 +11,7 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import asdict, replace
 from datetime import datetime, timezone
+from pathlib import Path
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, TypedDict
 
@@ -57,6 +58,13 @@ from skala_rag.scoring.aggregate_v3 import (
     ZeroDenominatorV3,
     aggregate_scores_v3,
 )
+from skala_rag.scoring.approved_consumers import (
+    ApprovedPolicySource,
+    aggregate_scores_approved,
+    decide_approved,
+    select_best_approved,
+)
+from skala_rag.scoring.approved_policy import PolicyApprovals, load_approved_policy
 from skala_rag.scoring.catalog import ScoringPolicy
 from skala_rag.scoring.coverage_v3 import (
     ApplicabilityCheck,
@@ -154,6 +162,32 @@ def _decode(payload):
     return data
 
 
+def _pin_approved_policy_source(source, *, source_only):
+    """Detach configuration only; retain the trusted verifier's current state."""
+    if not isinstance(source, ApprovedPolicySource):
+        raise ValueError("loader-backed ApprovedPolicySource required")
+    if source_only is not None:
+        raise ValueError("source-only cannot carry approved scoring source")
+    if source.execution_mode != "fixture":
+        raise ValueError("actual approved registry/runtime unavailable; live denied")
+    if source.live_gates is not None or source.live_gate_verifier is not None:
+        raise ValueError("fixture must not carry live admission inputs")
+    if (
+        not isinstance(source.path, (str, Path))
+        or not isinstance(source.approvals, PolicyApprovals)
+        or not callable(source.approval_verifier)
+    ):
+        raise ValueError(
+            "explicit policy path, approvals and trusted verifier required"
+        )
+    return replace(
+        source,
+        approvals=PolicyApprovals.model_validate(
+            source.approvals.model_dump(warnings="error")
+        ),
+    )
+
+
 def build_candidate_workflow_v3(
     stages: CandidateStagesV3 | None,
     evaluators: Mapping[str, Callable],
@@ -172,6 +206,7 @@ def build_candidate_workflow_v3(
     trace_events: list[dict] | None = None,
     run_profile: run_settings.RunProfile | None = None,
     source_only: SourceOnlyV3 | None = None,
+    approved_policy_source: ApprovedPolicySource | None = None,
 ) -> StateGraph:
     """Build the existing outer graph; source-only needs an explicit boundary."""
     return _build_candidate_workflow_v3(
@@ -191,6 +226,7 @@ def build_candidate_workflow_v3(
         trace_events=trace_events,
         run_profile=run_profile,
         source_only=source_only,
+        approved_policy_source=approved_policy_source,
         _entrypoint="discover",
     )
 
@@ -213,12 +249,44 @@ def _build_candidate_workflow_v3(
     trace_events: list[dict] | None = None,
     run_profile: run_settings.RunProfile | None = None,
     source_only: SourceOnlyV3 | None = None,
+    approved_policy_source: ApprovedPolicySource | None = None,
     _entrypoint: str,
 ) -> StateGraph:
     if _entrypoint not in ("discover", "candidate_iterator", "selector"):
         raise ValueError("invalid internal outer graph entrypoint")
     if not isinstance(policy, V3Policy) or policy.execution_mode != "fixture":
         raise ValueError("fixture V3Policy required")
+    if approved_policy_source is not None:
+        approved_policy_source = _pin_approved_policy_source(
+            approved_policy_source, source_only=source_only
+        )
+        policy = V3Policy.model_validate(policy.model_dump(warnings="error"))
+        expected_policy = policy.model_dump(warnings="error")
+        trusted_verifier = approved_policy_source.approval_verifier
+
+        def verify_policy(evidence, operational):
+            # Consumers still load independently. Check the WHOLE fresh policy
+            # around each trusted callback, before any numeric core can use it.
+            if operational.model_dump(warnings="error") != expected_policy:
+                raise ValueError(
+                    "approved source differs from whole operational policy"
+                )
+            accepted = trusted_verifier(evidence, operational)
+            if operational.model_dump(warnings="error") != expected_policy:
+                raise ValueError(
+                    "approved source differs from whole operational policy"
+                )
+            return accepted
+
+        approved_policy_source = replace(
+            approved_policy_source, approval_verifier=verify_policy
+        )
+        load_approved_policy(
+            approved_policy_source.path,
+            approvals=approved_policy_source.approvals,
+            approval_verifier=approved_policy_source.approval_verifier,
+            execution_mode="fixture",
+        )
     if not run_id.strip() or not schema_version.strip():
         raise ValueError("run/schema required")
     if run_profile is not None:
@@ -976,11 +1044,20 @@ def _build_candidate_workflow_v3(
         data["summary"] = timed(
             "score",
             data["cid"],
-            lambda: aggregate_scores_v3(
-                data["dims"],
-                policy,
-                applicability_verifier=applicability_verifier,
-                snapshot=data["snapshot"],
+            lambda: (
+                aggregate_scores_approved(
+                    data["dims"],
+                    approved_policy_source,
+                    applicability_verifier=applicability_verifier,
+                    snapshot=data["snapshot"],
+                )
+                if approved_policy_source is not None
+                else aggregate_scores_v3(
+                    data["dims"],
+                    policy,
+                    applicability_verifier=applicability_verifier,
+                    snapshot=data["snapshot"],
+                )
             ),
             [data["snapshot"].snapshot_id],
         )
@@ -990,7 +1067,11 @@ def _build_candidate_workflow_v3(
         data["decision"] = timed(
             "decision",
             data["cid"],
-            lambda: decide_v3(data["summary"], policy),
+            lambda: (
+                decide_approved(data["summary"], approved_policy_source)
+                if approved_policy_source is not None
+                else decide_v3(data["summary"], policy)
+            ),
             [data["summary"].score_summary_id],
         )
         data["scores"][data["cid"]] = data["summary"]
@@ -1058,8 +1139,17 @@ def _build_candidate_workflow_v3(
         selection = timed(
             "selector",
             None,
-            lambda: (select_source_only_terminal_v3 if source_only else select_best_v3)(
-                rows, policy, run_id=run_id, schema_version=schema_version
+            lambda: (
+                select_best_approved(
+                    rows,
+                    approved_policy_source,
+                    run_id=run_id,
+                    schema_version=schema_version,
+                )
+                if approved_policy_source is not None
+                else (
+                    select_source_only_terminal_v3 if source_only else select_best_v3
+                )(rows, policy, run_id=run_id, schema_version=schema_version)
             ),
             [item.score_summary_id for item in data["scores"].values()],
         )
@@ -1273,6 +1363,17 @@ def run_candidate_workflow_v3(
     research contexts never enter checkpoint serialization. This is an in-process
     handoff, not persistent resume. Events are unmodified LangGraph stream tuples.
     """
+    if options.get("approved_policy_source") is not None:
+        options = {
+            **options,
+            "approved_policy_source": _pin_approved_policy_source(
+                options["approved_policy_source"],
+                source_only=options.get("source_only"),
+            ),
+            "policy": V3Policy.model_validate(
+                options["policy"].model_dump(warnings="error")
+            ),
+        }
     graph = build_candidate_workflow_v3(
         stages, evaluators, run_profile=run_profile, **options
     ).compile(checkpointer=False)
@@ -1362,7 +1463,9 @@ def run_candidate_report_v3(
 
     run = run.model_copy(deep=True)
     pinned: dict[str, Any] = {
-        key: value if callable(value) or key == "trace_events" else deepcopy(value)
+        key: value
+        if callable(value) or key in ("trace_events", "approved_policy_source")
+        else deepcopy(value)
         for key, value in options.items()
     }
     if (run.schema_version, run.policy_version) != (
