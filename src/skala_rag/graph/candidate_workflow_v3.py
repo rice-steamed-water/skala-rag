@@ -1,7 +1,8 @@
 """Fixture-only outer LangGraph, with node-local detached state.
 
-No discovery policy, live admission, model, provider, or checkpoint persistence is
-introduced. The Python controller remains the independent compatibility oracle.
+An explicit profile consumes the existing pre-research selection API. No live
+admission, model, provider, or checkpoint persistence is introduced. The Python
+controller remains the independent compatibility oracle.
 """
 
 from collections.abc import Callable, Collection, Mapping, Sequence
@@ -13,6 +14,7 @@ from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
+from skala_rag import run_settings
 from skala_rag.contracts.candidates import Candidate, EligibilityResult
 from skala_rag.contracts.coverage import ResearchGap
 from skala_rag.contracts.errors import WorkflowError
@@ -138,6 +140,7 @@ def build_candidate_workflow_v3(
     industry_evidence_dimensions: Collection[str],
     clock: Callable[[], datetime],
     trace_events: list[dict] | None = None,
+    run_profile: run_settings.RunProfile | None = None,
 ) -> StateGraph:
     """Build the complete fixture graph, starting at discovery with no persistence."""
     return _build_candidate_workflow_v3(
@@ -155,6 +158,7 @@ def build_candidate_workflow_v3(
         industry_evidence_dimensions=industry_evidence_dimensions,
         clock=clock,
         trace_events=trace_events,
+        run_profile=run_profile,
         _entrypoint="discover",
     )
 
@@ -175,6 +179,7 @@ def _build_candidate_workflow_v3(
     industry_evidence_dimensions: Collection[str],
     clock: Callable[[], datetime],
     trace_events: list[dict] | None = None,
+    run_profile: run_settings.RunProfile | None = None,
     _entrypoint: str,
 ) -> StateGraph:
     if _entrypoint not in ("discover", "candidate_iterator", "selector"):
@@ -183,6 +188,11 @@ def _build_candidate_workflow_v3(
         raise ValueError("fixture V3Policy required")
     if not run_id.strip() or not schema_version.strip():
         raise ValueError("run/schema required")
+    if run_profile is not None:
+        run_settings._validate_profile(run_profile)
+        if run_profile.run_id != run_id:
+            raise ValueError("profile/controller run_id mismatch")
+        run_profile = deepcopy(run_profile)
     if (
         catalog.policy_version != catalog_policy_version
         or {c.criterion_id: (c.dimension, c.weight) for c in catalog.criteria}
@@ -321,6 +331,7 @@ def _build_candidate_workflow_v3(
             index=0,
             stage="discovery_normalize",
             route="normalize",
+            selection_receipt=None,
         )
         data["discovered"] = [
             Candidate.model_validate(
@@ -330,11 +341,24 @@ def _build_candidate_workflow_v3(
         ]
 
     def normalize(data, timed, error, finish):
+        if run_profile is not None:
+            selected = run_settings.normalize_and_select(
+                [
+                    Candidate.model_validate(c, context={"execution_mode": "fixture"})
+                    for c in data["discovered"]
+                ],
+                profile=run_profile,
+                execution_mode="fixture",
+            )
+            data["selection_receipt"] = selected.receipt
+            normalized = selected.candidates
+        else:
+            normalized = stages.normalize(deepcopy(data["discovered"]))
         data["candidates"] = [
             Candidate.model_validate(
                 c, context={"execution_mode": "fixture"}
             ).model_dump(mode="json")
-            for c in stages.normalize(deepcopy(data["discovered"]))
+            for c in normalized
         ]
         if len({c["candidate_id"] for c in data["candidates"]}) != len(
             data["candidates"]
@@ -801,6 +825,7 @@ def _build_candidate_workflow_v3(
             research_stop_reasons=data["stop_reasons"],
             coverage_results=data["coverages"],
             research_gaps=data["research_gaps"],
+            selection_receipt=data.get("selection_receipt"),
         )
         if data.get("discovery_failed"):
             data["result"] = replace(data["result"], status="discovery_failed")
@@ -912,6 +937,7 @@ def run_candidate_workflow_v3(
     evaluators: Mapping[str, Callable],
     *,
     graph_events: list | None = None,
+    run_profile: run_settings.RunProfile | None = None,
     **options,
 ) -> CandidateRunV3:
     """Execute the real outer flow with its exact normalized-population bound.
@@ -922,9 +948,11 @@ def run_candidate_workflow_v3(
     research contexts never enter checkpoint serialization. This is an in-process
     handoff, not persistent resume. Events are unmodified LangGraph stream tuples.
     """
-    graph = build_candidate_workflow_v3(stages, evaluators, **options).compile(
-        checkpointer=False
-    )
+    graph = build_candidate_workflow_v3(
+        stages, evaluators, run_profile=run_profile, **options
+    ).compile(checkpointer=False)
+    # Pin the validated binding before any callback can mutate caller-owned data.
+    run_profile = deepcopy(run_profile)
     config = {"recursion_limit": 8}
     result = None
     state = None
@@ -949,7 +977,7 @@ def run_candidate_workflow_v3(
                     result = updates["selector"]["result"]
 
     # Discovery/normalization failure must also stop before selector: this keeps
-    # the handoff limited to the initial DTO/JSON population, never research.
+    # the handoff limited to the selected population/receipt, never research.
     consume(graph, {}, interrupt_after=["normalize"], interrupt_before=["selector"])
     if state is None or state["data"]["route"] not in (
         "candidate_iterator",
@@ -960,7 +988,11 @@ def run_candidate_workflow_v3(
         len(state["data"]["candidates"]), options["policy"]
     )
     continuation = _build_candidate_workflow_v3(
-        stages, evaluators, _entrypoint=state["data"]["route"], **options
+        stages,
+        evaluators,
+        run_profile=run_profile,
+        _entrypoint=state["data"]["route"],
+        **options,
     ).compile(checkpointer=False)
     consume(continuation, deepcopy(state))
     if result is None:
