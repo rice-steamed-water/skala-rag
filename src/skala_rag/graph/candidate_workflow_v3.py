@@ -5,9 +5,11 @@ admission, model, provider, or checkpoint persistence is introduced. The Python
 controller remains the independent compatibility oracle.
 """
 
+import hashlib
+import json
 from collections.abc import Callable, Collection, Mapping, Sequence
 from copy import deepcopy
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from time import perf_counter
 from typing import Any, TypedDict
@@ -54,6 +56,7 @@ from skala_rag.scoring.coverage_v3 import (
 from skala_rag.scoring.decision_v3 import decide_v3
 from skala_rag.scoring.selector_v3 import SelectionResultV3, select_best_v3
 from skala_rag.scoring.v3_policy import V3Policy
+from skala_rag.source_only_v3 import SourceOnlyV3, select_source_only_terminal_v3
 
 
 class CandidateWorkflowStateV3(TypedDict, total=False):
@@ -125,7 +128,7 @@ def _decode(payload):
 
 
 def build_candidate_workflow_v3(
-    stages: CandidateStagesV3,
+    stages: CandidateStagesV3 | None,
     evaluators: Mapping[str, Callable],
     *,
     policy: V3Policy,
@@ -141,8 +144,9 @@ def build_candidate_workflow_v3(
     clock: Callable[[], datetime],
     trace_events: list[dict] | None = None,
     run_profile: run_settings.RunProfile | None = None,
+    source_only: SourceOnlyV3 | None = None,
 ) -> StateGraph:
-    """Build the complete fixture graph, starting at discovery with no persistence."""
+    """Build the existing outer graph; source-only needs an explicit boundary."""
     return _build_candidate_workflow_v3(
         stages,
         evaluators,
@@ -159,12 +163,13 @@ def build_candidate_workflow_v3(
         clock=clock,
         trace_events=trace_events,
         run_profile=run_profile,
+        source_only=source_only,
         _entrypoint="discover",
     )
 
 
 def _build_candidate_workflow_v3(
-    stages: CandidateStagesV3,
+    stages: CandidateStagesV3 | None,
     evaluators: Mapping[str, Callable],
     *,
     policy: V3Policy,
@@ -180,6 +185,7 @@ def _build_candidate_workflow_v3(
     clock: Callable[[], datetime],
     trace_events: list[dict] | None = None,
     run_profile: run_settings.RunProfile | None = None,
+    source_only: SourceOnlyV3 | None = None,
     _entrypoint: str,
 ) -> StateGraph:
     if _entrypoint not in ("discover", "candidate_iterator", "selector"):
@@ -193,6 +199,25 @@ def _build_candidate_workflow_v3(
         if run_profile.run_id != run_id:
             raise ValueError("profile/controller run_id mismatch")
         run_profile = deepcopy(run_profile)
+    if source_only is not None:
+        if type(source_only) is not SourceOnlyV3 or stages is not None or evaluators:
+            raise ValueError(
+                "explicit source-only boundary requires no fixture stages/evaluators"
+            )
+        source_only = replace(
+            source_only, run_profile=deepcopy(source_only.run_profile)
+        )
+        source_only.validate(
+            policy=policy,
+            run_id=run_id,
+            schema_version=schema_version,
+            run_profile=run_profile,
+        )
+    elif stages is None:
+        raise ValueError("fixture stages required")
+    execution_mode = "live" if source_only else "fixture"
+    research_tool = None
+    research_tool_configuration_failed = False
     if (
         catalog.policy_version != catalog_policy_version
         or {c.criterion_id: (c.dimension, c.weight) for c in catalog.criteria}
@@ -201,16 +226,20 @@ def _build_candidate_workflow_v3(
         != {w.dimension: w.weight for w in policy.dimension_weights}
     ):
         raise ValueError("coverage catalog differs from v3 approved catalog")
-    graph = build_evaluation_graph_v3(
-        evaluators,
-        criteria=policy.criteria,
-        policy_version=policy.policy_version,
-        run_id=run_id,
-        schema_version=schema_version,
-        industry_evidence_dimensions=industry_evidence_dimensions,
-        applicability_validator=applicability_verifier,
-        clock=clock,
-    ).compile()
+    graph = (
+        None
+        if source_only
+        else build_evaluation_graph_v3(
+            evaluators,
+            criteria=policy.criteria,
+            policy_version=policy.policy_version,
+            run_id=run_id,
+            schema_version=schema_version,
+            industry_evidence_dimensions=industry_evidence_dimensions,
+            applicability_validator=applicability_verifier,
+            clock=clock,
+        ).compile()
+    )
 
     def helpers(data):
         def timed(step, cid, operation: Callable, input_ids=()):
@@ -252,7 +281,7 @@ def _build_candidate_workflow_v3(
                             input_ids=list(input_ids),
                             output_ids=output_ids,
                             status=status,
-                            execution_mode="fixture",
+                            execution_mode=execution_mode,
                             research_retry_count=data["retry_counts"].get(cid, 0),
                             research_stop_reason=data["stop_reasons"].get(cid),
                             controller="langgraph",
@@ -333,6 +362,40 @@ def _build_candidate_workflow_v3(
             route="normalize",
             selection_receipt=None,
         )
+        if source_only is not None:
+            outcome = source_only.accept_discovery()
+            data["source_only_detail"] = dict(
+                run_input=source_only.run_input.model_dump(mode="json"),
+                budget=source_only.budget.model_dump(mode="json"),
+                budget_scope="per_candidate",
+                replay_budget_scope="no_new_network_not_charged_to_fresh_fetch_deadline",
+                profile=asdict(source_only.run_profile),
+                input_binding_sha256=source_only.input_binding_sha256,
+                discovery=dict(
+                    result=source_only.discovery_result.model_dump(mode="json"),
+                    status=outcome.status,
+                ),
+                research={},
+                capture_replay_inputs=json.loads(source_only.research_replays_json),
+                usage=dict(
+                    provider_company_research_calls=0,
+                    captured_replays=0,
+                    provider_configuration_attempts=0,
+                    physical_http_requests="unmeasured",
+                    per_candidate={},
+                ),
+            )
+            data["discovered"] = (
+                [c.model_dump(mode="json") for c in outcome.bundle.candidates]
+                if outcome.bundle
+                else []
+            )
+            data["errors"].extend(outcome.errors)
+            if outcome.status == "failed":
+                data["candidates"] = []
+                data["discovery_failed"] = True
+                data["route"] = "selector"
+            return
         data["discovered"] = [
             Candidate.model_validate(
                 c, context={"execution_mode": "fixture"}
@@ -344,11 +407,13 @@ def _build_candidate_workflow_v3(
         if run_profile is not None:
             selected = run_settings.normalize_and_select(
                 [
-                    Candidate.model_validate(c, context={"execution_mode": "fixture"})
+                    Candidate.model_validate(
+                        c, context={"execution_mode": execution_mode}
+                    )
                     for c in data["discovered"]
                 ],
                 profile=run_profile,
-                execution_mode="fixture",
+                execution_mode=execution_mode,
             )
             data["selection_receipt"] = selected.receipt
             normalized = selected.candidates
@@ -356,7 +421,7 @@ def _build_candidate_workflow_v3(
             normalized = stages.normalize(deepcopy(data["discovered"]))
         data["candidates"] = [
             Candidate.model_validate(
-                c, context={"execution_mode": "fixture"}
+                c, context={"execution_mode": execution_mode}
             ).model_dump(mode="json")
             for c in normalized
         ]
@@ -394,15 +459,73 @@ def _build_candidate_workflow_v3(
         data["route"] = "research"
 
     def research(data, timed, error, finish):
+        nonlocal research_tool, research_tool_configuration_failed
         data["stage"] = "research"
+        if source_only is not None:
+            usage = data["source_only_detail"]["usage"]
+            candidate_usage = dict(
+                provider_company_research_calls=0, captured_replays=0
+            )
+            usage["per_candidate"][data["cid"]] = candidate_usage
+            if source_only.has_replay(data["cid"]):
+                usage["captured_replays"] += 1
+                candidate_usage["captured_replays"] += 1
+            elif research_tool is None:
+                if research_tool_configuration_failed:
+                    raise ValueError("source-only provider configuration failed")
+
+                def record_configuration_attempt():
+                    usage["provider_configuration_attempts"] += 1
+
+                try:
+                    research_tool = source_only.make_tool(
+                        on_configuration_attempt=record_configuration_attempt
+                    )
+                except Exception:
+                    # Cache only the failure, never an exception/client in State.
+                    research_tool_configuration_failed = True
+                    raise ValueError(
+                        "source-only provider configuration failed"
+                    ) from None
+
+            def record_provider_call():
+                usage["provider_company_research_calls"] += 1
+                candidate_usage["provider_company_research_calls"] += 1
+
+            detail = source_only.research(
+                deepcopy(data["candidate"]),
+                research_tool,
+                on_provider_call=record_provider_call,
+            )
+            data["source_only_detail"]["research"][data["cid"]] = deepcopy(detail)
+            data["research"] = detail
+            data["route"] = "eligibility"
+            return
         data["research"] = stages.research(deepcopy(data["candidate"]))
         data["route"] = "eligibility"
 
     def eligibility_node(data, timed, error, finish):
         data["stage"] = "eligibility"
-        data["eligibility"] = EligibilityResult.model_validate(
-            stages.eligibility(deepcopy(data["candidate"]), deepcopy(data["research"]))
-        )
+        if source_only is not None:
+            state = data["research"]["state"]
+            if state.get("run_outcome") == "technical_failure":
+                failures = [WorkflowError.model_validate(e) for e in state["errors"]]
+                if not failures:
+                    raise ValueError("source-only technical failure omitted errors")
+                data["errors"].extend(failures)
+                data["failures"] = failures
+                data["terminal_status"] = "failed"
+                data["route"] = "archive"
+                return
+            data["eligibility"] = EligibilityResult.model_validate(
+                state["eligibility_results"][data["cid"]]
+            )
+        else:
+            data["eligibility"] = EligibilityResult.model_validate(
+                stages.eligibility(
+                    deepcopy(data["candidate"]), deepcopy(data["research"])
+                )
+            )
         if (
             data["eligibility"].run_id != run_id
             or data["eligibility"].schema_version != schema_version
@@ -416,6 +539,17 @@ def _build_candidate_workflow_v3(
                 if data["eligibility"].status == "ineligible"
                 else "eligibility_unknown"
             )
+            data["route"] = "archive"
+        elif source_only is not None:
+            failure = error(
+                "source_only_evaluation",
+                data["cid"],
+                "Source-only evaluation is not ready or authorized",
+                error_code="SOURCE_ONLY_EVALUATION_NOT_READY",
+            )
+            data["errors"].append(failure)
+            data["failures"] = [failure]
+            data["terminal_status"] = "failed"
             data["route"] = "archive"
         else:
             data["route"] = "collect"
@@ -773,7 +907,18 @@ def _build_candidate_workflow_v3(
             rows.append(
                 dict(
                     candidate_id=data["cid"],
-                    eligibility_status="eligible" if data["summary"] else "unknown",
+                    eligibility_status=(
+                        data["source_only_detail"]["research"]
+                        .get(data["cid"], {})
+                        .get("state", {})
+                        .get("eligibility_results", {})
+                        .get(data["cid"], {})
+                        .get("status", "unknown")
+                        if source_only
+                        else "eligible"
+                        if data["summary"]
+                        else "unknown"
+                    ),
                     status="evaluated"
                     if data["summary"]
                     else data["outcomes"][data["cid"]].status,
@@ -795,11 +940,13 @@ def _build_candidate_workflow_v3(
         selection = timed(
             "selector",
             None,
-            lambda: select_best_v3(
+            lambda: (select_source_only_terminal_v3 if source_only else select_best_v3)(
                 rows, policy, run_id=run_id, schema_version=schema_version
             ),
             [item.score_summary_id for item in data["scores"].values()],
         )
+        if source_only and data.get("discovery_failed"):
+            selection = replace(selection, reason="SOURCE_ONLY_DISCOVERY_FAILED")
         if not data["candidates"]:
             status = "no_candidates"
         elif data["scores"]:
@@ -810,6 +957,44 @@ def _build_candidate_workflow_v3(
             status = "eligible_failed_no_success"
         else:
             status = "no_eligible_candidates"
+        if source_only and any(
+            outcome.status == "failed" for outcome in data["outcomes"].values()
+        ):
+            status = (
+                "source_only_technical_failure"
+                if all(
+                    outcome.status == "failed" for outcome in data["outcomes"].values()
+                )
+                else "source_only_partial_failure"
+            )
+        if source_only is not None:
+            inputs = data["source_only_detail"]["capture_replay_inputs"]
+            provided = set(inputs)
+            attempted = {
+                cid
+                for cid, usage in data["source_only_detail"]["usage"][
+                    "per_candidate"
+                ].items()
+                if usage["captured_replays"]
+            }
+            receipt = data.get("selection_receipt")
+            data["source_only_detail"]["capture_replay"] = dict(
+                provided_ids=sorted(provided),
+                attempted_ids=sorted(attempted),
+                unused_ids=sorted(provided - attempted),
+                excluded_ids=sorted(provided & set(receipt.excluded_ids))
+                if receipt
+                else [],
+                dedup_merged_ids=sorted(
+                    provided & {merge.merged_candidate_id for merge in receipt.merges}
+                )
+                if receipt
+                else [],
+                input_sha256=hashlib.sha256(
+                    source_only.research_replays_json.encode()
+                ).hexdigest(),
+                attribution_limits="declared_identity_checked_opaque_metadata_not_identity_proof",
+            )
         data["result"] = CandidateRunV3(
             schema_version,
             run_id,
@@ -826,6 +1011,9 @@ def _build_candidate_workflow_v3(
             coverage_results=data["coverages"],
             research_gaps=data["research_gaps"],
             selection_receipt=data.get("selection_receipt"),
+            execution_mode=execution_mode,
+            replay_scope=source_only.replay_scope if source_only else None,
+            source_only_detail=deepcopy(data.get("source_only_detail", {})),
         )
         if data.get("discovery_failed"):
             data["result"] = replace(data["result"], status="discovery_failed")
@@ -855,7 +1043,19 @@ def _build_candidate_workflow_v3(
             data = _decode(state.get("data", {}))
             timed, error, finish = helpers(data)
             try:
-                operation(data, timed, error, finish)
+                if source_only is not None and name in (
+                    "discover",
+                    "normalize",
+                    "research",
+                    "eligibility",
+                ):
+                    timed(
+                        name,
+                        data.get("cid"),
+                        lambda: operation(data, timed, error, finish),
+                    )
+                else:
+                    operation(data, timed, error, finish)
             except Exception as exc:
                 if name in ("discover", "normalize"):
                     failure = error("discovery_normalize", None)
@@ -933,7 +1133,7 @@ def _build_candidate_workflow_v3(
 
 
 def run_candidate_workflow_v3(
-    stages: CandidateStagesV3,
+    stages: CandidateStagesV3 | None,
     evaluators: Mapping[str, Callable],
     *,
     graph_events: list | None = None,
@@ -984,6 +1184,13 @@ def run_candidate_workflow_v3(
         "selector",
     ):
         raise RuntimeError("outer graph did not reach normalized handoff")
+    source_only = options.get("source_only")
+    if source_only is not None and any(
+        not source_only.has_replay(c["candidate_id"])
+        for c in state["data"]["candidates"]
+    ):
+        # Selection is already pinned. Old captures do not spend a fresh deadline.
+        source_only.validate_fresh_admission()
     config["recursion_limit"] = candidate_recursion_limit_v3(
         len(state["data"]["candidates"]), options["policy"]
     )
