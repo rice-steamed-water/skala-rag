@@ -1388,7 +1388,15 @@ flowchart TB
                     <strong>REFERENCE</strong>로 구성한다.
                 </p>
 
-                <h3>E-1. 보고서 목차(초안)</h3>
+                <h3>E-1. 보고서 목차(본문 5절 + REFERENCE, #223 승인)</h3>
+                <p class="small">
+                    2026-10-07 사용자 승인
+                    <a href="https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-6029117687">#35 comment 6029117687</a>과
+                    <a href="https://github.com/rice-steamed-water/skala-rag/issues/223">#223</a>에 따른 현재 목차다.
+                    기술과 시장의 원본 역할 내용·인용을 각 절에 보존하며 통합 본문을 복제하지 않는다.
+                    기존 보고서 경로와 Python 직접 실행을 재사용한다. baseline 7절과 과거 통합 목차는 승인 이력으로 보존한다.
+                    비용·모델·정책·적격성·최종 발행 guard는 바꾸지 않으며 합성 데모는 full actual-v3 완료 증거가 아니다.
+                </p>
                 <table>
                     <thead>
                         <tr>
@@ -1418,32 +1426,41 @@ flowchart TB
                             <td>company_profiles, Founder Evaluation</td>
                         </tr>
                         <tr>
-                            <td><strong>3. TECHNOLOGY &amp; MARKET</strong></td>
+                            <td><strong>3. TECHNOLOGY</strong></td>
                             <td>
-                                제품·기술, 실제 환경 성능, AI/HW/SW 통합, 시장
-                                규모·CAGR·수요, 경쟁 우위
+                                제품·기술, 실제 환경 성능, AI/HW/SW 통합,
+                                기술의 한계와 상용화 근거
                             </td>
-                            <td>1.25~1.5 pages</td>
-                            <td>Technology / Market / Moat Evaluation</td>
+                            <td>기술·시장 합계 1.25~1.5 pages</td>
+                            <td>Technology Evaluation / Evidence Research</td>
+                        </tr>
+                        <tr>
+                            <td><strong>4. MARKET</strong></td>
+                            <td>
+                                시장 규모·CAGR·수요, 경쟁 환경,
+                                시장 근거의 범위와 미확인 항목
+                            </td>
+                            <td>기술·시장 합계 안에서 배분</td>
+                            <td>Market Evaluation</td>
                         </tr>
                         <tr>
                             <td>
                                 <strong
-                                    >4. INVESTMENT ASSESSMENT &amp;
+                                    >5. INVESTMENT ASSESSMENT &amp;
                                     RISKS</strong
                                 >
                             </td>
                             <td>
-                                실적, 투자조건, 종합 점수, 판단 근거, 주요
-                                리스크, 데이터 한계
+                                실적, 투자조건, 경쟁 우위, 종합 점수, 판단 근거,
+                                주요 리스크, 데이터 한계
                             </td>
                             <td>1.5~1.75 pages</td>
                             <td>
-                                Business &amp; Deal, coverage_results, decisions
+                                Business &amp; Deal / Moat, coverage_results, decisions
                             </td>
                         </tr>
                         <tr>
-                            <td><strong>5. REFERENCE</strong></td>
+                            <td><strong>6. REFERENCE</strong></td>
                             <td>실제 보고서 작성에 사용한 자료만 기재</td>
                             <td>0.5 page</td>
                             <td>evidence, retrieval_history</td>

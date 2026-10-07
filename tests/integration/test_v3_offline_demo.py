@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import re
 import runpy
 import socket
 from pathlib import Path
@@ -72,7 +73,16 @@ def test_offline_demo_preserves_public_results_and_pdf(tmp_path, monkeypatch):
     assert report["status"] == "completed" and not report["warning"]
     assert report["validation"]["valid"] and report["pdf_validation"]["valid"]
     assert not report["final_allowed"]
-    assert (out / "report-demo.md").read_text() == report["draft"]["markdown"]
+    markdown = (out / "report-demo.md").read_text()
+    assert markdown == report["draft"]["markdown"]
+    assert re.findall(r"^## (.+)$", markdown, re.M) == [
+        "SUMMARY",
+        "COMPANY & TEAM",
+        "TECHNOLOGY",
+        "MARKET",
+        "INVESTMENT ASSESSMENT & RISKS",
+        "REFERENCE",
+    ]
     pdf = out / manifest["pdf"]["path"]
     assert pdf.read_bytes().startswith(b"%PDF-")
     pages = PdfReader(pdf).pages

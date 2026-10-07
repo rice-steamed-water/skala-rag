@@ -73,7 +73,12 @@ def setup_boundary(root, monkeypatch, *, verdict="pass", instructions=None):
                 schema_version=SCHEMA,
                 summary=section,
                 company_team=section,
-                technology_market=section,
+                technology=section,
+                market=dict(
+                    facts=[],
+                    interpretation="합성 시장 해석",
+                    unknown="시장 자료 미확인",
+                ),
                 assessment_risks=section,
                 limitations=["Synthetic only"],
             )

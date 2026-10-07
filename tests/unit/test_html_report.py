@@ -32,11 +32,20 @@ def test_korean_structure_and_csp(ctx, draft):
     html = render_report_html(draft, ctx)
     assert html.startswith("<!DOCTYPE html>") and '<html lang="ko">' in html
     assert '<meta charset="utf-8">' in html
+    assert re.findall(r'<section id="sec-[^\"]+" data-section="([^\"]+)">', html) == [
+        "SUMMARY",
+        "COMPANY &amp; TEAM",
+        "TECHNOLOGY",
+        "MARKET",
+        "INVESTMENT ASSESSMENT &amp; RISKS",
+        "REFERENCE",
+    ]
     assert "default-src 'none'; style-src 'unsafe-inline'; font-src data:" in html
     for ko, en in [
         ("요약", "SUMMARY"),
         ("기업·팀", "COMPANY &amp; TEAM"),
-        ("기술·시장", "TECHNOLOGY &amp; MARKET"),
+        ("기술", "TECHNOLOGY"),
+        ("시장", "MARKET"),
         ("투자 평가·위험", "INVESTMENT ASSESSMENT &amp; RISKS"),
         ("참고문헌", "REFERENCE"),
     ]:

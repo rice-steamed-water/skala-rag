@@ -63,7 +63,8 @@ class Stub:
                 schema_version=payload["context"]["schema_version"],
                 summary=claim,
                 company_team=claim,
-                technology_market=claim,
+                technology=claim,
+                market="시장 자료는 이 합성 응답에서 별도로 확인하지 않았다.",
                 assessment_risks=claim,
                 limitations=["가상 데이터; 실측 아님"],
             )
@@ -77,6 +78,22 @@ class Stub:
             else [],
             judged_artifact_hash=payload["artifact_hash"],
         )
+
+
+def test_approved_five_body_sections_and_reference_order():
+    import re
+
+    ctx = context()
+    draft = ReportGeneratorV3(Stub())(ctx, [])
+    assert re.findall(r"^## (.+)$", draft.markdown, re.M) == [
+        "SUMMARY",
+        "COMPANY & TEAM",
+        "TECHNOLOGY",
+        "MARKET",
+        "INVESTMENT ASSESSMENT & RISKS",
+        "REFERENCE",
+    ]
+    assert validate_report_v3(draft, ctx).valid
 
 
 @pytest.mark.parametrize("rating", [5, 1])
@@ -408,3 +425,152 @@ def test_unsupported_numeric_claim_reaches_semantic_revision_warning():
     result = run_report_v3(ctx, generate=generated, judge=judge)
     assert result.warning and result.revisions == 2 and not result.final_allowed
     assert result.judgement.findings[0].reason == "unsupported numeric claim"
+
+
+def test_fixture_report_response_has_separate_five_body_fields():
+    from skala_rag.fixture_reporting import FixtureReportLLM
+    from skala_rag.reporting.v3_context import canonical
+
+    ctx = context()
+    draft = ReportGeneratorV3(FixtureReportLLM())(ctx, [])
+    assert validate_report_v3(draft, ctx).valid
+    response = FixtureReportLLM().generate(
+        system="synthetic",
+        user=canonical({"context": ctx.snapshot()}),
+        output_schema=ReportContentV3,
+    )
+    assert response.technology != response.market
+
+
+@pytest.mark.parametrize(
+    "change",
+    ["combined", "missing", "duplicate", "order", "reference_not_last", "empty"],
+)
+def test_v3_rejects_unapproved_section_shapes(change):
+    import re
+
+    from skala_rag.reporting.pdf import _blocks
+
+    ctx = context()
+    draft = ReportGeneratorV3(Stub())(ctx, [])
+    sections = re.split(r"(?=^## )", draft.markdown, flags=re.M)[1:]
+    if change == "combined":
+        sections[2] = sections[2].replace("## TECHNOLOGY", "## TECHNOLOGY & MARKET")
+    elif change == "missing":
+        del sections[3]
+    elif change == "duplicate":
+        sections.insert(3, sections[2])
+    elif change == "order":
+        sections[2], sections[3] = sections[3], sections[2]
+    elif change == "reference_not_last":
+        sections[-1], sections[-2] = sections[-2], sections[-1]
+    else:
+        sections[3] = "## MARKET\n\n"
+    markdown = "".join(sections)
+    result = validate_report_v3(draft.model_copy(update={"markdown": markdown}), ctx)
+    assert not result.valid
+    assert ("SECTION_EMPTY" if change == "empty" else "SECTIONS_INVALID") in {
+        e.code for e in result.errors
+    }
+    if change != "empty":
+        with pytest.raises(ValueError):
+            _blocks(markdown)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "combined",
+        "missing_technology",
+        "missing_market",
+        "blank_technology",
+        "blank_market",
+    ],
+)
+def test_v3_response_requires_both_separate_nonblank_bodies(change):
+    from pydantic import ValidationError
+
+    data = {
+        "schema_version": "synthetic-223",
+        "summary": "요약",
+        "company_team": "팀",
+        "technology": "기술",
+        "market": "시장",
+        "assessment_risks": "위험",
+        "limitations": [],
+    }
+    if change == "combined":
+        data["technology_market"] = data.pop("technology") + data.pop("market")
+    elif change.startswith("missing_"):
+        del data[change.removeprefix("missing_")]
+    else:
+        data[change.removeprefix("blank_")] = "   "
+    with pytest.raises(ValidationError):
+        ReportContentV3.model_validate(data)
+
+
+def test_separate_role_bodies_keep_citations_reference_closure_and_assessment():
+    import hashlib
+    import re
+
+    from skala_rag.reporting.v3_context import ReportContextV3, canonical
+    from skala_rag.reporting.v3_pipeline import assessment_block
+
+    data = context().snapshot()
+    tech_id = next(iter(data["evidence"]))
+    tech_source = data["evidence"][tech_id]["source_id"]
+    market_id, market_source = "synthetic-market-evidence", "synthetic-market-source"
+    data["sources"][market_source] = {
+        **data["sources"][tech_source],
+        "source_id": market_source,
+        "title": "합성 시장 원문",
+    }
+    data["evidence"][market_id] = {
+        **data["evidence"][tech_id],
+        "evidence_id": market_id,
+        "source_id": market_source,
+    }
+    payload = canonical(data)
+    ctx = ReportContextV3(
+        "sha256:" + hashlib.sha256(payload.encode()).hexdigest(), payload
+    )
+    before = ctx.payload
+
+    class Separate(Stub):
+        def generate(self, **kwargs):
+            result = super().generate(**kwargs)
+            return result.model_copy(
+                update={
+                    "technology": f"합성 기술 원문 12 ms [@evidence:{tech_id}]",
+                    "market": f"합성 시장 원문 3개 지역 [@evidence:{market_id}]",
+                }
+            )
+
+    draft = ReportGeneratorV3(Separate())(ctx, [])
+    bodies = dict(
+        zip(
+            re.findall(r"^## (.+)$", draft.markdown, re.M),
+            re.split(r"^## .+$", draft.markdown, flags=re.M)[1:],
+            strict=True,
+        )
+    )
+    assert "12 ms" in bodies["TECHNOLOGY"] and "3개 지역" not in bodies["TECHNOLOGY"]
+    assert (
+        f"[@evidence:{tech_id}]" in bodies["TECHNOLOGY"]
+        and market_id not in bodies["TECHNOLOGY"]
+    )
+    assert "3개 지역" in bodies["MARKET"] and "12 ms" not in bodies["MARKET"]
+    assert (
+        f"[@evidence:{market_id}]" in bodies["MARKET"]
+        and tech_id not in bodies["MARKET"]
+    )
+    assert set(draft.cited_evidence_ids) == {tech_id, market_id}
+    assert set(draft.reference_source_ids) == {tech_source, market_source}
+    for sid in draft.reference_source_ids:
+        assert f"[@source:{sid}]" in bodies["REFERENCE"]
+    assert assessment_block(data) in bodies["INVESTMENT ASSESSMENT & RISKS"]
+    assert "normalized_score" not in bodies["MARKET"]
+    assert validate_report_v3(draft, ctx).valid
+    assert ctx.payload == before
+    mutated = draft.model_copy(update={"reference_source_ids": [tech_source]})
+    assert not validate_report_v3(mutated, ctx).valid

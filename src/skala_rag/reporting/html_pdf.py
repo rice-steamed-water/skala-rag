@@ -38,7 +38,11 @@ def _heading_ys(reader):
         lines = {}
 
         def visit(text, cm, tm, font, size, lines=lines):
-            if text.strip():
+            # h2 is fixed at 14pt. Whole-line table labels and role h3 titles
+            # also say "기술"/"시장"; they are not section headings. Chromium's
+            # text size is transformed by cm into actual PDF points.
+            rendered_size = size * abs(cm[3])
+            if text.strip() and abs(rendered_size - 14) < 0.1:
                 y = tm[4] * cm[1] + tm[5] * cm[3] + cm[5]
                 lines.setdefault(round(y), []).append(text)
 
@@ -47,8 +51,12 @@ def _heading_ys(reader):
             line = _squash("".join(parts))
             for name, title in TITLES.items():
                 if line == _squash(title):
-                    found.setdefault(name, (number, y))
-    return found
+                    found.setdefault(name, []).append((number, y))
+    # A repeated title is not an exact six-section report. Leave it unresolved
+    # so existing section/summary gates refuse it rather than using the first.
+    return {
+        name: positions[0] for name, positions in found.items() if len(positions) == 1
+    }
 
 
 def measure_summary(reader):
@@ -143,6 +151,7 @@ class HTMLPDFRenderer:
 
     def __call__(self, draft: ReportDraft, template: str) -> RenderResult:
         temps = []
+        published = []
         try:
             structural, judged = self.proof(draft)
             digest = artifact_hash(draft)
@@ -157,6 +166,8 @@ class HTMLPDFRenderer:
                 or judged.judged_artifact_hash != digest
             ):
                 return _failure(draft, "PDF_UPSTREAM_NOT_VALIDATED")
+            if tuple(re.findall(r"^## (.+)$", draft.markdown, re.M)) != tuple(TITLES):
+                return _failure(draft, "PDF_SECTIONS")
             self.output_dir.mkdir(parents=True, exist_ok=True)
             stem = f"report-{draft.revision}-{digest.removeprefix('sha256:')[:8]}"
             html_path = self.output_dir / f"{stem}.html"
@@ -172,8 +183,6 @@ class HTMLPDFRenderer:
                 f.write(html_bytes)
             _chromium_pdf(html_bytes.decode("utf-8"), tmp_pdf)
             checks, pages, fraction = verify_pdf(tmp_pdf, draft)
-            tmp_html.rename(html_path)
-            tmp_pdf.rename(pdf_path)
             valid = all(checks.values())
             stub = any(f.severity == "stub" for f in judged.findings)
             measures = dict(
@@ -181,9 +190,8 @@ class HTMLPDFRenderer:
                 report_id=draft.report_id,
                 draft_revision=draft.revision,
                 draft_hash=digest,
-                html_path=str(html_path),
                 html_hash=hashlib.sha256(html_bytes).hexdigest(),
-                artifact_hash=hashlib.sha256(pdf_path.read_bytes()).hexdigest(),
+                artifact_hash=hashlib.sha256(tmp_pdf.read_bytes()).hexdigest(),
                 renderer=RENDERER,
                 template_version=template,
                 checks=checks,
@@ -192,6 +200,19 @@ class HTMLPDFRenderer:
                 final_allowed=valid and not stub and self.execution_mode == "live",
                 action="pass" if valid else "revise",
             )
+            if not valid:
+                for tmp in temps:
+                    tmp.unlink(missing_ok=True)
+                return RenderResult(
+                    schema_version=draft.schema_version,
+                    layout_measurements=measures,
+                    errors=_errors(draft, checks),
+                )
+            tmp_html.rename(html_path)
+            published.append(html_path)
+            tmp_pdf.rename(pdf_path)
+            published.append(pdf_path)
+            measures["html_path"] = str(html_path)
             return RenderResult(
                 schema_version=draft.schema_version,
                 artifact_path=str(pdf_path),
@@ -200,7 +221,7 @@ class HTMLPDFRenderer:
                 errors=_errors(draft, checks),
             )
         except Exception:
-            for tmp in temps:
+            for tmp in temps + published:
                 tmp.unlink(missing_ok=True)
             return _failure(draft, "PDF_RENDER_FAILED")
 

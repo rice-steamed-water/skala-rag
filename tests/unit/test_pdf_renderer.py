@@ -25,8 +25,10 @@ def make_draft(
 {summary}
 # COMPANY & TEAM
 가상 로봇 기업과 가상 팀입니다.
-# TECHNOLOGY & MARKET
+# TECHNOLOGY
 {body}
+# MARKET
+가상 시장 자료이며 실제 시장 규모·수요는 검증하지 않았다.
 # INVESTMENT ASSESSMENT & RISKS
 | 항목 | 값 |
 | --- | --- |
@@ -182,6 +184,117 @@ def test_saved_pdf_layout_validation_and_tamper_rejection(tmp_path):
         validator(draft, context, result)
 
 
+def _physical_pdf(path, headings, *, reverse_stream=False):
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen.canvas import Canvas
+
+    from skala_rag.reporting.pdf import SECTIONS
+
+    canvas = Canvas(str(path), pagesize=A4)
+    canvas.setFont("Helvetica", 10.5)
+    for index, mention in enumerate((*SECTIONS, "LOW_MARKET; LOW_TECHNOLOGY")):
+        canvas.drawString(60, 800 - index * 12, mention)
+    canvas.drawString(60, 700, "[@evidence:ev-fixture] [@source:src-fixture]")
+    canvas.setFont("Helvetica-Bold", 14)
+    positions = list(enumerate(headings))
+    for index, heading in reversed(positions) if reverse_stream else positions:
+        canvas.drawString(60, 670 - index * 25, heading)
+    canvas.save()
+
+
+def _physical_headings(shape):
+    from skala_rag.reporting.pdf import SECTIONS
+
+    headings: list[str] = list(SECTIONS)
+    if shape == "missing":
+        del headings[2]
+    elif shape == "wrong":
+        headings[2] = "TECHNOLOGIES"
+    elif shape == "duplicate":
+        headings.insert(3, headings[2])
+    elif shape == "combined":
+        headings[2] = "TECHNOLOGY & MARKET"
+    elif shape == "combined-extra":
+        headings.insert(3, "TECHNOLOGY & MARKET")
+    elif shape == "order":
+        headings[2], headings[3] = headings[3], headings[2]
+    elif shape == "reference-not-last":
+        headings[-2], headings[-1] = headings[-1], headings[-2]
+    return headings
+
+
+@pytest.mark.parametrize(
+    "shape",
+    [
+        "missing",
+        "wrong",
+        "duplicate",
+        "combined",
+        "combined-extra",
+        "order",
+        "reference-not-last",
+        "valid",
+    ],
+)
+def test_saved_pdf_sections_require_physical_headings(tmp_path, shape):
+    import hashlib
+    from types import SimpleNamespace
+
+    from skala_rag.reporting.pdf import PDFLayoutValidator
+
+    draft = make_draft()
+    render = renderer(tmp_path)(draft, "pdf-layout-v1")
+    assert render.artifact_path is not None
+    path = Path(render.artifact_path)
+    _physical_pdf(path, _physical_headings(shape), reverse_stream=True)
+    # Match actual saved bytes: this exercises sections, not hash rejection.
+    render.layout_measurements["artifact_hash"] = hashlib.sha256(
+        path.read_bytes()
+    ).hexdigest()
+    result = PDFLayoutValidator()(
+        draft, SimpleNamespace(context_id=draft.context_id), render
+    )
+    assert result.checks["sections"] is (shape == "valid")
+    assert result.valid is (shape == "valid")
+    assert all(
+        result.checks[name]
+        for name in ("summary", "bounds", "page_size", "citations", "page_count")
+    )
+    if shape != "valid":
+        assert [error.code for error in result.errors] == ["PDF_SECTIONS"]
+        assert result.checks["action"] == "revise"
+        assert not result.checks["pdf_verified"]
+
+
+def test_renderer_checks_actual_pdf_headings(tmp_path, monkeypatch):
+    def build(document, *args, **kwargs):
+        _physical_pdf(document.filename, _physical_headings("combined-extra"))
+
+    monkeypatch.setattr("skala_rag.reporting.pdf.SimpleDocTemplate.build", build)
+    result = renderer(tmp_path)(make_draft(), "pdf-layout-v1")
+    assert not result.layout_measurements["checks"]["sections"]
+    assert "PDF_SECTIONS" in [error.code for error in result.errors]
+    assert not result.layout_measurements["pdf_verified"]
+    assert not result.layout_measurements["final_allowed"]
+
+
+def test_explicit_document_title_remains_supported(tmp_path):
+    from types import SimpleNamespace
+
+    from skala_rag.reporting.pdf import PDFLayoutValidator
+
+    draft = make_draft()
+    draft = draft.model_copy(
+        update={"markdown": "# Fixture report\n\n" + draft.markdown}
+    )
+    render = renderer(tmp_path)(draft, "pdf-layout-v1")
+    assert render.errors == []
+    validation = PDFLayoutValidator()(
+        draft, SimpleNamespace(context_id=draft.context_id), render
+    )
+    assert validation.valid and validation.checks["sections"]
+
+
 def test_layout_draft_revision_mismatch_is_fatal(tmp_path):
     from types import SimpleNamespace
 
@@ -210,3 +323,37 @@ def test_missing_font_glyph_remains_fatal_without_artifact(tmp_path):
     assert result.errors[0].code == "PDF_FONT_GLYPH_MISSING"
     assert result.layout_measurements["final_allowed"] is False
     assert list(tmp_path.iterdir()) == []
+
+
+def test_pdf_parser_accepts_only_approved_six_section_order():
+    from tests.unit.test_v3_report_pipeline import Stub, context
+
+    from skala_rag.reporting.pdf import _blocks
+    from skala_rag.reporting.v3_pipeline import ReportGeneratorV3
+
+    draft = ReportGeneratorV3(Stub())(context(), [])
+    headings = [
+        section for section, kind, _ in _blocks(draft.markdown) if kind == "heading"
+    ]
+    assert headings == [
+        "SUMMARY",
+        "COMPANY & TEAM",
+        "TECHNOLOGY",
+        "MARKET",
+        "INVESTMENT ASSESSMENT & RISKS",
+        "REFERENCE",
+    ]
+
+
+def test_pdf_parser_rejects_combined_heading_even_with_all_six_sections():
+    from tests.unit.test_v3_report_pipeline import Stub, context
+
+    from skala_rag.reporting.pdf import _blocks
+    from skala_rag.reporting.v3_pipeline import ReportGeneratorV3
+
+    draft = ReportGeneratorV3(Stub())(context(), [])
+    marked = draft.markdown.replace(
+        "## TECHNOLOGY", "## TECHNOLOGY & MARKET\n\nCombined body\n\n## TECHNOLOGY"
+    )
+    with pytest.raises(ValueError):
+        _blocks(marked)

@@ -122,24 +122,28 @@ unit/contract 테스트는 네트워크 없이 실행한다. live integration은
 
 ### 역사적 baseline — D09 부분 승인 보존
 
-[보고서 계약](reporting.md)의 single_candidate/no_recommendation 각각 7개 섹션, 인용 token·서지 미상 표기·SV01–SV09 구조 검증은 2026-09-30 xxhigh가 부분 승인했다. 승인 기록은 [D09](decisions.md)에 보존한다. 아래 v3 다섯 목차·selector·Warning 방향은 #35의 별도 사용자 전환 승인에 근거한다. 과거 D09 승인의 자동 확장이 아니며 Warning 종료 운영 규칙은 #82 승인이고 mode별 섹션 예외·구조 검증 상세는 OPEN이다. PDF 구현 선택은 OPEN이다.
+[보고서 계약](reporting.md)의 single_candidate/no_recommendation 각각 7개 섹션, 인용 token·서지 미상 표기·SV01–SV09 구조 검증은 2026-09-30 xxhigh가 부분 승인했다. 승인 기록은 [D09](decisions.md)에 보존한다. #35의 당시 v3 다섯 목차와 selector·Warning 방향도 별도 승인 이력이다. 현재 목차는 2026-10-07 #223 후속 승인을 따른다. 과거 D09 승인의 자동 확장이 아니며 Warning 종료 운영 규칙은 #82 승인이다. PDF 구현은 #95/#175 후속 승인 범위와 미실행 actual 검증을 구분한다.
 
-### v3 E-1 다섯 목차 — 승인된 새 구현 방향
+### 현재 v3 E-1 목차: 본문 5절과 마지막 REFERENCE (#223)
+
+[후속 승인과 현재 보고서 계약](reporting.md#현재-v3-목차-본문-5절과-마지막-reference-223)에 따라 기술과 시장을 분리한다. baseline 7절과 이전 통합 목차의 승인 이력은 보존하며 비용·평가·발행 guard는 바꾸지 않는다.
 
 ```text
 1. SUMMARY
 2. COMPANY & TEAM
-3. TECHNOLOGY & MARKET
-4. INVESTMENT ASSESSMENT & RISKS
-5. REFERENCE
+3. TECHNOLOGY
+4. MARKET
+5. INVESTMENT ASSESSMENT & RISKS
+6. REFERENCE
 ```
 
 | 섹션 | 입력·내용 | v3 목표 분량 |
 | --- | --- | --- |
 | SUMMARY | **기업 한 줄 정의**, 최종 선택·정규화 점수/등급, 핵심 투자 포인트·위험·결론 | ≤0.5 page |
 | COMPANY & TEAM | CompanyProfile·Founder, 개요·아이디어·팀/사업화 역량 | 0.5~0.75 page |
-| TECHNOLOGY & MARKET | Technology·Market·Moat, 성능/통합·규모/성장/수요·차별성 | 1.25~1.5 pages |
-| INVESTMENT ASSESSMENT & RISKS | Business & Deal의 traction/deal_terms, 최종 점수·결측/해당 없음·판단·리스크 | 1.5~1.75 pages |
+| TECHNOLOGY | Technology·Evidence Research, 성능·통합·기술 근거와 한계 | 기술·시장 합계 1.25~1.5 pages |
+| MARKET | Market, 규모·성장·수요·경쟁 환경과 미확인 항목 | 기술·시장 합계 안에서 배분 |
+| INVESTMENT ASSESSMENT & RISKS | Moat와 Business & Deal의 traction/deal_terms, 최종 점수·결측/해당 없음·판단·리스크 | 1.5~1.75 pages |
 | REFERENCE | 실제 인용 Evidence가 가리키는 Source 서지 | 0.5 page |
 
 v3는 본문 약 4~4.5페이지를 목표로 둔다. 목표 분량 합이나 Markdown 길이가 실제 PDF 검증을 대체하지 않는다. 제목 문자열·순서는 위 E-1을 검사하고 번호/Markdown 레벨 허용 형식은 D09에서 고정한다.

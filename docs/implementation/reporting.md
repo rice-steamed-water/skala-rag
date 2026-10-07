@@ -4,13 +4,36 @@
 
 **현재 구현 방향 — v3 전환 승인:** [사용자 전환 승인 #35 comment 5902877317](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-5902877317)(luk0715, 2026-09-30T02:29:07Z)에 따라 새 작업은 기존 baseline의 계속 구현이 아니라 v3에 정합화한다. baseline 코드·승인 기록은 호환성과 이력으로 보존하며 새 구현의 우선 방향이 아니다. 방향 승인에 이어 #82 및 #35 comment 5903505208에서 N/A·0분모·최종 selector·재조사 회계·Warning 종료의 운영 규칙을 별도 승인했다. #35 comment 5903574761의 무작위 선정은 평가 전 조사·평가 대상 집합에만 적용하며 최종 selector는 무작위가 아니다. 승인과 구현 완료는 별개이며 rubric 상세·provider·corpus·시간/비용 예산 등 남은 세부 선택만 [결정 목록](decisions.md)의 OPEN gate를 따른다.
 
-**보존 본문의 범위 — 역사·호환성:** 아래 본문은 기존 baseline D09 부분 승인 계약을 그대로 보존한다. 본문 안의 “현재 baseline”, “v3 승인 전/대체 승인 시”, 과거 PR 상태와 고정100·N/A 미채택·첫 추천·7개 섹션은 작성 당시 맥락이며 새 구현 지시가 아니다. 새 구현은 [scoring](scoring.md)·[delivery](delivery.md)의 승인된 v3 방향을 따른다. #82의 N/A 사유·승인 rule·근거 요건, 0분모 오류, 최종 순위·재시도·completed Warning/CLI2는 후속 승인이다. 실제 rubric 숫자/rule 목록·품질, 보고서 mode별 섹션 예외·검증 상세·PDF는 OPEN이다. 평가 전 무작위 집합 선정은 최종 selector와 별개다.
+**보존 본문의 범위: 역사·호환성:** 아래 baseline 승인 기록은 기존 D09 부분 승인 계약을 그대로 보존한다. 본문 안의 “현재 baseline”, “v3 승인 전/대체 승인 시”, 과거 PR 상태와 고정100·N/A 미채택·첫 추천·7개 섹션은 작성 당시 맥락이며 새 구현 지시가 아니다. 새 구현은 [scoring](scoring.md)·[delivery](delivery.md)의 승인된 v3 방향을 따른다. #82의 N/A 사유·승인 rule·근거 요건, 0분모 오류, 최종 순위·재시도·completed Warning/CLI2는 후속 승인이다. 실제 rubric 숫자/rule 목록·품질, 보고서 mode별 섹션 예외·검증 상세·PDF는 OPEN이다. 평가 전 무작위 집합 선정은 최종 selector와 별개다.
 
 **PDF 후속 승인(#95, 2026-09-30):** renderer·A4/한글 폰트/여백·SUMMARY 측정·layout 회계는
 [pdf-rendering](pdf-rendering.md)과 decisions의 D09 PDF 승인 기록을 따른다.
 아래 본문의 PDF OPEN은 해당 승인 이전의 역사 기록이다.
 
 [문서 홈](../README.md) · [공통 계약](contracts.md#5-보고서와-오류) · [검증 계획](delivery.md#5-보고서-계약과-pdf-검증) · [결정 목록](decisions.md)
+
+## 현재 v3 목차: 본문 5절과 마지막 REFERENCE (#223)
+
+2026-10-07 사용자 승인 [#35 comment 6029117687](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-6029117687)과 [#223](https://github.com/rice-steamed-water/skala-rag/issues/223)에 따라 최신 경로의 목차는 아래 순서다. #94 당시 기술·시장 통합 목차와 아래 baseline 7절 기록은 이력으로 보존한다.
+
+```text
+SUMMARY
+COMPANY & TEAM
+TECHNOLOGY
+MARKET
+INVESTMENT ASSESSMENT & RISKS
+REFERENCE
+```
+
+- 두 v3 mode 모두 여섯 제목을 정확히 한 번씩 사용한다. 통합 절, 누락, 중복, 순서 오류와 빈 본문은 구조 검증에서 거절한다.
+- `ReportContentV3`는 `summary`, `company_team`, `technology`, `market`, `assessment_risks`와 `limitations`를 받는다. `ResearchContent`도 같은 다섯 본문을 사용하며 자료에서 확인한 사실, 분석·해석, 판단 불가를 각각 보존한다. 이전 `technology_market` 응답을 복제하거나 자동 분할하지 않는다.
+- 기술과 시장의 원본 역할 출력 및 인용은 각 절에 둔다. 기술 성능을 시장 규모·수요 근거로 바꾸지 않는다. 근거가 없으면 미확인으로 표시하고 사실·점수·판정을 만들지 않는다. `founder`는 기업·팀, `moat`와 `business_deal`은 투자 평가·위험에 남는다.
+- Generator(`report-v3-3`), 구조 Validator, HTML/PDF와 기존 fixture/local-demo 호출자를 재사용한다. 본문 인용 Evidence 집합과 사용 Source의 REFERENCE 집합은 양방향으로 일치해야 한다. 연구용 HTML의 추가 역할 출력은 렌더 단계의 부록에 출처·발췌·참조를 보존한다. 이는 원래 draft의 인용 ID 목록이나 구조/PDF proof 범위를 확장하지 않으며 추가 내용의 별도 의미 검증도 아니다([연구용 표시 계약](local-demo.md)).
+- 원래 점수·선택 결과, context/snapshot/policy/hash, 최대 2회 공유 수정 예산, Warning·actual admission·발행 guard는 바꾸지 않는다. PDF 전체 최대 5페이지와 SUMMARY 반 페이지는 실제 저장 PDF에서 계속 검증한다.
+
+목차 승인은 비용·모델·정책·적격성·최종 발행 승인이 아니다. 합성 offline 데모와 단일 기업 연구 경로는 full actual-v3 완료 증거가 아니며 actual 목표는 HOLD로 유지한다. 기존 Python 직접 실행 예제를 사용하고 별도 runner는 추가하지 않는다.
+
+## baseline 승인 기록과 호환 계약
 
 상태: **APPROVED (목차·인용·구조 검증)**, 이슈 #14, 담당·승인자 xxhigh, 작성일·승인일 2026-09-30 (Asia/Seoul). [승인 근거](https://github.com/rice-steamed-water/skala-rag/issues/14#issuecomment-5902607679). PDF 구현 선택은 OPEN이다.
 근거: [통합 원문 §9.1–9.3](../raws/robotics_startup_agentic_rag_notion_integrated.md).

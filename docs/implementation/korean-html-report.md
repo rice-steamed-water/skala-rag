@@ -7,11 +7,15 @@ draft를 정형 한글 HTML로 만들고 Playwright/Chromium으로 PDF화하는 
 `playwright==1.63.0`을 추가한다. 기존 ReportLab `reporting.pdf`(#95)와 테스트는 그대로
 보존하며, 이 경로가 실패해도 ReportLab으로 대체하지 않는다. 병합·유료 모델 호출은 승인 범위 밖이다.
 
+현재 목차는 [2026-10-07 후속 승인 #223](reporting.md#현재-v3-목차-본문-5절과-마지막-reference-223)에 따라
+본문 5절과 마지막 REFERENCE다. 기존 기술·시장 통합 목차는 승인 이력이며 현재 계약이 아니다.
+이 변경은 비용·모델·적격성·최종 발행 guard를 바꾸지 않는다.
+
 ## 구성
 
 | 모듈 | 역할 |
 | --- | --- |
-| `reporting.html_report.render_report_html(draft, context)` | 독립 UTF-8 `<html lang="ko">`. 표시 제목 요약/기업·팀/기술·시장/투자 평가·위험/참고문헌(영문 canonical 섹션명은 `id`·`data-section`). 점수 개요 카드, 후보 비교, 위험, 참고문헌. |
+| `reporting.html_report.render_report_html(draft, context)` | 독립 UTF-8 `<html lang="ko">`. 표시 제목 요약/기업·팀/기술/시장/투자 평가·위험/참고문헌(영문 canonical 섹션명은 `id`·`data-section`). 기술·시장 원본 역할 출력과 인용을 각 절에 보존한다. 점수 개요 카드, 후보 비교, 위험, 참고문헌. |
 | `reporting.html_pdf.HTMLPDFRenderer` | `(draft, template) -> RenderResult`. proof(구조 valid + Judge pass, context_id·artifact_hash 일치)를 렌더 전에 확인하고 `report-<rev>-<hash8>.html`을 저장한 뒤 **그 저장 bytes**를 Chromium에 넣어 PDF를 만든다. 기존 파일은 덮어쓰지 않는다. |
 | `reporting.html_pdf.HTMLPDFLayoutValidator` | 저장 HTML/PDF hash 재계산, draft·context 일치, HTML 재생성 일치, 페이지/A4/인용/섹션/SUMMARY 재검증. hash는 RenderResult가 가리키는 파일의 우발적·렌더 후 수정을 감지할 뿐이며, measurements까지 다시 쓸 수 있는 공격자는 막지 못한다. 불일치는 `PDFArtifactError`. |
 | `reporting.korean_report.build_korean_report_pdf` | 위 둘을 묶은 Python 직접 호출 helper. CLI는 없다. |
@@ -22,7 +26,7 @@ Evidence/Source token은 escape된 문자로 남고 문서 내부 `#src-…` anc
 모든 네트워크/파일 요청을 `route.abort()`한다.
 
 한글 서술: `GENERATOR_SYSTEM`은 서술 전체를 한국어로, 인용·고유명사·ID·자료 제목은 원문 유지를
-요구하고 `JUDGE_SYSTEM`은 한국어 여부와 충실성을 점검한다(`PROMPT_VERSION=report-v3-2`).
+요구하고 `JUDGE_SYSTEM`은 한국어 여부와 충실성을 점검한다(`PROMPT_VERSION=report-v3-3`).
 실제 모델의 준수 여부는 이 이슈에서 실측하지 않았다.
 
 ## 사용
@@ -46,7 +50,9 @@ summary_fraction을 JSON으로 출력한다. 직접 호출은
 - 초과는 `action=revise`로 기존 공유 수정 예산(최대 2회)에 넘기고, browser 부재·예외는
   `PDF_RENDER_FAILED`(action=fail, 임시 `.tmp` 파일은 삭제), hash 불일치·stale·execution_mode≠context는
   `PDFArtifactError`/`PDF_UPSTREAM_NOT_VALIDATED`. HTML/PDF는 검증 뒤에만 최종 이름으로 바뀐다.
-- 섹션 검사: 다섯 제목이 각각 한 줄 전체로 존재하고 페이지/y 순서가 오름차순이어야 한다.
+- 섹션 검사: 승인된 여섯 Markdown 제목의 정확한 순서와 단일 출현을 렌더 전에 확인한다.
+  저장 PDF의 실제 14pt 절 제목도 각각 한 번씩 페이지/y 순서로 존재해야 한다.
+  스코어보드 행·역할 소제목을 절 제목으로 오인하지 않으며 중복 제목도 거절한다.
 - Chromium 미설치 시 browser 테스트는 사유와 함께 skip된다.
 - 테스트: `tests/unit/test_html_report.py`(브라우저 없음),
   `tests/integration/test_html_pdf_browser.py`(실제 Chromium, marker `browser`).

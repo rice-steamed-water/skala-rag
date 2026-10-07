@@ -416,3 +416,32 @@ def test_missing_research_details_are_unknown_not_invented():
     rendered = render_report_html(draft, rehash(canonical(data)))
     assert "조사 대상 미상 — 자료 기반 연구 보고서" in rendered
     assert "출처: 미상" in rendered and "위치: 미상" in rendered
+
+
+def test_technology_and_market_original_roles_stay_in_their_own_sections():
+    draft, data = research_report()
+    eid = draft.cited_evidence_ids[0]
+    data["live_reviews"] = {
+        role: {
+            "observations": [{"text": role + " 원문 관측", "evidence_ids": [eid]}],
+            "interpretations": [{"text": role + " 원문 해석", "evidence_ids": [eid]}],
+            "missing": [role + " 원문 결측"],
+        }
+        for role in ("technology", "market")
+    }
+    ctx = rehash(canonical(data))
+    rendered = render_report_html(draft, ctx)
+    for role, other in (("technology", "market"), ("market", "technology")):
+        block = rendered.split(f'data-section="{role.upper()}"')[1].split("</section>")[
+            0
+        ]
+        assert f'id="review-{role}"' in block
+        assert f'id="review-{other}"' not in block
+        for kind in ("관측", "해석", "결측"):
+            assert role + " 원문 " + kind in block
+            assert other + " 원문 " + kind not in block
+        assert '<sup class="citation">' in block
+    assert ctx.snapshot() == data
+    assert set(re.findall(r'href="#([^"]+)"', rendered)) <= set(
+        re.findall(r'id="([^"]+)"', rendered)
+    )

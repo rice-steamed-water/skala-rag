@@ -70,7 +70,8 @@ def review_evidence_ids(review):
 
 ROLE_SECTIONS = {
     "COMPANY & TEAM": ("founder",),
-    "TECHNOLOGY & MARKET": ("technology", "market"),
+    "TECHNOLOGY": ("technology",),
+    "MARKET": ("market",),
     "INVESTMENT ASSESSMENT & RISKS": ("moat", "business_deal"),
 }
 

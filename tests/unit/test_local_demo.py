@@ -171,7 +171,8 @@ def test_scope_notice_is_not_optional_model_text():
         schema_version="local-demo-v1",
         summary="Test",
         company_team="Test",
-        technology_market="Test",
+        technology="Test technology",
+        market="Test market",
         assessment_risks="Test",
         limitations=[],
     )
@@ -285,7 +286,12 @@ def test_generated_citations_are_structural_not_optional_prompt_text():
         schema_version=SCHEMA,
         summary=section,
         company_team=section,
-        technology_market=section,
+        technology=section,
+        market={
+            "facts": [],
+            "interpretation": "Market not assessed",
+            "unknown": "Not verified",
+        },
         assessment_risks=section,
         limitations=["Synthetic only"],
     )
@@ -296,7 +302,7 @@ def test_generated_citations_are_structural_not_optional_prompt_text():
     assert "[판단 불가]" in converted.summary
     with pytest.raises(ValueError, match="GENERATOR_EVIDENCE_INVALID"):
         cited_content(content, {"different-evidence"})
-    for name in ("summary", "company_team", "technology_market", "assessment_risks"):
+    for name in ("summary", "company_team", "technology", "market", "assessment_risks"):
         getattr(content, name).facts = []
     with pytest.raises(ValueError, match="GENERATOR_CITATIONS_MISSING"):
         cited_content(content, {"ev-real"})
@@ -403,3 +409,40 @@ def test_receipt_uses_allowlisted_diagnostic_codes_only(tmp_path, monkeypatch, k
         "LOCAL_RETRIEVAL_FAILED" if known else "DEMO_EXECUTION_FAILED"
     )
     assert "secret-body" not in text
+
+
+def test_research_sections_preserve_distinct_technology_and_market_citations():
+    from skala_rag.demo_context import SCHEMA
+    from skala_rag.local_demo import ResearchContent, cited_content
+
+    def section(text, eid):
+        return {
+            "facts": [{"text": text, "evidence_ids": [eid]}],
+            "interpretation": text + " 해석",
+            "unknown": text + " 미확인",
+        }
+
+    content = ResearchContent.model_validate(
+        {
+            "schema_version": SCHEMA,
+            "summary": section("요약", "ev-summary"),
+            "company_team": section("팀", "ev-team"),
+            "technology": section("기술 원문", "ev-tech"),
+            "market": section("시장 원문", "ev-market"),
+            "assessment_risks": section("위험", "ev-risk"),
+            "limitations": ["합성 자료"],
+        }
+    )
+    converted = cited_content(
+        content, {"ev-summary", "ev-team", "ev-tech", "ev-market", "ev-risk"}
+    )
+    assert "기술 원문" in converted.technology
+    assert "[@evidence:ev-tech]" in converted.technology
+    assert "시장 원문" not in converted.technology
+    assert "[@evidence:ev-market]" not in converted.technology
+    assert "시장 원문" in converted.market
+    assert "[@evidence:ev-market]" in converted.market
+    assert "기술 원문" not in converted.market
+    assert "[@evidence:ev-tech]" not in converted.market
+    with pytest.raises(ValueError, match="GENERATOR_EVIDENCE_INVALID"):
+        cited_content(content, {"ev-summary", "ev-team", "ev-tech", "ev-risk"})

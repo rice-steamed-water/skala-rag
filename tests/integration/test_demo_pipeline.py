@@ -63,7 +63,8 @@ def test_synthetic_pipeline_generates_new_verified_artifacts(tmp_path, monkeypat
                 schema_version=SCHEMA,
                 summary=WARNING + sentence,
                 company_team=sentence,
-                technology_market=sentence,
+                technology=sentence,
+                market="시장 규모·수요는 이 합성 자료에서 확인하지 않았다.",
                 assessment_risks=sentence,
                 limitations=["합성 테스트 자료"],
             )
