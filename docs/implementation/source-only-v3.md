@@ -1,4 +1,4 @@
-# v3 source-only 직접 실행 (#209, #215)
+# v3 source-only 직접 실행 (#209, #215, #221)
 
 ## 범위와 승인 경계
 
@@ -67,7 +67,63 @@ result = run_source_only_v3(boundary, output_dir=private_new_directory)
 
 저장 `replay_scope`와 후보 입력 `origin`은 `fixed_candidate_input`이고 manifest의 신규 provider는 `null`이다. 원본 캡처와 진단은 바꾸지 않는다. required 오류는 기술 실패, optional 오류는 원래 하위 기록, empty는 unknown으로 남는다. 실제 assembler/Eligibility를 쓰되 eligible도 기존 `SOURCE_ONLY_EVALUATION_NOT_READY`로 종료한다. 저장 상태는 투자 결과가 아니다.
 
-회귀 제어군은 합성 캡처와 MockTransport만 쓴다. 실제 PI 기업의 CompanyResearch 적격성 캡처는 확보하지 않았다. 승인 PI 논문 Source/Chunk나 raw PDF를 기업 비상장/완료 Seed~C/Exit 미완료 근거로 바꾸지 않는다. actual Coverage/freeze/평가/scoring/report와 유료 호출은 열지 않는다.
+당시 #215 회귀 제어군은 합성 캡처와 MockTransport만 썼으며 실제 PI 기업의 CompanyResearch 적격성 캡처는 확보하지 않았다. 이 이력은 아래 #221의 새 로컬 변환과 구별한다. 승인 PI 논문 Source/Chunk나 raw PDF를 기업 비상장/완료 Seed~C/Exit 미완료 근거로 바꾸지 않는다. actual Coverage/freeze/평가/scoring/report와 유료 호출은 열지 않는다.
+
+## 봉인 기업 archive에서 새 Source-only 결과 생산 (#221)
+
+`skala_rag.tools.company_archive.compose_archive_company_research`는 보유 공개 자료를 읽어 기존 `LiveResearchCompany`를 후보당 한 번 호출한다. 원래 수집 당시의 프로젝트 ToolResult를 복원하는 함수가 아니다. 원본 packet은 `NOT_CompanyResearchBundle_or_Evaluation`이며 그대로 ToolResult에 넣으면 계속 거절된다. 반환값만 새 로컬 변환의 `ToolResult[CompanyResearchBundle]`이다.
+
+```python
+from skala_rag.tools.company_archive import compose_archive_company_research
+from skala_rag.source_only_v3 import prepare_offline_source_only_v3, run_source_only_v3
+
+research_captures = {
+    candidate.candidate_id: compose_archive_company_research(
+        archive_root=archive_root,
+        expected_index_sha256=external_index_pin,
+        candidate=candidate,
+        run_input=run_input,
+        run_id=run_id,
+        budget=budget,
+        clock=clock,
+    )
+    for candidate in candidate_bundle.candidates
+}
+boundary = prepare_offline_source_only_v3(
+    run_id=run_id,
+    run_input=run_input,
+    candidate_bundle=candidate_bundle,
+    research_captures=research_captures,
+    run_profile=run_profile,
+    budget=budget,
+    clock=clock,
+)
+result = run_source_only_v3(boundary, output_dir=private_new_directory)
+```
+
+모든 변수는 호출자가 제공한다. 후보 이름·국가·homepage·선정 입력은 수집 후 고정한 caller 선언이지 이 archive가 확인한 법인 정보나 사전 무작위 모집단이 아니다. `post_collection_selection_context=true`로 구별한다. 내부 `archive-local-sources`는 로컬 Sources port일 뿐 일반 live factory에 추가한 외부 provider가 아니다. provider allowlist, 운영 정책 registry, assembler, as_of, Eligibility, graph와 저장 경계는 기존 구현을 그대로 쓴다.
+
+외부 index SHA-256은 필수다. composer 구성 전에 봉인 목록의 모든 bytes, manifest/receipt/source/candidate/packet join, raw→text 일치, Unicode claim anchor, 중복 ID와 시각을 검증한다. 선택하지 않은 후보도 검사한다. canonical 상대 경로만 허용하고 root부터 각 경로 component의 symlink와 일반 파일이 아닌 입력을 거절한다. 파일 상한은 일반 파일/HTML 8 MiB, 보유 PDF 32 MiB, 전체 64 MiB, 봉인 파일 128개다. PDF 상한은 과거 HTTP 응답 상한을 늘리는 설정이 아니라 기존 로컬 보유본의 무결성 검사 한도다. archive Python은 실행하지 않으며 자료를 고치거나 다시 봉인·수집하지 않는다. 중복 JSON key, 비유한 수치, 과도한 nesting과 이 형식에 없던 프로젝트 run/schema/generation 선언도 거절한다.
+
+성공 HTML만 원래 ID·title·URL·publisher(없으면 null)·raw hash로 Source를 만든다. language가 없으면 `unknown`이다. `retrieved_at`은 원래 receipt의 `finished_at`과 같은 시각이며 `published_at=null`은 그대로 둔다. claim에 관측된 날짜, HTTP Date, 현재 변환 시각이나 논문 `copied_at`를 발행·확보 시각으로 대체하지 않는다. 기존 PDF는 Source를 새로 만들지 않고 `reused_assets` metadata로만 보존한다. claim bytes/anchor 일치는 무결성 검사이지 사실·authority·criterion 의미 검토 통과가 아니다. `observations=()`, `calls=()`이며 FieldObservation/Evidence/rating/N/A/점수는 만들지 않는다. boolean None, stage unknown과 빈 field map은 기존 assembler가 만든다.
+
+Source의 `bibliographic_metadata`에는 원래 receipt와 그 source의 원래 claims를 보존한다. Source는 원래 HTTPS URL을 유지하고 `local_path=null`로 반환한다. receipt의 `raw_path`는 과거 보관 위치 metadata일 뿐 consumer가 파일을 다시 읽어도 되는 경로가 아니다. 변환 후 원문 파일이 바뀌어도 반환 Source의 hash와 receipt는 바뀌지 않으며 새 변환은 봉인 hash 불일치를 composer 호출 전에 거절한다. 새 composer summary의 `arguments_without_secrets.archive_conversion`에는 index, 세 manifest, candidate packet, 전체 receipts와 검색 crosscheck를 원래 JSON subtree로 둔다. 원래 403/404/429/oversize, 검색 backend 실패·fallback/rescue와 reused assets를 새 WorkflowError나 요청 RetrievalRecord로 바꾸지 않는다. 새 summary의 ID/run/provider/status/started_at/finished_at와 원래 획득 시각은 별개다. JSON/DTO 왕복으로 분리하며 반환 metadata 변경은 archive나 다른 호출에 반영되지 않는다.
+
+현재 `current_composition.scope="local_archive_transformation_only"`의 외부 요청/외부 비용 0과 composer의 `requests_used=0`은 이번 무네트워크 변환에만 해당한다. composer `cost`는 원래 계약의 null을 유지한다. 과거 획득의 물리 HTTP 요청은 `unmeasured`, paid ledger와 프로젝트 ToolRuntime은 `not_supplied_unverified`다. redirect 총수나 캠페인 비용을 실측 0으로 채우지 않는다.
+
+2026-10-07 최초 보유본은 외부 pin `84435b773164e95908165db2787827a983be0c14136a35fba19e64b84db6fe0b`에 묶인다. 봉인 파일 71개, source-bound claims 22개, 성공 HTML PI 7개/Skild 12개와 기존 PDF 2개다. GET attempt 23개와 실패 4개에는 preliminary PI429를 포함한다. 검색 4개의 backend 실패/구조와 rescue도 보존한다. 이 수치는 물리 HTTP 요청 총수나 승인 RunManifest가 아니다.
+
+실제 보유본 테스트는 아래 두 환경변수가 모두 있을 때만 실행한다. 둘 다 없으면 명시 skip하며 actual PASS로 세지 않는다. 하나만 있거나 지정 경로·pin이 잘못됐으면 실패한다. 원문 경로나 자료는 Git에 넣지 않는다.
+
+```sh
+SKALA_COMPANY_ARCHIVE_ROOT=/path/to/2026-10-07-initial \
+SKALA_COMPANY_ARCHIVE_PIN=84435b773164e95908165db2787827a983be0c14136a35fba19e64b84db6fe0b \
+uv run --offline --no-sync pytest -q -s tests/integration/test_company_archive_source_only.py
+```
+
+실제 두 후보의 새 composer 결과는 위 public consumer를 통과해 각각 `eligibility_unknown`, 전체 `no_eligible_candidates`/`NO_ELIGIBLE_RESULTS`로 끝난다. 정상 cutoff에서는 19 Sources를 보존하고 2026-10-06 cutoff에서는 전부 제외한다. 더 늦은 consumer clock도 원래 확보 시각을 덮어쓰지 않는다. private JSON readback/hash, metadata 보존과 callback 0을 테스트한다. 별도의 합성 sealed archive 테스트는 hash·anchor·candidate·경로·시각·JSON 공격 입력의 composer 전 거절과 반복 호출 분리를 검사한다.
+
+기업 facts와 authority는 여전히 미검토다. PI Series C 날짜 충돌·Acq - Rumored와 Skild의 Zebra division 매수자 역할을 법적 Exit 또는 단계 확정으로 승격하지 않는다. Skild `$1.4 billion` literal, `currency_normalized=null`, `closing_date=null`도 packet metadata 그대로다. 이 슬라이스는 Sources 보존과 unknown consumer 연결이며 full actual E2E·Coverage/freeze·평가·scoring·보고서·최종 발행, 신규 corpus/index/model/유료 실행 승인을 대신하지 않는다.
 
 ## 결과와 산출물
 
