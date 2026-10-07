@@ -105,7 +105,7 @@ result = run_source_only_v3(boundary, output_dir=private_new_directory)
 
 외부 index SHA-256은 필수다. composer 구성 전에 봉인 목록의 모든 bytes, manifest/receipt/source/candidate/packet join, raw→text 일치, Unicode claim anchor, 중복 ID와 시각을 검증한다. 선택하지 않은 후보도 검사한다. canonical 상대 경로만 허용하고 root부터 각 경로 component의 symlink와 일반 파일이 아닌 입력을 거절한다. 파일 상한은 일반 파일/HTML 8 MiB, 보유 PDF 32 MiB, 전체 64 MiB, 봉인 파일 128개다. PDF 상한은 과거 HTTP 응답 상한을 늘리는 설정이 아니라 기존 로컬 보유본의 무결성 검사 한도다. archive Python은 실행하지 않으며 자료를 고치거나 다시 봉인·수집하지 않는다. 중복 JSON key, 비유한 수치, 과도한 nesting과 이 형식에 없던 프로젝트 run/schema/generation 선언도 거절한다.
 
-성공 HTML만 원래 ID·title·URL·publisher(없으면 null)·raw hash로 Source를 만든다. language가 없으면 `unknown`이다. `retrieved_at`은 원래 receipt의 `finished_at`과 같은 시각이며 `published_at=null`은 그대로 둔다. claim에 관측된 날짜, HTTP Date, 현재 변환 시각이나 논문 `copied_at`를 발행·확보 시각으로 대체하지 않는다. 기존 PDF는 Source를 새로 만들지 않고 `reused_assets` metadata로만 보존한다. claim bytes/anchor 일치는 무결성 검사이지 사실·authority·criterion 의미 검토 통과가 아니다. `observations=()`, `calls=()`이며 FieldObservation/Evidence/rating/N/A/점수는 만들지 않는다. boolean None, stage unknown과 빈 field map은 기존 assembler가 만든다.
+성공 HTML만 원래 ID·title·URL·publisher(없으면 null)·raw hash로 Source를 만든다. language가 없으면 `unknown`이다. `retrieved_at`은 원래 receipt의 `finished_at`과 같은 시각이며 `published_at=null`은 그대로 둔다. claim에 관측된 날짜, HTTP Date, 현재 변환 시각이나 논문 `copied_at`를 발행·확보 시각으로 대체하지 않는다. 기존 PDF는 Source를 새로 만들지 않고 `reused_assets` metadata로만 보존한다. claim bytes/anchor 일치는 무결성 검사이지 사실·authority·criterion 의미 검토 통과가 아니다. 기본 호출은 `observations=()`, `calls=()`이며 FieldObservation/Evidence/rating/N/A/점수를 만들지 않는다. boolean None, stage unknown과 빈 field map은 기존 assembler가 만든다. 아래 #227의 명시적 설명 심사 입력만 예외다.
 
 Source의 `bibliographic_metadata`에는 원래 receipt와 그 source의 원래 claims를 보존한다. Source는 원래 HTTPS URL을 유지하고 `local_path=null`로 반환한다. receipt의 `raw_path`는 과거 보관 위치 metadata일 뿐 consumer가 파일을 다시 읽어도 되는 경로가 아니다. 변환 후 원문 파일이 바뀌어도 반환 Source의 hash와 receipt는 바뀌지 않으며 새 변환은 봉인 hash 불일치를 composer 호출 전에 거절한다. 새 composer summary의 `arguments_without_secrets.archive_conversion`에는 index, 세 manifest, candidate packet, 전체 receipts와 검색 crosscheck를 원래 JSON subtree로 둔다. 원래 403/404/429/oversize, 검색 backend 실패·fallback/rescue와 reused assets를 새 WorkflowError나 요청 RetrievalRecord로 바꾸지 않는다. 새 summary의 ID/run/provider/status/started_at/finished_at와 원래 획득 시각은 별개다. JSON/DTO 왕복으로 분리하며 반환 metadata 변경은 archive나 다른 호출에 반영되지 않는다.
 
@@ -123,7 +123,75 @@ uv run --offline --no-sync pytest -q -s tests/integration/test_company_archive_s
 
 실제 두 후보의 새 composer 결과는 위 public consumer를 통과해 각각 `eligibility_unknown`, 전체 `no_eligible_candidates`/`NO_ELIGIBLE_RESULTS`로 끝난다. 정상 cutoff에서는 19 Sources를 보존하고 2026-10-06 cutoff에서는 전부 제외한다. 더 늦은 consumer clock도 원래 확보 시각을 덮어쓰지 않는다. private JSON readback/hash, metadata 보존과 callback 0을 테스트한다. 별도의 합성 sealed archive 테스트는 hash·anchor·candidate·경로·시각·JSON 공격 입력의 composer 전 거절과 반복 호출 분리를 검사한다.
 
-기업 facts와 authority는 여전히 미검토다. PI Series C 날짜 충돌·Acq - Rumored와 Skild의 Zebra division 매수자 역할을 법적 Exit 또는 단계 확정으로 승격하지 않는다. Skild `$1.4 billion` literal, `currency_normalized=null`, `closing_date=null`도 packet metadata 그대로다. 이 슬라이스는 Sources 보존과 unknown consumer 연결이며 full actual E2E·Coverage/freeze·평가·scoring·보고서·최종 발행, 신규 corpus/index/model/유료 실행 승인을 대신하지 않는다.
+기업 facts와 authority의 전체 범위는 여전히 미검토다. PI Series C 날짜 충돌·Acq - Rumored와 Skild의 Zebra division 매수자 역할을 법적 Exit 또는 단계 확정으로 승격하지 않는다. Skild `$1.4 billion` literal, `currency_normalized=null`, `closing_date=null`도 packet metadata 그대로다. 이 슬라이스는 Sources 보존과 unknown consumer 연결이며 full actual E2E·Coverage/freeze·평가·scoring·보고서·최종 발행, 신규 corpus/index/model/유료 실행 승인을 대신하지 않는다.
+
+## 사용자 심사한 단일 설명의 원래 소비 경로 (#227)
+
+사용자는 `skild-ai-011`의 출처 귀속 진술과 제한을 이미 수용했고, 별도로 “한정된 설명 Evidence 연결 구현을 승인”을 선택했다. 이 권한은 Sequoia의 소개를 `candidate_id="skild-ai"`, `scope="company"`, `criterion_ids=[]`로 보존하는 데만 적용한다. 나머지 수용 진술 4건의 자동 소비, 법인 동일성, domain/listing/stage/Exit field mapping, rating, 최소 Coverage, 유료 실행과 발행은 포함하지 않는다. 봉인 packet의 역사 `unreviewed_for_production_semantics`와 manifest의 전체 `semantic_review="unreviewed"`를 유지한다.
+
+`prepare_reviewed_archive_description(...) -> str`는 기존 archive loader로 전체 봉인 bytes와 raw/text/claim closure를 확인한 뒤 한정된 기대 snapshot을 immutable JSON 문자열로 분리한다. 필수 인자는 `archive_root`, `expected_index_sha256`, `candidate`, `run_input`, `run_id`, `proposal_bytes`, `expected_proposal_sha256`, `decision_bytes`, `expected_decision_sha256`다. 심사안과 결정 bytes를 외부 기대 hash와 대조하고, 정확한 단일 item, 원래 claim 필드, 후보/기준일/archive pin, 진술/제한, reviewer attribution 및 보충 Unicode excerpt를 검증한다. 새 범용 registry, 승인 DTO, runner 또는 accepting callback은 없다.
+
+```python
+from skala_rag.tools.company_archive import (
+    compose_archive_company_research,
+    prepare_reviewed_archive_description,
+)
+
+reviewed_description = prepare_reviewed_archive_description(
+    archive_root=archive_root,
+    expected_index_sha256=external_index_pin,
+    candidate=candidate,
+    run_input=run_input,
+    run_id=run_id,
+    proposal_bytes=proposal_bytes,
+    expected_proposal_sha256=trusted_proposal_pin,
+    decision_bytes=decision_bytes,
+    expected_decision_sha256=trusted_decision_pin,
+)
+capture = compose_archive_company_research(
+    archive_root=archive_root,
+    expected_index_sha256=external_index_pin,
+    candidate=candidate,
+    run_input=run_input,
+    run_id=run_id,
+    budget=budget,
+    clock=clock,
+    reviewed_description=reviewed_description,
+)
+boundary = prepare_offline_source_only_v3(
+    run_id=run_id,
+    run_input=run_input,
+    candidate_bundle=candidate_bundle,
+    research_captures={candidate.candidate_id: capture},
+    reviewed_descriptions={candidate.candidate_id: reviewed_description},
+    run_profile=run_profile,
+    budget=budget,
+    clock=clock,
+)
+result = run_source_only_v3(boundary, output_dir=private_new_directory)
+```
+
+변수와 최종 고정 Candidate/RunInput은 호출자가 먼저 준비한다. 위 예시는 입력 생성이나 실행 권한을 부여하지 않는다. `compose_archive_company_research`와 원래 `assemble_research_state`는 선택적 `reviewed_description: str | None = None`를 받는다. 두 SourceOnly 준비 함수는 선택적 `reviewed_descriptions: Mapping[str, str] | None = None`를 받으며 capture가 있는 후보만 허용한다. SourceOnly는 이 별도 기대 입력도 기존 binding digest에 포함하고 소비 직전에 다시 변경 여부를 검사한 뒤 **원래 assembler에 전달한다**. 생략하면 기존 Sources-only/임의 manual 거절과 기본 binding 내용은 그대로다.
+
+composer는 자기 호출에서 읽은 새 archive snapshot과 보호된 기대 snapshot을 대조한 뒤 기존 `LiveResearchCompany`의 실제 로컬 summary에 Evidence를 붙인다. 소비자는 source 파일을 다시 열지 않는다. 준비 이후 archive가 바뀌면 새 composition은 거절하지만, 이미 검증·분리한 캡처를 소비할 때 mutable 경로로 다시 연결하지 않는다. Evidence에는 수용한 정확한 귀속 진술·제한과 보충 excerpt만 들어간다. `reported/unknown`, 빈 criterion/supporting/conflict 목록과 모든 수치/사건/derivation/supersedes의 None을 유지한다. provenance는 현재 로컬 summary의 retrieval ID, `method="manual"`, `chunk_id=None`다. HTTP ProviderCall, LLM 응답 또는 RAG Chunk를 만들지 않는다.
+
+assembler는 result/State 밖에서 전달받은 기대 입력과 현재 Candidate/RunInput/run/schema/as_of, 전체 Source/profile, statement/excerpt/locator/limitations, archive/review identity와 현재 성공 summary의 closure를 대조한다. 검증 후에도 기존 `verify_provenance`로 stable Evidence ID와 record/Source 연결을 확인한다. 임의 marker/accepted 문자열만 있는 manual Evidence는 계속 거절한다. `field_evidence_ids={}`, boolean None과 stage unknown은 그대로이고 Eligibility는 unknown이며 평가·점수·선정·보고서는 없다. 심사 metadata는 `arguments_without_secrets.reviewed_archive_description`에 item별로 남기며 전체 Source의 심사를 승격하지 않는다.
+
+**신뢰 책임:** hash 일치와 immutable snapshot은 caller-owned 입력의 무결성 검사이지 심사자의 인증이나 진술의 독립적 사실 증명이 아니다. 호출자는 신뢰된 사용자 심사 기록에서 외부 기대 pin과 범위 권한을 확보하고 보호해야 한다. 같은 mutable 파일이나 ToolResult/State의 자기 선언에서 hash와 기대 context를 함께 가져오면 이 신뢰 전제를 충족하지 않는다. 모든 기대 입력과 결과를 일관되게 다시 만든 공격자나 권한 있는 caller의 허위 재선언을 서명 없이 인증할 수 없다. reviewer 권위·기록 보관, 향후 field/criterion 의미 심사, runtime/spending gate와 재배포·발행 권한은 별도 의무다.
+
+실제 한 진술 회귀는 기존 archive opt-in 2개에 아래 4개를 추가해 같은 테스트 파일을 실행한다. 심사 변수 4개가 모두 없으면 해당 새 테스트만 opt-in skip이다. 일부만 지정했거나 paths/pins/bytes가 틀리면 실패한다. 합성 bytes/decisions는 거절·분리 제어군일 뿐 실제 사용자 심사로 세지 않는다.
+
+```sh
+SKALA_COMPANY_ARCHIVE_ROOT=/path/to/2026-10-07-initial \
+SKALA_COMPANY_ARCHIVE_PIN=84435b773164e95908165db2787827a983be0c14136a35fba19e64b84db6fe0b \
+SKALA_COMPANY_REVIEW_PROPOSAL=/path/to/semantic-review.json \
+SKALA_COMPANY_REVIEW_PROPOSAL_PIN=4d0026fe09c0de2e5165f65f8ffdba5ebd9563b776721ac6a6dc7acd18f8881d \
+SKALA_COMPANY_REVIEW_DECISIONS=/path/to/user-review.json \
+SKALA_COMPANY_REVIEW_DECISIONS_PIN=104da926ef282c67701477e4c205a7ef1a1993c9f9aa35cf3a5c5dd48a01ddd0 \
+uv run --offline --no-sync pytest -q -s tests/integration/test_company_archive_source_only.py
+```
+
+이는 보유 실제 archive·사용자 결정으로 composer → public SourceOnly → 원래 State를 실행하는 로컬 회귀다. saved Evidence/제한/manual record, 빈 field map, unknown/no-selection, archive·artifact hash와 네트워크/모델/encoder/평가/scoring/report callback 0을 확인한다. 새 실제 수집, full actual-v3, 유료 실행과 최종 발행의 완료 증거가 아니다.
 
 ## 결과와 산출물
 

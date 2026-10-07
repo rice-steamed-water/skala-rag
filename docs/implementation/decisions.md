@@ -14,6 +14,16 @@
 - Supersedes: 신규 실행 인터페이스의 CLI-first 방향과 CLI 기능/프로세스 종료 코드를 새 개발 완료 조건으로 요구하는 부분만 대체한다. 아래 D01–D14·V3-OPERATIONS 원문 기록은 수정하지 않는다. completed+Warning·현재 draft/findings·final 금지·fatal 구분은 유지하며 CLI exit 0/2/1은 기존 호환 매핑이다.
 - Still gated: 정책·rubric·selector·provider·corpus·예산/readiness·유료 호출 승인은 이 결정의 범위가 아니다. 기존 `skala_rag.cli.run(...) -> Path` 재사용만 안내하며 runner 이동·새 RunResult API·live 구현 완료를 주장하지 않는다.
 
+## #227 단일 사용자 심사 설명의 로컬 Evidence 연결
+
+- Status: APPROVED (한정된 연결 방식; full actual-v3 승인 아님).
+- Source: 사용자가 확인 UI에서 “한정된 설명 Evidence 연결 구현을 승인”을 선택했다. 이미 수용한 `skild-ai-011`의 귀속 진술과 제한을 재심사하는 결정이 아니다.
+- Decision: 기존 archive composer → 원래 `assemble_research_state` → public SourceOnly에서 `skild-ai-011`만 적격성 필드 없는 회사 설명 Evidence로 보존한다. 현재 실행한 로컬 변환 summary의 `manual` provenance만 좁게 허용한다. candidate는 `skild-ai`, company scope, 빈 criterion IDs, reported/unknown이며 field map과 모든 적격성 값/stage는 기존 unknown 그대로다.
+- Authority: 외부 archive/proposal/decision pins와 원래 심사 기록의 권위는 controller 책임이다. 검증된 immutable 기대 snapshot을 result/State 밖에서 전달하며, hash/marker/accepted 문자열만으로 인증된 의미 승인이라고 주장하지 않는다. SourceOnly binding은 입력 변경을 검출하고 원래 consumer는 정확한 현재 세대·source/statement/anchor/제한 및 local record closure를 확인한다.
+- Not approved: 나머지 4개 수용 진술 자동 소비, identity/domain/listing/stage/Exit mapping, field 관측 identity 완화, Source 전역 reviewed 승격, rating/Coverage, 새 registry/runner, HTTP·모델·유료 실행, 보고서·발행. 원래 봉인 packet은 바꾸지 않는다.
+- Implementation and tests: [Source-only 호출 계약](source-only-v3.md#사용자-심사한-단일-설명의-원래-소비-경로-227), 합성 거절 제어군과 별도 실제 archive/사용자 결정 opt-in 회귀. 테스트 통과는 심사 권위의 인증이나 full actual-v3 완료가 아니다. schema/policy/default 변경 없음.
+- Owner: 사용자 승인, 구현 담당 luk0715 (#227). 별도 승인 시각은 추정하지 않는다.
+
 ## #158 현재 실행 provider 제외 승인 범위
 
 사용자의 이번 실행 지시로 KIPRIS·KRX·중기부·Tavily를 제외하고 각각
