@@ -359,3 +359,11 @@ N/A는 확인된 pre-revenue Rule40·동일 기간/주체 OCF≥0 runway만 허�
 rule ID/reason/snapshot evidence 필수, 미확인은 missing, burn5는 실제 재무근거 필요.
 작은 기저 limitations 필수(새 cap/threshold 없음), pre/post 미상은 missing,
 valuation 직전3배/동종중앙값2배, CAPEX 제외. 정책 승인과 #55 live 완료는 별개.
+
+## D09 후속: 본문 5절과 마지막 REFERENCE 승인 (#223, 2026-10-07)
+
+- Status: APPROVED (목차 정합화만). 사용자 승인 기록: [#35 comment 6029117687](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-6029117687), [#223](https://github.com/rice-steamed-water/skala-rag/issues/223).
+- Decision: 최신 v3의 순서는 SUMMARY → COMPANY & TEAM → TECHNOLOGY → MARKET → INVESTMENT ASSESSMENT & RISKS → REFERENCE다. 기술과 시장의 원본 역할 내용·인용을 각 절에 보존한다. 통합 본문을 복제하거나 사실·점수·판정을 만들지 않는다.
+- Scope: 기존 ReportContentV3/Generator/구조 Validator/HTML/PDF와 fixture/local-demo 호출자를 재사용한다. 별도 runner는 추가하지 않는다. baseline 7절 계약과 #94의 통합 목차 승인 기록, 원문·과거 산출물은 그대로 보존한다.
+- Unchanged: 인용/REFERENCE closure, context/snapshot/policy/hash, 공유 수정 최대 2회, Warning, actual admission·최종 발행 guard, PDF 최대 5페이지와 SUMMARY 반 페이지.
+- Boundary: 이 승인은 유료 호출·새 provider/model/corpus/scoring 정책·실제 기업 적격성·최종 발행 승인이 아니다. 합성 offline 결과는 full actual-v3 완료 증거가 아니며 #96/#168 목표는 HOLD로 유지한다.

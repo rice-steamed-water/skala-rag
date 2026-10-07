@@ -26,7 +26,8 @@ FONT_ROOT = Path(__file__).with_name("fonts")
 TITLES = {
     "SUMMARY": "요약",
     "COMPANY & TEAM": "기업·팀",
-    "TECHNOLOGY & MARKET": "기술·시장",
+    "TECHNOLOGY": "기술",
+    "MARKET": "시장",
     "INVESTMENT ASSESSMENT & RISKS": "투자 평가·위험",
     "REFERENCE": "참고문헌",
 }

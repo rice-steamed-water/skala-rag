@@ -18,7 +18,7 @@ def build_korean_report_pdf(
     output_dir: Path,
     execution_mode: str,
 ) -> tuple[RenderResult, ValidationResult]:
-    """render 실패(artifact_path=None)면 layout 검증 없이 RenderResult만 의미가 있다."""
+    """미발행 결과의 layout 수정 요청과 기술 실패를 구분해 전달한다."""
     render = HTMLPDFRenderer(
         output_dir=output_dir,
         proof=lambda _: (structural, judgement),
@@ -26,11 +26,17 @@ def build_korean_report_pdf(
         context=context,
     )(draft, TEMPLATE)
     if render.artifact_path is None:
+        layout_checks = render.layout_measurements.get("checks")
         validation = ValidationResult(
             schema_version=draft.schema_version,
             valid=False,
             context_id=draft.context_id,
-            checks={"action": "fail"},
+            checks={
+                **(layout_checks if isinstance(layout_checks, dict) else {}),
+                "action": render.layout_measurements.get("action", "fail"),
+                "pdf_verified": False,
+                "final_allowed": False,
+            },
             errors=render.errors,
             artifact_hash=render.layout_measurements["draft_hash"],
         )

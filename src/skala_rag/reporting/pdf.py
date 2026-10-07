@@ -41,7 +41,8 @@ from skala_rag.reporting.validator import artifact_hash
 SECTIONS = (
     "SUMMARY",
     "COMPANY & TEAM",
-    "TECHNOLOGY & MARKET",
+    "TECHNOLOGY",
+    "MARKET",
     "INVESTMENT ASSESSMENT & RISKS",
     "REFERENCE",
 )
@@ -83,6 +84,8 @@ def _blocks(markdown):
         heading = re.match(r"^#{1,3}\s+(.+)$", line)
         if heading:
             title = _heading(heading.group(1))
+            if title == "TECHNOLOGY & MARKET":
+                raise ValueError("v3 기술·시장 통합 절은 허용하지 않습니다")
             if title in SECTIONS:
                 section = title
                 sections.append(title)
@@ -109,8 +112,35 @@ def _blocks(markdown):
         blocks.append((section, "paragraph", line))
         i += 1
     if sections != list(SECTIONS):
-        raise ValueError("v3 다섯 섹션 순서/중복/누락 오류")
+        raise ValueError("v3 본문 5절과 REFERENCE 순서/중복/누락 오류")
     return blocks
+
+
+def _physical_sections(reader, draft):
+    """Check real 14pt heading lines in physical page order, not body substrings."""
+    lines = {}
+    for number, page in enumerate(reader.pages):
+
+        def visit(text, cm, tm, font, size, number=number):
+            if not text.strip() or abs(size * abs(cm[3]) - 14) >= 0.1:
+                return
+            x = tm[4] * cm[0] + tm[5] * cm[2] + cm[4]
+            y = tm[4] * cm[1] + tm[5] * cm[3] + cm[5]
+            bold = font is not None and str(font.get("/BaseFont", "")).endswith("Bold")
+            lines.setdefault((number, -round(y, 1)), []).append((x, text, bold))
+
+        page.extract_text(visitor_text=visit)
+    headings = []
+    for _, parts in sorted(lines.items()):
+        parts.sort(key=lambda part: part[0])
+        if not all(part[2] for part in parts):
+            return False
+        headings.append(re.sub(r"\s+", " ", "".join(part[1] for part in parts)).strip())
+    # The public parser also permits an explicit document title before SUMMARY.
+    expected = [
+        value for _, kind, value in _blocks(draft.markdown) if kind == "heading"
+    ]
+    return headings == expected
 
 
 def _failure(draft, code):
@@ -397,9 +427,7 @@ class PDFRenderer:
             required = [f"[@evidence:{eid}]" for eid in draft.cited_evidence_ids]
             required += [f"[@source:{sid}]" for sid in draft.reference_source_ids]
             checks["citations"] = all(token in normalized for token in required)
-            checks["sections"] = all(
-                re.sub(r"\s+", "", title) in normalized for title in SECTIONS
-            )
+            checks["sections"] = _physical_sections(reader, draft)
             # 저장 PDF의 실제 용지 크기를 확인한다.
             checks["page_size"] = all(
                 abs(float(p.mediabox.width) - A4[0]) < 0.1
@@ -507,9 +535,7 @@ class PDFLayoutValidator:
         tokens = [f"[@evidence:{eid}]" for eid in draft.cited_evidence_ids]
         tokens.extend(f"[@source:{sid}]" for sid in draft.reference_source_ids)
         checks["citations"] = all(token in text for token in tokens)
-        checks["sections"] = all(
-            re.sub(r"\s+", "", title) in text for title in SECTIONS
-        )
+        checks["sections"] = _physical_sections(reader, draft)
         valid = all(checks.values())
         checks.update(
             pdf_verified=valid,

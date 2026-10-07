@@ -40,7 +40,8 @@ class FixtureReportLLM:
                 schema_version=data["schema_version"],
                 summary="가상 후보 비교; 실제 투자 권고가 아니다.",
                 company_team=claim,
-                technology_market=claim,
+                technology="가상 기술 검토: 실제 기술 성능은 검증하지 않았다.",
+                market="가상 시장 검토: 실제 시장 규모·수요는 검증하지 않았다.",
                 assessment_risks=(
                     "가상 정책의 점수·판정이며 실제 모델 품질은 검증하지 않았다."
                 ),

@@ -10,8 +10,14 @@ renderer가 원격 이미지/URL을 fetch하거나 원문 HTML을 실행하지 �
 `PDFRenderer(profile, output_dir, proof, execution_mode)`는 RenderPdf Protocol의
 (draft, template) 호출 경계다. proof(draft)는 최신 ValidationResult/ReportJudgement를
 반환해야 한다. 양쪽 pass, context_id와 원래 artifact_hash 일치 전에는 렌더하지 않는다.
-PDF는 문장/점수/label/인용을 수정하지 않는다. v3 다섯 섹션 순서를 확인하고 한글·표·
-URL·Evidence/Source token을 보존한다. #94는 이 경계에 실제 검증 결과를 주입한다.
+PDF는 문장/점수/label/인용을 수정하지 않는다. [#223 목차 승인](reporting.md#현재-v3-목차-본문-5절과-마지막-reference-223)에 따라
+SUMMARY → COMPANY & TEAM → TECHNOLOGY → MARKET → INVESTMENT ASSESSMENT & RISKS → REFERENCE
+순서의 본문 5절과 마지막 REFERENCE를 확인하고 한글·표·URL·Evidence/Source token을 보존한다.
+기술과 시장의 원본 역할 출력·인용을 각 절에 보존하며 통합 본문을 복제하지 않는다.
+#94는 이 경계에 실제 검증 결과를 주입한다. HTML→PDF 제목 측정은 실제 14pt 절 제목을
+식별해 스코어보드의 기술·시장 행이나 역할 소제목을 절 제목으로 오인하지 않는다.
+HTML→PDF renderer는 렌더 전에 여섯 Markdown 제목의 정확한 순서·단일 출현을 확인하고,
+저장 PDF에서 중복 제목을 통과시키지 않는다.
 
 출력 RenderResult에는 실제 artifact path/page_count와 PDF bytes SHA-256,
 context/report ID·draft revision/hash·renderer/template 버전·실제 draw bbox·SUMMARY

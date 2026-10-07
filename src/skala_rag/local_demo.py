@@ -113,14 +113,15 @@ class ResearchSection(BaseModel):
 class ResearchContent(Contract):
     summary: ResearchSection
     company_team: ResearchSection
-    technology_market: ResearchSection
+    technology: ResearchSection
+    market: ResearchSection
     assessment_risks: ResearchSection
     limitations: list[Text]
 
 
 def cited_content(content, allowed):
     bodies, used = {}, set()
-    for name in ("summary", "company_team", "technology_market", "assessment_risks"):
+    for name in ("summary", "company_team", "technology", "market", "assessment_risks"):
         section = getattr(content, name)
         facts = []
         for claim in section.facts:
@@ -304,6 +305,10 @@ class DemoLLM:
         if self.node == "generator":
             output_schema = ResearchContent
             system += (
+                "Keep technology and market separate with their own supporting "
+                "evidence_ids. Preserve their original role observations, "
+                "interpretations and unknowns; do not duplicate combined text "
+                "or infer market facts from technology results. "
                 "Include required_warning verbatim in SUMMARY. SUMMARY <=230 "
                 "Korean characters, other sections <=350 characters each. "
                 "Total narrative <=1300 Korean characters excluding citations. "

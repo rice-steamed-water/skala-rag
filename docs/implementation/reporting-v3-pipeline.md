@@ -1,9 +1,11 @@
 # #94 v3 보고서 생성·Judge·수정 흐름
 
-2026-09-30 xxhigh가 [두 mode의 다섯 섹션·모델 사용 범위를 승인](https://github.com/rice-steamed-water/skala-rag/issues/94#issuecomment-5906219758)했다.
+2026-09-30 xxhigh의 [통합 목차·모델 사용 범위 승인](https://github.com/rice-steamed-water/skala-rag/issues/94#issuecomment-5906219758)은 이력으로 보존한다.
+현재 목차는 [2026-10-07 후속 승인 #223](reporting.md#현재-v3-목차-본문-5절과-마지막-reference-223)에 따라
+SUMMARY, COMPANY & TEAM, TECHNOLOGY, MARKET,
+INVESTMENT ASSESSMENT & RISKS, REFERENCE를 두 mode 모두 사용한다.
 Generator/Judge는 기존 OpenAI `gpt-4.1-mini-2025-04-14` adapter를 주입한다.
-SUMMARY, COMPANY & TEAM, TECHNOLOGY & MARKET,
-INVESTMENT ASSESSMENT & RISKS, REFERENCE를 두 mode 모두 유지한다.
+목차 변경은 새 모델·유료 실행·실제 사실 심사·최종 발행 승인이 아니다.
 무선택 SUMMARY에는 selector의 이유와 후보 결과를 보존한다. 과거 baseline의
 첫 추천·고정100 점수·세 label·7개 섹션을 이 경로에 넣지 않는다.
 
@@ -35,8 +37,10 @@ result = run_report_v3(context, generate=generate, judge=judge)
 ```
 
 `candidate_result`는 #89의 `CandidateRunV3`다. 같은 성공 후보 집합의 최종
-`EvaluationSnapshot`을 caller가 넘긴다. 기존 후보 controller가 snapshot을 결과에
-보존하지 않으므로 freeze 단계에서 저장해야 한다. baseline ReportInput으로 변환하지 않는다.
+`EvaluationSnapshot`을 caller가 넘기는 기존 API다. 현재 public 경로는 원래 결과의
+`research_artifacts[cid]["state"]["snapshots"]`를 보존하며,
+`build_report_context_from_run_v3`가 이 snapshot을 직접 소비한다.
+이 인계 구현을 actual 평가 성공으로 해석하지 않으며 baseline ReportInput으로 변환하지 않는다.
 selector의 run/schema/policy·후보/score 집합, score/snapshot 세대, decision/outcome,
 Evidence→Source/지원 Evidence/retrieval/RAG Chunk, corpus·as_of를 대조한다.
 충돌하는 Evidence/Source ID의 다른 payload와 미래 자료를 거절한다.
@@ -49,11 +53,13 @@ Generator/Judge는 같은 고정 payload를 받는다. raw snapshot/Source의 te
 
 ## 검증·회계
 
-Generator 출력 schema는 네 narrative section과 limitations다. wrapper가 다섯 heading,
+Generator 출력 schema는 `summary`, `company_team`, `technology`, `market`,
+`assessment_risks`의 다섯 본문과 `limitations`다(`report-v3-3`). wrapper가 여섯 heading,
 원래 점수·N/A·관측/정규화 점수·여섯 차원·판정/위험/한계와 후보 비교를 결정적으로
 추가하고, 본문에서 실제 인용한 Evidence의 Source만 REFERENCE에 넣는다.
 Decimal은 context의 정확한 문자열을 그대로 표시하고 null은 미상으로 표시한다.
 추가 검색·없는 Evidence·Source 생성·문서 지시 실행·점수 변경은 허용하지 않는 prompt다.
+기술과 시장 내용·인용은 각 본문에 보존하며 이전 통합 본문을 복제하거나 자동 분할하지 않는다.
 
 `validate_report_v3`는 목차·빈 섹션·fence·인용/REFERENCE 폐쇄성, context/hash,
 고정 점수·선택 block 보존과 fixture 표시를 검사한다. 의미·사실성은

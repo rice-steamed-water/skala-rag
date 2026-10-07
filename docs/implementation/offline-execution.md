@@ -52,7 +52,7 @@ PY
 
 무후보, 무선택, failed, eligibility_unknown은 원래 후보 결과와 함께 읽는다. 보고서 `completed`가 후보 실패를 지우지는 않는다. 구조, 의미, PDF 수정은 기존 공유 2회 예산을 사용하며 소진은 `completed`와 Warning이다. 기술 실패와 stale proof는 `failed`다. 입력 거절은 예외가 될 수 있다. 모든 `ReportRunV3.final_allowed`는 False다.
 
-현재 `SECTIONS`는 REFERENCE를 포함한 총5절이다. 최신 요구의 '5개 section + 마지막 REFERENCE'와의 차이는 미결정으로 남기며 이 작업에서 목차 정책을 바꾸지 않는다. `execution_mode='offline'` 같은 별도 mode나 live 별칭은 없다. 현재 scored artifact 연결은 fixture만 지원한다. actual/scoring gate와 source-only의 eligible-not-ready 경계는 그대로이며 source-only 결과를 이 API의 보고서로 승격하지 않는다.
+목차 차이는 [2026-10-07 후속 승인 #223](reporting.md#현재-v3-목차-본문-5절과-마지막-reference-223)으로 해소한다. 현재 `SECTIONS`는 SUMMARY → COMPANY & TEAM → TECHNOLOGY → MARKET → INVESTMENT ASSESSMENT & RISKS → REFERENCE의 본문 5절과 마지막 REFERENCE다. #213 당시 총5절 설명은 이력이며 현재 계약이 아니다. `execution_mode='offline'` 같은 별도 mode나 live 별칭은 없다. 현재 scored artifact 연결은 fixture만 지원한다. actual/scoring gate와 source-only의 eligible-not-ready 경계는 그대로이며 source-only 결과를 이 API의 보고서로 승격하지 않는다.
 
 ## 다음 최소 작업과 범위 밖
 
