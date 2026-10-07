@@ -4,13 +4,15 @@ Physical AI / Robotics 스타트업의 투자 가능성을 조사·평가하는 
 
 ## Overview
 
-**현재 우선 목표 (#219):** [Offline v3 데모 패키지와 재현 안내](docs/implementation/offline-delivery.md). 기존 public graph/원래 snapshot/승인 산술/보고서를 합성 fixture로 연결하고 실제 ReportLab PDF와 원본 DTO/trace/hash를 저장한다. 실제 기업 평가·M3 live·최종 발행 완료는 아니며 #96/#168과 아래 과거 로컬 데모 이력은 보존한다.
+**현재 목표: 전체 actual-v3 완성.** [현재 구현·실제 검증·남은 작업](docs/implementation/actual-v3-status.md)을 기준으로 읽는다. #219/#220의 [Offline v3 합성 데모](docs/implementation/offline-delivery.md)는 완료 이력이다. #222에서 보유 실제 기업 자료를 새 로컬 `ToolResult`로 변환해 public Source-only graph에 연결했지만, 두 후보는 `unknown`이며 점수·선정·보고서는 없다. 실제 5개 평가 branch, 의미 심사, 점수·선정, Judge·최종 PDF와 재현은 아직 완료되지 않았다. #96/#168은 OPEN/blocked다.
+
+본문 5절과 마지막 REFERENCE 목차는 승인됐으며 #223/PR #225로 구현·병합·검증됐다: `SUMMARY` → `COMPANY & TEAM` → `TECHNOLOGY` → `MARKET` → `INVESTMENT ASSESSMENT & RISKS` → `REFERENCE`. 현재 main 기준은 `a830c7d7271544eefe4a9447401291e788fdfb74`다. 합성 PDF·캐시 기반 clean clone 재현 검증은 실제 기업 평가·유료 실행·최종 발행 승인이나 전체 actual-v3 완료가 아니다.
 
 - **Objective:** 비상장·Seed~Series C·Exit 미완료 스타트업을 대상으로 창업자, 시장성, 제품·기술력, 경쟁 우위, 실적, 투자조건을 분석한다.
 - **Method:** AI Agent의 역할 분담과 Agentic RAG를 결합한다. PDF·웹·API에서 수집한 근거로 LLM이 항목별 분석을 작성하고, 점수 계산·후보 선정·인용 검증은 코드가 수행한다.
 - **평가 기준:** 창업자 5 / 시장성 30 / 제품·기술력 25 / 경쟁 우위 20 / 실적 10 / 투자조건 10의 가중치를 사용한다. 자료가 부족한 항목은 결측으로 보존하고, 적용 제외 근거가 있는 항목만 계산 분모에서 제외한다.
 
-여러 후보의 조사·평가·선정 흐름은 가상 데이터로 실행할 수 있다. 실제 자료를 사용하는 **Physical Intelligence 단일 기업 로컬 데모**는 논문 검색, 다섯 역할의 모델 분석, 보고서 생성·검증과 PDF 출력을 연결한다. 실행 방법은 [로컬 라이브 데모 재현 가이드](#로컬-라이브-데모-재현-180)를 참조한다.
+여러 후보의 조사·평가·선정 흐름은 가상 데이터로 실행할 수 있다. 기존 **Physical Intelligence 단일 기업 로컬 데모**는 실제 논문 검색, 다섯 역할의 모델 분석, 보고서 생성·검증과 PDF 출력 경로를 제공한다. 이 경로의 구현과 과거 실행 이력은 전체 actual-v3 성공과 별개다. 실행 방법과 실측 한계는 [로컬 라이브 데모 재현 가이드](#로컬-라이브-데모-재현-180)를 참조한다.
 
 ## Features
 
@@ -20,7 +22,7 @@ Physical AI / Robotics 스타트업의 투자 가능성을 조사·평가하는 
 | 문서 검색·근거 추적 | BGE-M3 임베딩, SQLite 인덱스, cosine 검색, 기업·출처·기준일 필터, 검색 결과와 보고서 인용 연결 |
 | 기업 조사·적격성 판별 | 후보 정규화·중복 제거, 공식 홈페이지·OpenDART 조회, 투자 단계·상장·Exit 여부 검사 |
 | 투자 지표 평가 | 여섯 영역·23개 항목 평가, 가상 후보의 가중 점수·최종 후보 선정, 로컬 데모의 역할별 100점 환산 |
-| 보고서 생성·평가 | 요약, 기업·팀, 기술·시장, 투자 평가·위험, 참고문헌 생성. 별도 LLM Judge가 근거성·일관성·평가 근거 검사 |
+| 보고서 생성·평가 | 요약, 기업·팀, 기술, 시장, 투자 평가·위험, 참고문헌 생성. 별도 LLM Judge가 근거성·일관성·평가 근거 검사 |
 | 한글 HTML·PDF 출력 | 점수표, 원문 발췌·페이지·참고문헌 제공. A4·최대 5페이지·요약 반 페이지 이내 검증 |
 | 실행 기록·비용 제어 | 검색·모델 호출·평가 결과·파일 해시 저장, 호출·시간·비용 상한과 재승인 처리 |
 
@@ -124,7 +126,7 @@ skala-rag/
 Python 3.11 이상과 uv를 사용하며, 아래 명령은 저장소 루트 기준이다.
 
 ```bash
-uv sync --locked
+uv sync --frozen
 uv run ruff check .
 uv run ruff format --check .
 uv run pytest -ra
@@ -133,7 +135,9 @@ uv build
 
 브라우저 테스트는 Chromium 설치 후 실행한다. 실제 기업조사·기술평가 테스트는 각각 `SKALA_LIVE_COMPANY_RESEARCH=1`, `SKALA_LIVE_TECHNOLOGY_EVAL=1`과 해당 입력·API 설정을 요구한다. 브라우저 제외 실행은 `uv run pytest -m "not browser"`, 브라우저만 실행은 `uv run pytest -m browser`를 사용한다.
 
-기준 커밋 `a4abe79`의 전체 테스트는 **2,748개 통과·4개 실패·2개 건너뜀**이다. 실패는 기본 ReportLab 보고서의 페이지 제한 검사와 관련되며, 한글 HTML·Chromium PDF와 로컬 데모의 모의 응답 통합 테스트는 통과했다.
+**과거 검증 이력:** 기준 커밋 `a4abe79`의 전체 테스트는 **2,748개 통과·4개 실패·2개 건너뜀**이었다. 당시 실패는 기본 ReportLab 보고서의 페이지 제한 검사와 관련되며, 한글 HTML·Chromium PDF와 로컬 데모의 모의 응답 통합 테스트는 통과했다. 현재 tree의 실패 목록이 아니다. #222 최종 tree의 과거 gate와 별도 실제 source-proof 검증은 [현재 상태 문서](docs/implementation/actual-v3-status.md#검증-이력과-해석)에 구분해 기록한다.
+
+API 없는 합성 데모는 준비된 의존성 캐시에서 `uv sync --frozen --offline` 후 `uv run --offline --frozen python examples/v3_offline_demo.py`로 실행한다. fresh clone만으로 실제 기업 archive·승인 PDF·모델·index가 생기지는 않는다. 캐시와 로컬 자산, opt-in actual 테스트의 환경변수 및 재배포 권한 전제는 [팀원 재현 전제](docs/implementation/actual-v3-status.md#팀원-재현-전제)를 따른다.
 
 가상 후보 전체 실행은 [Python 실행 예제](docs/implementation/python-execution.md), API 호출 없는 한글 보고서 예제는 `uv run python examples/korean_report_fixture.py`를 사용한다. Docker·Compose·GitHub Actions·배포 설정은 현재 저장소에 추가되어 있지 않다.
 
@@ -144,7 +148,7 @@ macOS/Linux에서 앱·자료·검색을 로컬로 실행하고, 모델 분석·
 1. 저장소 루트에서 설치·자료 준비:
 
    ```bash
-   uv sync --locked
+   uv sync --frozen
    uv run playwright install chromium
    uv run python -c 'from pathlib import Path; from skala_rag.demo_prepare import prepare_demo; print(prepare_demo(root=Path.cwd()))'
    ```

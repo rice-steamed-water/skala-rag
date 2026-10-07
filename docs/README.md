@@ -6,7 +6,9 @@
 
 ## 먼저 할 일
 
-**현재 우선 목표 (#219):** [Offline v3 데모 패키지](implementation/offline-delivery.md)의 합성 데모 산출물과 재현 안내를 완성한다. 실제 기업 평가·M3 live·최종 발행이나 과제 전체 완료를 뜻하지 않는다. #96/#168, 원래 필수 요구와 아래 historical snapshot은 유지한다.
+**현재 목표: 전체 actual-v3 완성.** [현재 구현·실제 검증·남은 작업](implementation/actual-v3-status.md)을 먼저 확인한다. #219/#220의 [Offline v3 합성 데모 패키지](implementation/offline-delivery.md)는 완료 이력이고 현재 목표를 대신하지 않는다. #222의 실제 기업 Source producer와 public Source-only 소비 경로는 연결됐지만, 실제 적격성·5개 평가 branch·점수·선정·Judge·최종 PDF와 clean actual replay는 미완료다. #96/#168은 OPEN/blocked이며 원래 필수 요구와 아래 historical snapshot은 유지한다.
+
+승인된 목차는 `SUMMARY` → `COMPANY & TEAM` → `TECHNOLOGY` → `MARKET` → `INVESTMENT ASSESSMENT & RISKS` → `REFERENCE`다([승인 기록 #35](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-6029117687)). #223/PR #225의 구현·병합·검증을 반영한 현재 main 기준은 `a830c7d7271544eefe4a9447401291e788fdfb74`다. 합성 PDF와 캐시 기반 clean clone 검증 범위는 [현재 상태의 검증 이력](implementation/actual-v3-status.md#검증-이력과-해석)을 따른다. 목차 승인·구현 완료는 실제 사실 심사·정책·비용·적격성·최종 발행 승인과 별개다.
 
 **실행 인터페이스 후속 승인 #166:** [Python 직접 실행](implementation/python-execution.md)으로 마무리하며 신규 CLI·옵션·console-script·CLI UX 개발은 중단한다. 기존 #29 fixture callable/parser·테스트는 호환성으로 보존한다. 이 문서의 과거 pinned 구현 snapshot과 CLI2 승인 설명은 이력이며 현재 실행 완료 조건은 Python 상태/receipt·산출물 검증이다. 정책·예산/readiness·live 승인 범위는 바꾸지 않는다.
 
@@ -23,6 +25,7 @@
 
 | 필요한 내용 | 문서 | 우선 독자 |
 | --- | --- | --- |
+| full actual-v3 요구별 구현·fixture/actual 증거·남은 작업과 재현 전제 | [현재 actual-v3 상태](implementation/actual-v3-status.md) | 전원 |
 | 최종 실행 인터페이스, 기존 callable·receipt와 호환 경계 | [Python 직접 실행](implementation/python-execution.md) | 전원 |
 | v3 출처·절별 추적·현재 GitHub 작업 영향 | [v3 정합화 기록](implementation/design-v3-alignment.md) | 전원 |
 | 전체 흐름, 노드 책임, 반복과 종료 | [아키텍처](implementation/architecture.md) · [v3 실행 그래프 (Archify HTML)](../.archify/architecture-v3-agent-20260930-172142/v3-agent.html) · [소스·검증 안내](../.archify/architecture-v3-agent-20260930-172142/README.md) | Graph / Agent 담당 |
