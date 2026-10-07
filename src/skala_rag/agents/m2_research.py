@@ -29,6 +29,11 @@ from skala_rag.contracts.error_codes import ERROR_SPECS, ErrorCode
 from skala_rag.contracts.errors import WorkflowError
 from skala_rag.contracts.interfaces import ResearchCompany
 from skala_rag.contracts.state import InvestmentState, create_initial_state
+from skala_rag.tools.company_archive import (
+    _reviewed_description_context,
+    _reviewed_description_evidence,
+    _timestamp,
+)
 from skala_rag.tools.company_research import EXTRACTOR_TOOL_ERRORS, TOOL_NAME
 from skala_rag.tools.source_fetch import check_as_of, snapshot_source_id
 
@@ -45,6 +50,7 @@ def assemble_research_state(
     run_input: RunInput,
     run_id: str,
     result: ToolResult[CompanyResearchBundle],
+    reviewed_description: str | None = None,
 ) -> ResearchState:
     """Validate provider output, link actual evidence paths and run #18 admission."""
     context = {"execution_mode": run_input.execution_mode}
@@ -54,6 +60,17 @@ def assemble_research_state(
     result = ToolResult[CompanyResearchBundle].model_validate(
         result.model_dump(mode="python"), context=context
     )
+    expected_review = None
+    if reviewed_description is not None:
+        try:
+            expected_review = _reviewed_description_context(
+                reviewed_description,
+                candidate=candidate,
+                run_input=run_input,
+                run_id=run_id,
+            )
+        except (ValueError, KeyError, TypeError, IndexError):
+            raise TraceInvalid("reviewed description context invalid") from None
     if not run_id.strip() or candidate.country not in run_input.countries:
         raise TraceInvalid("research candidate/run scope mismatch")
     state = create_initial_state(run_input.model_dump(mode="json"))
@@ -216,6 +233,73 @@ def assemble_research_state(
                 raise TraceInvalid("research source map key mismatch")
             if not check_as_of(source, run_input.as_of).admitted:
                 raise TraceInvalid("research source is after the run cutoff")
+        if expected_review is not None:
+            expected, decision = expected_review
+            if len(records) != 1 or result.status != "ok" or result.errors:
+                raise TraceInvalid(
+                    "reviewed description requires current local summary"
+                )
+            record = next(iter(records.values()))
+            args = record.arguments_without_secrets
+            conversion = args.get("archive_conversion", {})
+            marker = args.get("reviewed_archive_description")
+            sid = expected["source"]["source_id"]
+            item = _reviewed_description_evidence(
+                expected, decision, record.retrieval_id
+            )
+            if (
+                result.schema_version != run_input.schema_version
+                or bundle.schema_version != run_input.schema_version
+                or record.schema_version != run_input.schema_version
+                or record.retrieval_id != f"retrieval-{TOOL_NAME}-{run_id}-{cid}-1"
+                or record.tool_name != TOOL_NAME
+                or record.query != candidate.canonical_name
+                or record.status != "ok"
+                or record.error_id is not None
+                or record.chunk_ids
+                or record.cost is not None
+                or record.cache_hit
+                or record.started_at
+                < _timestamp(expected["archive"]["collection_index"]["sealed_at"])
+                or set(record.source_ids) != set(bundle.sources)
+                or {sid: s.model_dump(mode="json") for sid, s in bundle.sources.items()}
+                != expected["sources"]
+                or record.evidence_ids != [item.evidence_id]
+                or args.get("as_of") != run_input.as_of.isoformat()
+                or args.get("requests_used") != 0
+                or args.get("providers")
+                != {
+                    "archive-local-sources": dict(
+                        status="ok",
+                        required=True,
+                        error_code=None,
+                        skipped=None,
+                        notes=[],
+                    )
+                }
+                or args.get("rejected_observations") != []
+                or conversion.get("origin") != "new_archive_conversion"
+                or conversion.get("index_sha256") != expected["expected_index_sha256"]
+                or any(conversion.get(k) != v for k, v in expected["archive"].items())
+                or conversion.get("current_composition")
+                != dict(
+                    scope="local_archive_transformation_only",
+                    external_requests_used=0,
+                    external_cost_usd=0,
+                )
+                or marker
+                != dict(
+                    review_item_id="skild-ai-011",
+                    decision_sha256=expected["expected_decision_sha256"],
+                    proposal_sha256=expected["expected_proposal_sha256"],
+                    decision=decision,
+                )
+                or sid not in bundle.sources
+                or bundle.sources[sid].model_dump(mode="json") != expected["source"]
+                or bundle.evidence != {item.evidence_id: item}
+                or bundle.profile.model_dump(mode="json") != expected["profile"]
+            ):
+                raise TraceInvalid("reviewed description local conversion mismatch")
         for eid, evidence in bundle.evidence.items():
             if (
                 eid != evidence.evidence_id
@@ -237,7 +321,12 @@ def assemble_research_state(
             for path in evidence.provenance:
                 record = records.get(path.retrieval_id)
                 if (
-                    path.method not in ("web", "api")
+                    (
+                        path.method not in ("web", "api")
+                        and not (
+                            path.method == "manual" and expected_review is not None
+                        )
+                    )
                     or path.chunk_id is not None
                     or record is None
                     or record.status != "ok"

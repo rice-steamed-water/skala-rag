@@ -12,14 +12,25 @@ from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlsplit
 
-from skala_rag.contracts import Candidate, RunInput, Source, ToolBudget, ToolResult
+from skala_rag.contracts import (
+    Candidate,
+    Evidence,
+    EvidenceProvenance,
+    RunInput,
+    Source,
+    ToolBudget,
+    ToolResult,
+)
+from skala_rag.contracts.ids import evidence_id
 from skala_rag.contracts.interfaces import Clock
 from skala_rag.contracts.tools import CompanyResearchBundle
 from skala_rag.tools.company_research import (
     CallBudget,
     LiveResearchCompany,
     ProviderOutcome,
+    assemble_bundle,
 )
+from skala_rag.tools.source_fetch import check_as_of
 
 _MAX_FILE_BYTES = 8 * 1024 * 1024
 _MAX_REUSED_PDF_BYTES = 32 * 1024 * 1024
@@ -576,7 +587,257 @@ def _load_archive(root, expected_pin):
         index["physical_http_request_total"] is None,
         "historical physical HTTP total unsupported",
     )
-    return index, manifests, packets, rows, search
+    return index, manifests, packets, rows, search, texts
+
+
+def _archive_source(row, claims, schema_version):
+    return Source(
+        schema_version=schema_version,
+        source_id=row["source_id"],
+        title=row["title"],
+        publisher=row.get("publisher"),
+        source_kind="web",
+        url=row["resolved_url"],
+        local_path=None,
+        published_at=row["published_at"],
+        retrieved_at=row["finished_at"],
+        content_hash="sha256:" + row["raw_sha256"],
+        language=row.get("language", "unknown"),
+        access_notes="Retained HTML; local transformation; semantics unreviewed.",
+        bibliographic_metadata=dict(original_receipt=row, original_claims=claims),
+    )
+
+
+def prepare_reviewed_archive_description(
+    *,
+    archive_root: Path,
+    expected_index_sha256: str,
+    candidate: Candidate,
+    run_input: RunInput,
+    run_id: str,
+    proposal_bytes: bytes,
+    expected_proposal_sha256: str,
+    decision_bytes: bytes,
+    expected_decision_sha256: str,
+) -> str:
+    """Detach a caller-authorized one-claim snapshot, NOT authenticate a reviewer.
+
+    The controller owns all three expected hashes and the review authority. Never
+    derive these arguments from returned ToolResult/State metadata. Source bytes
+    are read only by the archive loader, once in this preparation snapshot.
+    """
+    for raw, pin in (
+        (proposal_bytes, expected_proposal_sha256),
+        (decision_bytes, expected_decision_sha256),
+    ):
+        _require(
+            type(raw) is bytes and len(raw) <= _MAX_FILE_BYTES,
+            "bounded review bytes required",
+        )
+        _require(_hash(raw) == _digest(pin), "external review pin mismatch")
+    _digest(expected_index_sha256)
+    index, manifests, packets, rows, search, texts = _load_archive(
+        archive_root.absolute(), expected_index_sha256
+    )
+    proposal, decisions = _json(proposal_bytes), _json(decision_bytes)
+    _require(
+        candidate.candidate_id == "skild-ai", "reviewed description candidate mismatch"
+    )
+    packet = packets[candidate.candidate_id]
+    originals = [c for c in packet["claims"] if c["claim_id"] == "skild-ai-011"]
+    items = [i for i in proposal["items"] if i["review_item_id"] == "skild-ai-011"]
+    accepted = [
+        d for d in decisions["decisions"] if d["review_item_id"] == "skild-ai-011"
+    ]
+    _require(
+        len(originals) == len(items) == len(accepted) == 1,
+        "exact single reviewed description required",
+    )
+    original, item, decision = originals[0], items[0], accepted[0]
+    for document in (proposal, decisions):
+        _require(
+            document["archive_index_sha256"] == expected_index_sha256
+            and document["research_as_of"] == run_input.as_of.isoformat(),
+            "review archive/date mismatch",
+        )
+    _require(
+        proposal["candidate_label"] == candidate.candidate_id
+        and decisions["proposal_sha256"] == expected_proposal_sha256,
+        "review proposal attribution mismatch",
+    )
+    _require(
+        all(item["original_claim"].get(k) == v for k, v in original.items()),
+        "review original claim mismatch",
+    )
+    _require(
+        original["source_id"] == "skild-sequoia-profile"
+        and decision["decision"] == "accepted_with_stated_limits"
+        and decision["accepted_statement_ko"] == item["proposed_statement_ko"]
+        and decision["limitations_ko"] == item["limitations_ko"]
+        and isinstance(decision["reviewer_identity"], str)
+        and bool(decision["reviewer_identity"].strip()),
+        "review decision mismatch",
+    )
+    basis = decision["source_evidence"]
+    _require(
+        basis["original_claim_id"] == original["claim_id"]
+        and basis["original_source_id"] == original["source_id"]
+        and basis["original_text_sha256"] == original["extracted_sha256"]
+        and basis["original_anchor"] == original["anchor"]
+        and basis["supplemental_context_anchors"]
+        == item["supplemental_context_anchors"]
+        and len(item["supplemental_context_anchors"]) == 1,
+        "review source/anchor mismatch",
+    )
+    context_anchor = item["supplemental_context_anchors"][0]
+    anchor = context_anchor["anchor"]
+    text = texts[original["source_id"]]
+    _require(
+        context_anchor["source_id"] == original["source_id"]
+        and context_anchor["extracted_sha256"] == _hash(text.encode())
+        and anchor["unit"] == "unicode_character_offset_zero_based"
+        and type(anchor["start"]) is int
+        and type(anchor["end"]) is int
+        and 0 <= anchor["start"] < anchor["end"] <= len(text)
+        and text[anchor["start"] : anchor["end"]] == context_anchor["verbatim_quote"]
+        and _hash(context_anchor["verbatim_quote"].encode())
+        == _digest(anchor["sha256_utf8"]),
+        "review excerpt mismatch",
+    )
+    source = _archive_source(
+        rows[original["source_id"]],
+        [c for c in packet["claims"] if c["source_id"] == original["source_id"]],
+        run_input.schema_version,
+    )
+    # JSON text is immutable; no file pointers, mutable DTOs, callbacks or clients.
+    expected_sources = {}
+    for row in rows.values():
+        if row["status"] == "captured" and row["candidate"] == candidate.candidate_id:
+            retained = _archive_source(
+                row,
+                [c for c in packet["claims"] if c["source_id"] == row["source_id"]],
+                run_input.schema_version,
+            )
+            if check_as_of(retained, run_input.as_of).admitted:
+                expected_sources[retained.source_id] = retained.model_dump(mode="json")
+    _require(
+        source.source_id in expected_sources,
+        "reviewed description source cutoff mismatch",
+    )
+    empty_bundle, _, _ = assemble_bundle(
+        candidate,
+        [Source.model_validate(s) for s in expected_sources.values()],
+        [],
+        as_of=run_input.as_of,
+        schema_version=run_input.schema_version,
+    )
+    return json.dumps(
+        dict(
+            candidate_id=candidate.candidate_id,
+            run_id=run_id,
+            candidate=candidate.model_dump(mode="json"),
+            run_input=run_input.model_dump(mode="json"),
+            sources=expected_sources,
+            profile=empty_bundle.profile.model_dump(mode="json"),
+            schema_version=run_input.schema_version,
+            as_of=run_input.as_of.isoformat(),
+            execution_mode=run_input.execution_mode,
+            expected_index_sha256=expected_index_sha256,
+            expected_proposal_sha256=expected_proposal_sha256,
+            expected_decision_sha256=expected_decision_sha256,
+            proposal_bytes=proposal_bytes.decode(),
+            decision_bytes=decision_bytes.decode(),
+            source=source.model_dump(mode="json"),
+            archive=dict(
+                collection_index=index,
+                source_manifests=manifests,
+                candidate_packet=packet,
+                original_receipts=rows,
+                search_crosscheck=search,
+            ),
+        ),
+        ensure_ascii=False,
+        sort_keys=True,
+        allow_nan=False,
+    )
+
+
+def _reviewed_description_context(value, *, candidate, run_input, run_id):
+    _require(
+        type(value) is str and len(value.encode()) <= _MAX_ARCHIVE_BYTES,
+        "controller-owned reviewed snapshot required",
+    )
+    context = json.loads(value)
+    _require(
+        context["candidate_id"] == candidate.candidate_id == "skild-ai"
+        and context["candidate"] == candidate.model_dump(mode="json")
+        and context["run_input"] == run_input.model_dump(mode="json")
+        and context["run_id"] == run_id
+        and context["schema_version"]
+        == candidate.schema_version
+        == run_input.schema_version
+        and context["as_of"] == run_input.as_of.isoformat()
+        and context["execution_mode"] == run_input.execution_mode == "live",
+        "reviewed description generation mismatch",
+    )
+    for name in ("proposal", "decision"):
+        _require(
+            _hash(context[name + "_bytes"].encode())
+            == _digest(context["expected_" + name + "_sha256"]),
+            "reviewed snapshot pin mismatch",
+        )
+    _digest(context["expected_index_sha256"])
+    decision = _json(context["decision_bytes"].encode())
+    matches = [
+        d for d in decision["decisions"] if d["review_item_id"] == "skild-ai-011"
+    ]
+    _require(
+        len(matches) == 1 and matches[0]["decision"] == "accepted_with_stated_limits",
+        "reviewed snapshot decision mismatch",
+    )
+    return context, matches[0]
+
+
+def _reviewed_description_evidence(context, decision, retrieval_id):
+    original = decision["source_evidence"]
+    span = original["supplemental_context_anchors"][0]
+    anchor = span["anchor"]
+    core = dict(
+        source_id=original["original_source_id"],
+        locator=f"{context['source']['url']}#unicode-character-offset={anchor['start']}:{anchor['end']}",
+        claim=decision["accepted_statement_ko"],
+        candidate_id=context["candidate_id"],
+        scope="company",
+        value=None,
+        unit=None,
+        currency=None,
+        value_as_of=None,
+        period=None,
+        geography=None,
+        event_date=None,
+        evidence_kind="reported",
+        supporting_evidence_ids=[],
+        derivation=None,
+        supersedes=None,
+    )
+    return Evidence(
+        schema_version=context["schema_version"],
+        evidence_id=evidence_id(**core),
+        criterion_ids=[],
+        excerpt=span["verbatim_quote"],
+        provenance=[
+            EvidenceProvenance(
+                schema_version=context["schema_version"],
+                retrieval_id=retrieval_id,
+                method="manual",
+                chunk_id=None,
+            )
+        ],
+        confidence="unknown",
+        limitations=[decision["limitations_ko"]],
+        conflicts_with=[],
+        **core,
+    )
 
 
 @dataclass
@@ -600,8 +861,9 @@ def compose_archive_company_research(
     run_id: str,
     budget: ToolBudget,
     clock: Clock,
+    reviewed_description: str | None = None,
 ) -> ToolResult[CompanyResearchBundle]:
-    """Compose sources only; claims are unreviewed metadata, never observations."""
+    """Compose Sources by default; optionally retain one reviewed description."""
     _digest(expected_index_sha256)
     _require(
         isinstance(run_id, str) and run_id.strip(), "new composition run ID required"
@@ -624,7 +886,7 @@ def compose_archive_company_research(
     )
     root = archive_root.absolute()
     try:
-        index, manifests, packets, rows, search = _load_archive(
+        index, manifests, packets, rows, search, _texts = _load_archive(
             root, expected_index_sha256
         )
         _require(
@@ -654,30 +916,40 @@ def compose_archive_company_research(
         if row["status"] != "captured":
             continue
         original_packet = packets[row["candidate"]]
-        source = Source(
-            schema_version=run_input.schema_version,
-            source_id=row["source_id"],
-            title=row["title"],
-            publisher=row.get("publisher"),
-            source_kind="web",
-            url=row["resolved_url"],
-            local_path=None,
-            published_at=row["published_at"],
-            retrieved_at=row["finished_at"],
-            content_hash="sha256:" + row["raw_sha256"],
-            language=row.get("language", "unknown"),
-            access_notes="Retained HTML; local transformation; semantics unreviewed.",
-            bibliographic_metadata=dict(
-                original_receipt=row,
-                original_claims=[
-                    c
-                    for c in original_packet["claims"]
-                    if c["source_id"] == row["source_id"]
-                ],
-            ),
+        source = _archive_source(
+            row,
+            [
+                c
+                for c in original_packet["claims"]
+                if c["source_id"] == row["source_id"]
+            ],
+            run_input.schema_version,
         )
         if row["candidate"] == candidate.candidate_id:
             sources.append(source)
+    review_context = None
+    if reviewed_description is not None:
+        review_context, decision = _reviewed_description_context(
+            reviewed_description,
+            candidate=candidate,
+            run_input=run_input,
+            run_id=run_id,
+        )
+        _require(
+            review_context["expected_index_sha256"] == expected_index_sha256
+            and review_context["archive"]
+            == dict(
+                collection_index=index,
+                source_manifests=manifests,
+                candidate_packet=packet,
+                original_receipts=rows,
+                search_crosscheck=search,
+            )
+            and any(
+                s.model_dump(mode="json") == review_context["source"] for s in sources
+            ),
+            "reviewed description archive snapshot mismatch",
+        )
     tool = LiveResearchCompany(
         [_ArchiveSources(tuple(sources))],
         run_id=run_id,
@@ -704,6 +976,25 @@ def compose_archive_company_research(
         historical_tool_runtime="not_supplied_unverified",
         post_collection_selection_context=True,
     )
+    if review_context is not None:
+        _require(
+            result.status == "ok"
+            and result.data is not None
+            and review_context["source"]["source_id"] in result.data.sources,
+            "reviewed description source not admitted",
+        )
+        record = result.retrieval_records[-1]
+        evidence = _reviewed_description_evidence(
+            review_context, decision, record.retrieval_id
+        )
+        result.data.evidence[evidence.evidence_id] = evidence
+        record.evidence_ids = [evidence.evidence_id]
+        record.arguments_without_secrets["reviewed_archive_description"] = dict(
+            review_item_id="skild-ai-011",
+            decision_sha256=review_context["expected_decision_sha256"],
+            proposal_sha256=review_context["expected_proposal_sha256"],
+            decision=decision,
+        )
     return ToolResult[CompanyResearchBundle].model_validate_json(
         result.model_dump_json(), context={"execution_mode": "live"}
     )

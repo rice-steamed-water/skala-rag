@@ -33,7 +33,10 @@ from skala_rag.contracts.tools import CompanyResearchBundle
 from skala_rag.fakes import FakeClock
 from skala_rag.graph import candidate_workflow_v3 as outer
 from skala_rag.rag.hf_embedding import HFEmbeddingEncoder
-from skala_rag.tools.company_archive import compose_archive_company_research
+from skala_rag.tools.company_archive import (
+    compose_archive_company_research,
+    prepare_reviewed_archive_description,
+)
 from skala_rag.tools.company_research import LiveResearchCompany
 from skala_rag.tools.official_homepage import OfficialHomepage
 from skala_rag.tools.runtime_llm import RuntimeStructuredLLM
@@ -400,6 +403,255 @@ def test_actual_archive_new_compositions_in_public_consumer(
                 selector_reason=result.selection.reason,
                 semantic_review="unreviewed",
                 evaluation="not_started",
+                publication_allowed=False,
+            )
+        )
+    )
+
+
+def test_actual_reviewed_description_persists_through_original_public_path(
+    actual_archive, tmp_path, monkeypatch
+):
+    names = (
+        "SKALA_COMPANY_REVIEW_PROPOSAL",
+        "SKALA_COMPANY_REVIEW_PROPOSAL_PIN",
+        "SKALA_COMPANY_REVIEW_DECISIONS",
+        "SKALA_COMPANY_REVIEW_DECISIONS_PIN",
+    )
+    inputs = [os.environ.get(name) for name in names]
+    if all(value is None for value in inputs):
+        pytest.skip(
+            "actual user review not supplied; synthetic controls are not user approval"
+        )
+    assert all(inputs), (
+        "actual review requires proposal/decisions paths AND external expected pins"
+    )
+    root, index_pin = actual_archive
+    proposal_path, proposal_pin, decision_path, decision_pin = inputs
+    proposal_bytes = Path(proposal_path).read_bytes()
+    decision_bytes = Path(decision_path).read_bytes()
+    accepted = next(
+        d
+        for d in json.loads(decision_bytes)["decisions"]
+        if d["review_item_id"] == "skild-ai-011"
+    )
+    before = (root / "collection-index.json").read_bytes()
+    index = json.loads(before)
+    calls = Counter()
+
+    def forbidden(*args, **kwargs):
+        calls["forbidden"] += 1
+        raise AssertionError(
+            "reviewed local description attempted external/evaluation callback"
+        )
+
+    # No mocks for the original archive producer, assembler, Eligibility or outer.
+    for target, name in (
+        (socket.socket, "connect"),
+        (socket.socket, "connect_ex"),
+        (socket, "create_connection"),
+        (socket, "getaddrinfo"),
+        (httpx.Client, "send"),
+        (httpx.AsyncClient, "send"),
+        (source_only_v3.SourceOnlyV3, "make_tool"),
+        (OfficialHomepage, "__init__"),
+        (OfficialHomepage, "__call__"),
+        (SafeFetcher, "__init__"),
+        (SafeFetcher, "fetch"),
+        (LLMEligibilityExtractor, "__call__"),
+        (OpenAIStructuredLLM, "__init__"),
+        (OpenAIStructuredLLM, "generate"),
+        (RuntimeStructuredLLM, "__init__"),
+        (RuntimeStructuredLLM, "generate"),
+        (HFEmbeddingEncoder, "__init__"),
+        (HFEmbeddingEncoder, "embed_texts"),
+        (EvidenceCollector, "__call__"),
+        (outer, "build_evaluation_graph_v3"),
+        (outer, "check_coverage_v3"),
+        (outer.snapshot_module, "freeze_snapshot"),
+        (outer, "aggregate_scores_v3"),
+        (outer, "decide_v3"),
+        (outer, "run_candidate_report_v3"),
+    ):
+        monkeypatch.setattr(target, name, forbidden)
+    run_id = f"issue227-reviewed-local-description-{uuid4().hex}"
+    run = RunInput(
+        schema_version="issue227-source-only",
+        investment_theme="Physical AI / Robotics",
+        countries=["US"],
+        languages=["en"],
+        as_of=date(2026, 10, 7),
+        policy_version="v3-operational-1.0.0",
+        corpus_version="no-corporate-corpus-admission",
+        execution_mode="live",
+    )
+    candidate = Candidate(
+        schema_version=run.schema_version,
+        candidate_id="skild-ai",
+        canonical_name="Skild AI",
+        aliases=[],
+        country="US",
+        homepage_url="https://www.skild.ai/",
+        legal_identifiers={},
+        discovery_source_ids=[],
+    )
+    clock = FakeClock(datetime.now(UTC))
+    budget = ToolBudget(
+        schema_version=run.schema_version,
+        max_calls=1,
+        max_retries=0,
+        timeout_seconds=30,
+    )
+    review = prepare_reviewed_archive_description(
+        archive_root=root,
+        expected_index_sha256=index_pin,
+        candidate=candidate,
+        run_input=run,
+        run_id=run_id,
+        proposal_bytes=proposal_bytes,
+        expected_proposal_sha256=proposal_pin,
+        decision_bytes=decision_bytes,
+        expected_decision_sha256=decision_pin,
+    )
+    capture = compose_archive_company_research(
+        archive_root=root,
+        expected_index_sha256=index_pin,
+        candidate=candidate,
+        run_input=run,
+        run_id=run_id,
+        budget=budget,
+        clock=clock,
+        reviewed_description=review,
+    )
+    assert len(capture.data.evidence) == 1 and len(capture.retrieval_records) == 1
+    assert len(capture.data.sources) == 12
+    eid = next(iter(capture.data.evidence))
+    evidence = capture.data.evidence[eid]
+    assert evidence.claim == accepted["accepted_statement_ko"]
+    assert evidence.limitations == [accepted["limitations_ko"]]
+    assert evidence.source_id == "skild-sequoia-profile"
+    assert (
+        evidence.excerpt
+        == accepted["source_evidence"]["supplemental_context_anchors"][0][
+            "verbatim_quote"
+        ]
+    )
+    assert evidence.locator.endswith("#unicode-character-offset=84:204")
+    assert evidence.scope == "company" and evidence.candidate_id == "skild-ai"
+    assert (
+        evidence.criterion_ids
+        == evidence.supporting_evidence_ids
+        == evidence.conflicts_with
+        == []
+    )
+    assert evidence.evidence_kind == "reported" and evidence.confidence == "unknown"
+    assert all(
+        getattr(evidence, name) is None
+        for name in (
+            "value",
+            "unit",
+            "currency",
+            "value_as_of",
+            "period",
+            "geography",
+            "event_date",
+            "derivation",
+            "supersedes",
+        )
+    )
+    record = capture.retrieval_records[0]
+    assert evidence.provenance[0].method == "manual"
+    assert evidence.provenance[0].retrieval_id == record.retrieval_id
+    assert evidence.provenance[0].chunk_id is None and record.chunk_ids == []
+    assert record.started_at == record.finished_at == clock.now()
+    assert record.arguments_without_secrets["requests_used"] == 0
+    assert record.cost is None
+    original = capture.model_dump(mode="json")
+    clock.current += timedelta(days=1)  # Later consumer clock, not new acquisition.
+    profile = run_settings.recommended_profile(
+        run_id=run_id,
+        selection_source="post-collection-fixed-candidate-input",
+        authority_reference="user-reviewed-description-only",
+        policy_references=(run.policy_version,),
+        code_version=None,
+    )
+    boundary = source_only_v3.prepare_offline_source_only_v3(
+        run_id=run_id,
+        run_input=run,
+        candidate_bundle=DiscoveryBundle(
+            schema_version=run.schema_version,
+            candidates=[candidate],
+            sources=capture.data.sources,
+        ),
+        research_captures={"skild-ai": capture},
+        reviewed_descriptions={"skild-ai": review},
+        run_profile=profile,
+        budget=budget,
+        clock=clock,
+    )
+    capture.data.evidence[eid].claim = "caller mutation after pinning"
+    output = tmp_path / "actual-reviewed-description"
+    final = source_only_v3.run_source_only_v3(boundary, output_dir=output)
+    assert final.status == "no_eligible_candidates"
+    assert (
+        final.selection.reason == "NO_ELIGIBLE_RESULTS"
+        and final.selection.selected_candidate_id is None
+    )
+    assert final.outcomes["skild-ai"].status == "eligibility_unknown"
+    assert final.scores == final.decisions == final.coverage_results == {}
+    assert not final.errors and calls["forbidden"] == 0
+    saved = json.loads((output / "candidate-run.json").read_text())
+    manifest = json.loads((output / "manifest.json").read_text())
+    detail = saved["source_only_detail"]["research"]["skild-ai"]
+    assert detail["result"] == original
+    state = detail["state"]
+    assert state["evidence"] == original["data"]["evidence"]
+    assert state["retrieval_history"][0]["evidence_ids"] == [eid]
+    assert (
+        state["retrieval_history"][0]["arguments_without_secrets"][
+            "reviewed_archive_description"
+        ]["decision"]
+        == accepted
+    )
+    assert state["company_profiles"]["skild-ai"]["field_evidence_ids"] == {}
+    stored_profile = state["company_profiles"]["skild-ai"]
+    assert (
+        stored_profile["domain_match"]
+        is stored_profile["is_listed"]
+        is stored_profile["exit_completed"]
+        is None
+    )
+    assert stored_profile["stage"]["normalized_round"] == "unknown"
+    assert state["eligibility_results"]["skild-ai"]["status"] == "unknown"
+    assert all(
+        c["review_authority_status"] == "unreviewed_for_production_semantics"
+        for s in state["sources"].values()
+        for c in s["bibliographic_metadata"]["original_claims"]
+    )
+    assert manifest["semantic_review"] == "unreviewed"
+    assert manifest["evaluation"] == manifest["scoring"] == "not_started"
+    assert manifest["publication_allowed"] is False
+    for name, digest in manifest["artifacts"].items():
+        assert hashlib.sha256((output / name).read_bytes()).hexdigest() == digest
+    assert (root / "collection-index.json").read_bytes() == before
+    for name, digest in index["file_sha256"].items():
+        assert hashlib.sha256((root / name).read_bytes()).hexdigest() == digest
+    print(
+        json.dumps(
+            dict(
+                actual_reviewed_description_output=str(output),
+                evidence_ids=[eid],
+                sources=12,
+                local_records=1,
+                forbidden_callbacks=calls["forbidden"],
+                terminal=final.status,
+                eligibility="unknown",
+                field_evidence_ids={},
+                decision_sha256=decision_pin,
+                proposal_sha256=proposal_pin,
+                index_sha256=index_pin,
+                artifact_sha256=manifest["artifacts"],
+                semantic_review="unreviewed",
                 publication_allowed=False,
             )
         )

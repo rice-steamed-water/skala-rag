@@ -30,6 +30,7 @@ from skala_rag.scoring.approval_registry import pinned_approval_registry
 from skala_rag.scoring.catalog import load_policy
 from skala_rag.scoring.selector_v3 import _select_best_v3
 from skala_rag.scoring.v3_policy import V3Policy, load_v3_policy
+from skala_rag.tools.company_archive import _reviewed_description_context
 from skala_rag.tools.company_research import LiveResearchCompany, same_site, url_host
 from skala_rag.tools.official_homepage import OfficialHomepage
 from skala_rag.tools.provider_scope import EXCLUDED_PROVIDERS
@@ -87,6 +88,7 @@ class SourceOnlyV3:
     research_replays_json: str = "{}"
     input_binding_sha256: str = ""
     fixed_candidate_json: str | None = None
+    reviewed_descriptions_json: str = "{}"
 
     def binding_digest(self):
         # Integrity only: a hash is not a signature, approval or source authority.
@@ -101,6 +103,15 @@ class SourceOnlyV3:
                     provider=self.provider,
                     replay_scope=self.replay_scope,
                     research_replays=json.loads(self.research_replays_json),
+                    **(
+                        dict(
+                            reviewed_descriptions=json.loads(
+                                self.reviewed_descriptions_json
+                            )
+                        )
+                        if self.reviewed_descriptions_json != "{}"
+                        else {}
+                    ),
                     **(
                         dict(
                             fixed_candidate_input=json.loads(self.fixed_candidate_json)
@@ -188,6 +199,18 @@ class SourceOnlyV3:
         captures = json.loads(self.research_replays_json)
         if not isinstance(captures, dict) or not captures.keys() <= candidates.keys():
             raise ValueError("source-only replay candidate closure mismatch")
+        reviews = json.loads(self.reviewed_descriptions_json)
+        if not isinstance(reviews, dict) or not reviews.keys() <= captures.keys():
+            raise ValueError("source-only reviewed description closure mismatch")
+        for cid, reviewed_description in reviews.items():
+            if cid not in candidates:
+                raise ValueError("source-only reviewed candidate mismatch")
+            _reviewed_description_context(
+                reviewed_description,
+                candidate=candidates[cid],
+                run_input=run,
+                run_id=self.run_id,
+            )
         for cid, payload in captures.items():
             self.validate_research_result(
                 ToolResult[CompanyResearchBundle].model_validate(
@@ -310,6 +333,8 @@ class SourceOnlyV3:
             raise ValueError("source-only fresh fetch deadline expired")
 
     def research(self, candidate, tool, *, on_provider_call=None):
+        if self.binding_digest() != self.input_binding_sha256:
+            raise ValueError("source-only pinned input binding mismatch")
         run = self.run_input
         candidate = Candidate.model_validate(
             candidate, context={"execution_mode": "live"}
@@ -337,7 +362,13 @@ class SourceOnlyV3:
             result, candidate.candidate_id, candidate=candidate
         )
         assembled = assemble_research_state(
-            candidate=candidate, run_input=run, run_id=self.run_id, result=result
+            candidate=candidate,
+            run_input=run,
+            run_id=self.run_id,
+            result=result,
+            reviewed_description=json.loads(self.reviewed_descriptions_json).get(
+                candidate.candidate_id
+            ),
         )
         return dict(
             result=result.model_dump(mode="json"),
@@ -389,6 +420,7 @@ def prepare_source_only_v3(
     fetcher_factory: Callable[[], SafeFetcher],
     clock: Clock,
     research_replays: Mapping[str, ToolResult[CompanyResearchBundle]] | None = None,
+    reviewed_descriptions: Mapping[str, str] | None = None,
 ) -> SourceOnlyV3:
     """Reject unsafe bindings before any fetcher/provider/model configuration."""
     run = RunInput.model_validate(run_input.model_dump(mode="python", warnings="error"))
@@ -422,6 +454,9 @@ def prepare_source_only_v3(
             }
         ),
     )
+    boundary = replace(
+        boundary, reviewed_descriptions_json=_json(dict(reviewed_descriptions or {}))
+    )
     boundary = replace(boundary, input_binding_sha256=boundary.binding_digest())
     boundary.validate(
         policy=load_v3_policy(
@@ -443,6 +478,7 @@ def prepare_offline_source_only_v3(
     run_profile: run_settings.RunProfile,
     budget: ToolBudget,
     clock: Clock,
+    reviewed_descriptions: Mapping[str, str] | None = None,
 ) -> SourceOnlyV3:
     """Pin caller-owned fixed candidates and original captures; never collect."""
     run = RunInput.model_validate(run_input.model_dump(mode="python", warnings="error"))
@@ -475,6 +511,7 @@ def prepare_offline_source_only_v3(
             }
         ),
         fixed_candidate_json=bundle.model_dump_json(),
+        reviewed_descriptions_json=_json(dict(reviewed_descriptions or {})),
     )
     boundary = replace(boundary, input_binding_sha256=boundary.binding_digest())
     boundary.validate(
