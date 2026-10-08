@@ -22,6 +22,10 @@ LINE = colors.HexColor("#CCDADF")
 
 def presentation_payload(data, draft):
     """Called only by the structural validator after exact score-block checks."""
+    if data.get("mode") == "source_review":
+        # The existing Korean HTML/PDF path consumes the detached context. Do not
+        # fabricate score/selection presentation observations for this report.
+        return None
     return {
         "version": VERSION,
         "context_id": draft.context_id,

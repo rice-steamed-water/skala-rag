@@ -7,6 +7,7 @@ HTTP, transport retries, score calculation, search, or PDF publication occurs he
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Literal
 
 from skala_rag.contracts import (
@@ -118,6 +119,10 @@ def assessment_block(payload):
 
 
 def outcome_block(payload):
+    if payload.get("mode") == "source_review":
+        from skala_rag.reporting.source_review import review_disclosure
+
+        return review_disclosure(payload)
     selection = payload["selection"]
     lines = [
         f"선택 결과: {selection['selected_candidate_id'] or '없음'}; "
@@ -190,6 +195,64 @@ def validate_report_v3(
         add("SCORE_OR_SELECTION_CHANGED")
     if data["execution_mode"] == "fixture" and "가상 데이터" not in draft.markdown:
         add("FIXTURE_MARK_MISSING")
+    if data.get("mode") == "source_review":
+        if any(data[k] for k in ("scores", "decisions", "outcomes", "snapshots")):
+            add("CONTEXT_INVALID")
+        if not cited:
+            add("EVIDENCE_INVALID")
+        # Fatal identity is caller-bound below; factual Korean paraphrases still
+        # require the original semantic Judge, not a regex admission authority.
+        narrative = draft.markdown.split("## REFERENCE\n\n")[0]
+        narrative = narrative.replace(outcome_block(data), "").replace(
+            assessment_block(data), ""
+        )
+        if re.search(
+            r"RECOMMEND|WATCHLIST|normalized_score|observed_score|"
+            r"(?:점수|rating|등급)\s*[:=]\s*\w+|투자(?:를)?\s*추천한다",
+            narrative,
+            re.I,
+        ):
+            add("SOURCE_REVIEW_ASSESSMENT_FORBIDDEN")
+
+        def numeric_values(text):
+            number = r"\d+(?:,\d{3})*(?:\.\d+)?"
+            scales = {"million": 1000000, "billion": 1000000000, "m": 1000000}
+            text = re.sub(
+                r"\bhalf a (million|billion)\b",
+                lambda m: str(scales[m[1].lower()] // 2),
+                text,
+                flags=re.I,
+            )
+            text = re.sub(
+                rf"({number})\s*억(?:\s*({number})\s*만)?",
+                lambda m: format(
+                    Decimal(m[1].replace(",", "")) * 100000000
+                    + Decimal((m[2] or "0").replace(",", "")) * 10000,
+                    "f",
+                ),
+                text,
+            )
+            text = re.sub(
+                rf"({number})\s*(million|billion|M)\b",
+                lambda m: format(
+                    Decimal(m[1].replace(",", "")) * scales[m[2].lower()], "f"
+                ),
+                text,
+                flags=re.I,
+            )
+            return {Decimal(n.replace(",", "")) for n in re.findall(number, text)}
+
+        numeric = numeric_values(TOKEN.sub("", narrative))
+        supplied = numeric_values(
+            " ".join(e["excerpt"] for e in data["evidence"].values())
+            + " "
+            + " ".join(
+                (data["sources"][sid].get("published_at") or "").split("T")[0]
+                for sid in source_ids
+            )
+        )
+        if not numeric <= supplied:
+            add("SOURCE_REVIEW_UNSUPPORTED_NUMBER")
     return ValidationResult(
         schema_version=data["schema_version"],
         valid=not errors,
@@ -219,7 +282,10 @@ class ReportGeneratorV3:
 
     def __call__(self, context: ReportContextV3, feedback):
         data = context.snapshot()
-        if hasattr(self.llm, "call") and self.llm.call.run_id != data["run_id"]:
+        if (
+            hasattr(self.llm, "call")
+            and getattr(self.llm.call, "run_id") != data["run_id"]
+        ):
             raise ValueError("Generator runtime run mismatch")
         content = ReportContentV3.model_validate(
             self.llm.generate(
@@ -230,6 +296,30 @@ class ReportGeneratorV3:
                         "context_id": context.context_id,
                         "context": data,
                         "feedback": list(feedback),
+                        **(
+                            {
+                                "required_output_schema_version": data[
+                                    "schema_version"
+                                ],
+                                "required_citation_tokens": [
+                                    f"[@evidence:{eid}]"
+                                    for eid in sorted(data["evidence"])
+                                ],
+                                "source_review": "Korean review only; no scores, "
+                                "ratings or recommendation. Attribute company claims; "
+                                "historical funding is not current financial data. "
+                                "Keep unsupported matters unknown. Aim for 2-3 pages. "
+                                "Copy required_output_schema_version verbatim into "
+                                "schema_version. End every factual sentence with "
+                                "its exact required_citation_tokens. Only evidence "
+                                "quotes support facts, not uncited source_texts. "
+                                "Use literal source numbers, without unit conversion. "
+                                "Do not equate aggregate funding with Series C equity. "
+                                "Keep each body to 1-2 short sentences.",
+                            }
+                            if data.get("mode") == "source_review"
+                            else {}
+                        ),
                     }
                 ),
                 output_schema=ReportContentV3,
@@ -300,7 +390,7 @@ class SemanticJudgeV3:
     def __call__(self, draft, context):
         if (
             hasattr(self.llm, "call")
-            and self.llm.call.run_id != context.snapshot()["run_id"]
+            and getattr(self.llm.call, "run_id") != context.snapshot()["run_id"]
         ):
             raise ValueError("Judge runtime run mismatch")
         result = ReportJudgement.model_validate(
@@ -313,6 +403,18 @@ class SemanticJudgeV3:
                         "artifact_hash": artifact_hash(draft),
                         "context": context.snapshot(),
                         "draft": draft.model_dump(mode="json"),
+                        **(
+                            {
+                                "required_output_schema_version": context.snapshot()[
+                                    "schema_version"
+                                ],
+                                "source_review": "Copy required_output_schema_version "
+                                "verbatim into schema_version. Judge attributed "
+                                "quoted evidence only, not uncited source_texts.",
+                            }
+                            if context.snapshot().get("mode") == "source_review"
+                            else {}
+                        ),
                     }
                 ),
                 output_schema=ReportJudgement,
@@ -359,6 +461,8 @@ def run_report_v3(
     judge: Callable,
     validate: Callable = validate_report_v3,
     check_pdf: Callable | None = None,
+    initial_revision: int = 0,
+    initial_feedback: tuple[str, ...] = (),
 ) -> ReportRunV3:
     """check_pdf(draft, context, structural, judged) consumes the same revisions.
 
@@ -366,7 +470,7 @@ def run_report_v3(
     with the runner; absent layout verification never implies a validated PDF.
     """
     draft = validation = judgement = pdf = None
-    feedback = []
+    feedback = list(initial_feedback)
     revision = 0
     stage = "context"
 
@@ -385,6 +489,9 @@ def run_report_v3(
 
     try:
         context.snapshot()
+        if type(initial_revision) is not int or not 0 <= initial_revision <= 2:
+            raise ValueError("invalid initial report revision")
+        revision = initial_revision
         while True:
             stage = "generate"
             validation = judgement = pdf = None
@@ -451,3 +558,36 @@ def run_report_v3(
             )
         )
         return finish("failed", error=code)
+
+
+def run_source_review_report(
+    context: ReportContextV3,
+    *,
+    expected_context_id: str,
+    expected_input_id: str,
+    generate: Callable,
+    judge: Callable,
+    check_pdf: Callable | None = None,
+    initial_revision: int = 0,
+    initial_feedback: tuple[str, ...] = (),
+) -> ReportRunV3:
+    """Opt-in caller identity gate around the original shared-revision controller.
+
+    No actual investment gate is relaxed. Publication/paid runtime authority is
+    external; completed without layout remains a draft, never a final PDF.
+    """
+    data = context.snapshot()
+    if (
+        context.context_id != expected_context_id
+        or data.get("input_id") != expected_input_id
+        or data.get("mode") != "source_review"
+    ):
+        raise ValueError("source review controller identity mismatch")
+    return run_report_v3(
+        context,
+        generate=generate,
+        judge=judge,
+        check_pdf=check_pdf,
+        initial_revision=initial_revision,
+        initial_feedback=initial_feedback,
+    )
