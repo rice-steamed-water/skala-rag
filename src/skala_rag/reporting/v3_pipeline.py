@@ -7,6 +7,7 @@ HTTP, transport retries, score calculation, search, or PDF publication occurs he
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Literal
 
 from skala_rag.contracts import (
@@ -212,11 +213,42 @@ def validate_report_v3(
             re.I,
         ):
             add("SOURCE_REVIEW_ASSESSMENT_FORBIDDEN")
-        numeric = set(re.findall(r"\d+(?:[.,]\d+)*", TOKEN.sub("", narrative)))
-        supplied = set(
-            re.findall(
-                r"\d+(?:[.,]\d+)*",
-                " ".join(e["excerpt"] for e in data["evidence"].values()),
+
+        def numeric_values(text):
+            number = r"\d+(?:,\d{3})*(?:\.\d+)?"
+            scales = {"million": 1000000, "billion": 1000000000, "m": 1000000}
+            text = re.sub(
+                r"\bhalf a (million|billion)\b",
+                lambda m: str(scales[m[1].lower()] // 2),
+                text,
+                flags=re.I,
+            )
+            text = re.sub(
+                rf"({number})\s*억(?:\s*({number})\s*만)?",
+                lambda m: format(
+                    Decimal(m[1].replace(",", "")) * 100000000
+                    + Decimal((m[2] or "0").replace(",", "")) * 10000,
+                    "f",
+                ),
+                text,
+            )
+            text = re.sub(
+                rf"({number})\s*(million|billion|M)\b",
+                lambda m: format(
+                    Decimal(m[1].replace(",", "")) * scales[m[2].lower()], "f"
+                ),
+                text,
+                flags=re.I,
+            )
+            return {Decimal(n.replace(",", "")) for n in re.findall(number, text)}
+
+        numeric = numeric_values(TOKEN.sub("", narrative))
+        supplied = numeric_values(
+            " ".join(e["excerpt"] for e in data["evidence"].values())
+            + " "
+            + " ".join(
+                (data["sources"][sid].get("published_at") or "").split("T")[0]
+                for sid in source_ids
             )
         )
         if not numeric <= supplied:
@@ -429,6 +461,8 @@ def run_report_v3(
     judge: Callable,
     validate: Callable = validate_report_v3,
     check_pdf: Callable | None = None,
+    initial_revision: int = 0,
+    initial_feedback: tuple[str, ...] = (),
 ) -> ReportRunV3:
     """check_pdf(draft, context, structural, judged) consumes the same revisions.
 
@@ -436,7 +470,7 @@ def run_report_v3(
     with the runner; absent layout verification never implies a validated PDF.
     """
     draft = validation = judgement = pdf = None
-    feedback = []
+    feedback = list(initial_feedback)
     revision = 0
     stage = "context"
 
@@ -455,6 +489,9 @@ def run_report_v3(
 
     try:
         context.snapshot()
+        if type(initial_revision) is not int or not 0 <= initial_revision <= 2:
+            raise ValueError("invalid initial report revision")
+        revision = initial_revision
         while True:
             stage = "generate"
             validation = judgement = pdf = None
@@ -531,6 +568,8 @@ def run_source_review_report(
     generate: Callable,
     judge: Callable,
     check_pdf: Callable | None = None,
+    initial_revision: int = 0,
+    initial_feedback: tuple[str, ...] = (),
 ) -> ReportRunV3:
     """Opt-in caller identity gate around the original shared-revision controller.
 
@@ -549,4 +588,6 @@ def run_source_review_report(
         generate=generate,
         judge=judge,
         check_pdf=check_pdf,
+        initial_revision=initial_revision,
+        initial_feedback=initial_feedback,
     )

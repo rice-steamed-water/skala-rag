@@ -286,3 +286,53 @@ def test_source_review_prompt_binds_machine_output_identity_and_citations():
     SemanticJudgeV3(judge)(report, ctx)
     request = json.loads(judge.calls[0].user)
     assert request["required_output_schema_version"] == ctx.snapshot()["schema_version"]
+
+
+@pytest.mark.parametrize(
+    "number,supported",
+    [
+        ("1억6500만 달러", True),
+        ("1억 달러", True),
+        ("5억", True),
+        ("2025년 10월 14일", True),
+        ("165억 달러", False),
+        ("999 달러", False),
+    ],
+)
+def test_report_numeric_values_preserve_units_and_source_publication_date(
+    number, supported
+):
+    data = capsule()
+    quote = (
+        "14 October 2025: $165 million aggregate funding, including $100M Series C; "
+        "more than half a billion warehouse scans."
+    )
+    data["sources"]["synthetic-dexory"]["published_at"] = "2025-10-14"
+    data["source_texts"]["synthetic-dexory"] = quote
+    data["evidence"]["synthetic-quote"].update(claim=quote, excerpt=quote)
+    ctx = context(data)
+    body = content()
+    body["summary"] = number + " [@evidence:synthetic-quote]"
+    validation = validate_report_v3(draft(ctx, body), ctx)
+    assert validation.valid is supported
+
+
+@pytest.mark.parametrize("verdict", ["pass", "revise"])
+def test_restored_revision_does_not_reset_shared_repair_limit(verdict):
+    ctx = context()
+    generator = FakeLLM([content()])
+    report = draft(ctx).model_copy(update={"revision": 2})
+    judge = FakeLLM([judgement(ctx, report, verdict)])
+    result = run(ctx, generator, judge, initial_revision=2)
+    assert result.status == "completed" and result.revisions == 2
+    assert result.warning is (verdict == "revise")
+    assert len(generator.calls) == len(judge.calls) == 1
+
+
+@pytest.mark.parametrize("revision", [-1, 3, True])
+def test_invalid_restored_revision_rejected_before_model_calls(revision):
+    ctx = context()
+    generator, judge = FakeLLM([]), FakeLLM([])
+    result = run(ctx, generator, judge, initial_revision=revision)
+    assert result.status == "failed" and result.error_code == "CONTEXT_INVALID"
+    assert not generator.calls and not judge.calls

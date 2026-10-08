@@ -60,6 +60,16 @@ reference closure, 고정 disclosure와 명백한 score/recommendation 및 원�
 않는다. 숫자가 원문에 있어도 매출·valuation으로 바꿔 쓰면 원래 Semantic Judge가
 거절해야 한다. synthetic Judge 제어군은 실제 의미 검증 성공이 아니다.
 
+숫자 비교는 영어 million/billion/M과 한국어 억·억/만 조합을 같은 정확한 값으로
+정규화한다. 발행일의 한국어 월·일 표기도 Source 날짜와 대조한다. 이 변환은 새
+Evidence·점수·재무 추정치를 만들지 않으며, 금액의 의미·통화·주체는 Judge가 검사한다.
+
+이미 생성한 실제 응답을 재생할 때 caller는 `initial_revision`(0–2)과
+`initial_feedback`을 전달해 원래 수정 상태를 보존할 수 있다. 기본값은 원래의
+0회·빈 feedback이다. 2회 상태에서 Judge가 수정 요청을 하면 추가 생성 없이
+기존 Warning으로 종료한다. 재생 응답의 원래 입력 hash와 누적 유료 ledger는
+caller가 별도로 검증·보존해야 하며, 이 인자는 재시작·예산 초기화 승인이 아니다.
+
 check_pdf가 없으면 완료 상태도 draft일 뿐이다. Warning은 현재 draft/findings를
 보존하고 최종 발행을 금지한다. run 결과 final_allowed는 원래대로 false다.
 HTML renderer의 기술적 live final_allowed observation도 parent의 실행/발행 승인,
