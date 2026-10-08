@@ -1,4 +1,4 @@
-# Founder·Market·Technology·Moat rubric과 missing 조건 — D14 제안
+# Founder·Market·Technology·Moat rubric과 missing 조건 — D14 core 승인
 
 > 실행 인터페이스는 후속 #166의 [Python 직접 호출](python-execution.md)을 따른다. 아래 CLI2 언급은 기존 승인/호환 매핑이며 rubric 정책 변경이나 신규 CLI 개발 요구가 아니다.
 
@@ -8,7 +8,9 @@
 
 [문서 홈](../README.md) · [점수와 판단 정책](scoring.md) · [공통 계약](contracts.md) · [결정 목록](decisions.md) · 구조화 파일: [`configs/rubrics/core.yaml`](../../configs/rubrics/core.yaml) · 재무 영역: #11 (PR #34)
 
-> 상태: **구현 제안 / D14(founder·market·technology·moat 영역) OPEN** · rubric_version `core-0.1.0`
+> 상태: **D14(founder·market·technology·moat 영역) APPROVED — 2026-09-30, heojiwon2, [승인 기록](https://github.com/rice-steamed-water/skala-rag/issues/59#issuecomment-5904859865)** · rubric_version `core-0.1.0`. §6 Q1–Q5는 표의 제안안대로 승인. 아래 본문의 "제안"·"승인 전" 표기는 작성 당시 문구를 보존한 것이다. 정책 파일은 draft이며 Finance는 후속 #61 comment5906253348에서 별도로 승인되었다([결정 목록](decisions.md)). rubric 승인은 실제 artifact·의미 검증·runtime/live 예산 또는 전체 v3 완료가 아니다.
+>
+> (작성 당시 상태: 구현 제안 / D14 OPEN)
 > 근거: 원문 §3 "상세 평가 기준 — 창업자 / 시장성 / 제품·기술력 / 경쟁 우위", [scoring §2–§4](scoring.md), D02·D05(APPROVED). 설계 산출물 v3 C-2(#35 / PR #36, 미병합)의 5단계 척도와 정합.
 > 숫자 구간과 anchor는 **팀 승인 전 제안**이다. 모든 예시는 **가상 기업**이며 실제 기업이 아니다.
 

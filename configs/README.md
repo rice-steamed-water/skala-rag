@@ -20,6 +20,6 @@ OPEN이며, v3 정합화 작업 #35 / PR #36의 변경은 반영하지 않았다
 ## rubric (D14 제안)
 
 `rubrics/core.yaml`(founder·market·technology·moat)과 `rubrics/finance.yaml`(traction·deal_terms)은
-criterion별 rating 1–5 기준·최소 근거·missing 조건을 담은 **미승인 제안**이다. criterion ID·비중·표시명은
+criterion별 rating 1–5 기준·최소 근거·missing 조건을 담는다. `core.yaml`은 **D14 core APPROVED**(2026-09-30, #59 comment5904859865), `finance.yaml`은 **D14 Finance APPROVED**(2026-09-30, #61 comment5906253348)이다. rubric 승인은 정책 파일·신뢰된 artifact/의미 검증·runtime readiness·live 예산 승인과 별개다. criterion ID·비중·표시명은
 `scoring.draft.json`과 같아야 하며 `tests/unit/test_core_rubric.py`·`test_finance_rubric.py`가 확인한다.
 설명: `docs/implementation/rubric-core.md`, `docs/implementation/rubric-finance.md`.

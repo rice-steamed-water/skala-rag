@@ -124,6 +124,23 @@ def test_other_company_claim_and_injected_text_excluded(case):
     assert "Ignore the rubric" not in llm.calls[0].user
 
 
+def test_approval_does_not_transfer_to_unknown_core_version(case):
+    snapshot, _, links = case
+    llm = FakeLLM([])
+    with pytest.raises(ValueError, match="core-0.1.0"):
+        evaluate_founder_fixture(
+            snapshot,
+            founder_person_ids=("person-founder-1",),
+            verified_person_by_evidence_id=links,
+            rubric={**RUBRIC, "rubric_version": "core-unapproved"},
+            llm=llm,
+            policy=POLICY,
+            clock=CLOCK,
+            schema_version="synthetic-1",
+        )
+    assert llm.calls == []
+
+
 def test_unknown_attribution_id_rejected_before_llm(case):
     snapshot, _, links = case
     llm = FakeLLM([])

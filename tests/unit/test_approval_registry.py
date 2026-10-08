@@ -19,8 +19,8 @@ def test_pinned_factory_binds_existing_loader_without_admitting_live():
     assert policy.policy_version == "v3-operational-1.0.0"
     diagnosis = registry.diagnose()
     assert all(row.content_binding == "matched" for row in diagnosis.artifacts)
-    assert diagnosis.artifacts[1].artifact_status == "proposed"
-    assert diagnosis.artifacts[1].owner_dependency == "PR134"
+    assert diagnosis.artifacts[1].artifact_status == "approved"
+    assert diagnosis.artifacts[1].owner_dependency is None
     assert diagnosis.semantic_review == "unreviewed"
     assert diagnosis.runtime_admission == "not_admitted"
     assert diagnosis.campaign_approval == "unapproved"

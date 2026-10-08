@@ -1,10 +1,11 @@
-# Founder·Market·Technology·Moat rubric — D14 제안 (팀 승인 전)
+# Founder·Market·Technology·Moat rubric — D14 core APPROVED (2026-09-30, #59)
 # 설명 문서: docs/implementation/rubric-core.md
 # 구간 표기: [min, max) — min 이상, max 미만.
-# 승인 전에는 fixture·prompt 개발용이며 실제 추천 근거로 표시하지 않는다.
+# 승인 기록: docs/implementation/decisions.md "D14 승인 기록 — core". 정책 파일(scoring.draft.json)은
+# 아직 draft이므로 이 rubric 승인만으로 결과를 추천 근거로 표시하지 않는다.
 
 rubric_version: core-0.1.0
-status: proposed          # proposed | approved
+status: approved          # proposed | approved
 decision_id: D14
 scale: {min: 1, max: 5, missing: null}
 comparison: pre_rounding
