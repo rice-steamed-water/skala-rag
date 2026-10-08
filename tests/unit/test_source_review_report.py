@@ -1,6 +1,7 @@
 """Synthetic FakeLLM controls, never actual Generator/Judge evidence."""
 
 import hashlib
+import json
 from copy import deepcopy
 
 import pytest
@@ -272,3 +273,16 @@ def test_structural_then_semantic_revision_share_original_budget():
     assert result.status == "completed" and not result.warning and result.revisions == 2
     assert len(generator.calls) == 3 and len(judge.calls) == 2
     assert result.validation.valid and not result.final_allowed
+
+
+def test_source_review_prompt_binds_machine_output_identity_and_citations():
+    ctx = context()
+    llm = FakeLLM([content()])
+    report = ReportGeneratorV3(llm)(ctx, ())
+    request = json.loads(llm.calls[0].user)
+    assert request["required_output_schema_version"] == ctx.snapshot()["schema_version"]
+    assert request["required_citation_tokens"] == ["[@evidence:synthetic-quote]"]
+    judge = FakeLLM([judgement(ctx, report)])
+    SemanticJudgeV3(judge)(report, ctx)
+    request = json.loads(judge.calls[0].user)
+    assert request["required_output_schema_version"] == ctx.snapshot()["schema_version"]

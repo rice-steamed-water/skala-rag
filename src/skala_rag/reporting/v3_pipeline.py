@@ -266,10 +266,24 @@ class ReportGeneratorV3:
                         "feedback": list(feedback),
                         **(
                             {
+                                "required_output_schema_version": data[
+                                    "schema_version"
+                                ],
+                                "required_citation_tokens": [
+                                    f"[@evidence:{eid}]"
+                                    for eid in sorted(data["evidence"])
+                                ],
                                 "source_review": "Korean review only; no scores, "
                                 "ratings or recommendation. Attribute company claims; "
                                 "historical funding is not current financial data. "
-                                "Keep unsupported matters unknown. Aim for 2-3 pages."
+                                "Keep unsupported matters unknown. Aim for 2-3 pages. "
+                                "Copy required_output_schema_version verbatim into "
+                                "schema_version. End every factual sentence with "
+                                "its exact required_citation_tokens. Only evidence "
+                                "quotes support facts, not uncited source_texts. "
+                                "Use literal source numbers, without unit conversion. "
+                                "Do not equate aggregate funding with Series C equity. "
+                                "Keep each body to 1-2 short sentences.",
                             }
                             if data.get("mode") == "source_review"
                             else {}
@@ -357,6 +371,18 @@ class SemanticJudgeV3:
                         "artifact_hash": artifact_hash(draft),
                         "context": context.snapshot(),
                         "draft": draft.model_dump(mode="json"),
+                        **(
+                            {
+                                "required_output_schema_version": context.snapshot()[
+                                    "schema_version"
+                                ],
+                                "source_review": "Copy required_output_schema_version "
+                                "verbatim into schema_version. Judge attributed "
+                                "quoted evidence only, not uncited source_texts.",
+                            }
+                            if context.snapshot().get("mode") == "source_review"
+                            else {}
+                        ),
                     }
                 ),
                 output_schema=ReportJudgement,
