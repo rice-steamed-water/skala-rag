@@ -81,3 +81,47 @@ HTML renderer의 기술적 live final_allowed observation도 parent의 실행/�
 parent가 수행한다. 이 작업은 오프라인 FakeLLM 회귀와 실제 로컬 PDF 렌더만 수행한다.
 실제 Dexory 원문에 대한 모델 결과, 최종 PDF 발행, full suite/build/독립 review와
 페이지별 실제 콘텐츠 visual QA는 parent 소관이며 완료로 주장하지 않는다.
+
+## 팀원용 실제 결과 재현 (#229)
+
+위 helper 구현의 오프라인 검증과 별개로, parent는 승인된 실제 모델 요청 6회
+안에서 Generator와 SemanticJudge를 실행했다. 실제 Judge pass, 원래 수정
+2회 상태의 Warning 없는 completed, 최종 한국어 3쪽 PDF와 SUMMARY 21.7368%,
+native Preview 모든 페이지 검증 및 정리 증거는
+[PR #229](https://github.com/rice-steamed-water/skala-rag/pull/229)의 실행 증거와
+첨부를 따른다. 이 성공은 source-review 범위이며 전체 투자 평가·RAG·M3 완료가 아니다.
+
+실제 수집 자료는 Git에 넣지 않는다. PR의 `dexory-replay-bundle.zip`을
+다운로드해 저장소의 `outputs/` 아래에 풀면 다음 자료가 함께 제공된다.
+
+- 당시 공식 Source 2개의 content-decoded 보관 body와 추출 text, URL·수집일·hash
+- 원래 입력 capsule, Source DTO 2개와 정확한 발표문 Evidence 발췌 4개
+- 실제 최종 초안과 과거 Judge 결과, 누적 ledger 및 원문/내용/PDF 검증 receipts
+- 파일 무결성 manifest와 상대 경로만 사용하는 `replay.py`, 실행 README
+
+```bash
+git fetch origin feat/96-minimal-dexory-report
+git switch feat/96-minimal-dexory-report
+uv sync
+uv run playwright install chromium
+PYTHONPATH=src:. uv run python outputs/dexory-replay-bundle/replay.py
+```
+
+API key와 `.env` 없이 원문 body/text hash, 원래 input/context/초안/Judge 대상의
+동일성, 구조·인용 closure를 검사하고 기존 renderer로 PDF를 다시 만든다.
+PDF 경로와 검증 결과가 JSON으로 출력된다. 패키지 내부의 `replayed-report-*`에
+새 결과를 만들므로 기존 결과를 덮어쓰지 않는다. 설치 이후 replay는 외부
+HTTP나 모델 요청을 하지 않는다. 원래 회사 발표와 실제 모델 결과를 재사용하는
+cache replay이며 새로운 조사·Generator·의미 Judge 실행이라고 표시하지 않는다.
+생성 시각 등으로 새 PDF binary hash는 달라질 수 있지만 원래 context와
+초안 hash는 같아야 한다.
+
+원문 저작권은 원출처에 있으며 별도 오픈 데이터 재배포 라이선스는 확인하지
+않았다. 사용자가 요청한 팀 내부 재현용 첨부이며 원문·outputs·API key와
+생성 index는 커밋하지 않는다. 역사적 receipts의 수집 머신 절대 경로는
+메타데이터로 보존하고 replay에서는 열지 않는다. 전체 actual-v3 입력
+코퍼스나 검색 index를 추가로 만들지 않는다.
+
+새 유료 모델 실행은 위 명령에 포함되지 않는다. 기존 6회 한도는 소진됐으므로
+새 finite call/token/time/USD 승인이 필요하며, 원래 비용 예약 상한
+USD 0.0770756은 실제 청구액이 아니다.
