@@ -5,12 +5,16 @@ untrusted data until a trusted controller's external verifier resolves them.
 """
 
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Literal
 
 from pydantic import ConfigDict, model_validator
 
 from skala_rag.contracts.common import Text
+from skala_rag.contracts.tools import ToolBudget
 from skala_rag.scoring.v3_policy import (
     FrozenPolicy,
     V3Criterion,
@@ -18,7 +22,16 @@ from skala_rag.scoring.v3_policy import (
     load_v3_policy,
 )
 from skala_rag.tools.provider_scope import EXCLUDED_PROVIDERS
-from skala_rag.tools.runtime import Allowance, Readiness, RuntimeLimits
+from skala_rag.tools.runtime import (
+    AdapterRuntime,
+    Allowance,
+    BudgetLedger,
+    CallContext,
+    Readiness,
+    RuntimeLimits,
+    RuntimePolicy,
+    _add_cost,
+)
 
 
 class ApprovalEvidence(FrozenPolicy):
@@ -101,6 +114,154 @@ class LiveScoringGates(FrozenPolicy):
 
 
 LiveGateVerifier = Callable[[LiveGate, LiveScoringGates], bool]
+
+
+@dataclass(frozen=True, kw_only=True)
+class ScoringRuntimeBinding:
+    """Explicit observations retaining the actual runtime/shared ledger.
+
+    Provider identity is caller-declared, not inferred from a tool name or
+    authenticated here. This compatibility boundary accepts no transport.
+    """
+
+    runtime: AdapterRuntime
+    gates: LiveScoringGates
+    policy: RuntimePolicy
+    call: CallContext
+    budget: ToolBudget
+    readiness: Readiness
+    allowance: Allowance
+    provider: str
+    tool_name: str
+
+
+def observe_scoring_runtime(
+    binding: ScoringRuntimeBinding,
+    *,
+    run_id: str,
+    policy_version: str,
+    schema_version: str,
+) -> dict:
+    """Fresh read-only compatibility, never semantic authority/live admission.
+
+    Mirror ONE request's reserve checks using exact runtime Decimal addition.
+    Concurrent changes invalidate observations; actual requests still need an
+    atomic reservation. No approval, reserve, settle or execute callback runs.
+    """
+    if type(binding) is not ScoringRuntimeBinding:
+        raise ValueError("explicit scoring runtime binding required")
+    runtime = binding.runtime
+    if type(runtime) is not AdapterRuntime or type(runtime.ledger) is not BudgetLedger:
+        raise ValueError("actual AdapterRuntime and shared BudgetLedger required")
+    for value, expected in (
+        (binding.gates, LiveScoringGates),
+        (binding.policy, RuntimePolicy),
+        (runtime.policy, RuntimePolicy),
+        (binding.call, CallContext),
+        (binding.budget, ToolBudget),
+        (binding.readiness, Readiness),
+        (binding.allowance, Allowance),
+        (runtime.ledger.limits, RuntimeLimits),
+    ):
+        if not isinstance(value, expected):
+            raise ValueError("runtime binding requires explicit validated DTO inputs")
+    gates = LiveScoringGates.model_validate(binding.gates.model_dump(warnings="error"))
+    policy = RuntimePolicy.model_validate(binding.policy.model_dump(warnings="error"))
+    actual_policy = RuntimePolicy.model_validate(
+        runtime.policy.model_dump(warnings="error")
+    )
+    call = CallContext.model_validate(binding.call.model_dump(warnings="error"))
+    budget = ToolBudget.model_validate(binding.budget.model_dump(warnings="error"))
+    readiness = Readiness.model_validate(binding.readiness.model_dump(warnings="error"))
+    allowance = Allowance.model_validate(binding.allowance.model_dump(warnings="error"))
+    limits = RuntimeLimits.model_validate(
+        runtime.ledger.limits.model_dump(warnings="error")
+    )
+    if (
+        (call.run_id, gates.run_id) != (run_id, run_id)
+        or gates.policy_version != policy_version
+        or gates.provider != binding.provider
+        or call.tool_name != binding.tool_name
+        or any(
+            item.schema_version != schema_version
+            for item in (
+                policy,
+                actual_policy,
+                call,
+                budget,
+                readiness,
+                allowance,
+                limits,
+                gates.readiness,
+                gates.allowance,
+                gates.limits,
+            )
+        )
+    ):
+        raise ValueError("runtime binding run/tool/provider/policy/schema mismatch")
+    if policy != actual_policy or limits != gates.limits:
+        raise ValueError("runtime binding current policy/limits mismatch")
+    if readiness != gates.readiness or allowance != gates.allowance:
+        raise ValueError("runtime binding readiness/allowance mismatch")
+    if readiness.missing:
+        raise ValueError("runtime binding readiness incomplete")
+    if (
+        policy.execution_mode != "live"
+        or policy.live_approval_reference is None
+        or policy.timing_approval_reference is None
+        or budget.deadline is None
+        or len(policy.retry_delays_seconds) != budget.max_retries
+    ):
+        raise ValueError("runtime binding live mode/timing incompatible")
+    now = runtime.clock.now()
+    if not isinstance(now, datetime) or now.utcoffset() is None:
+        raise ValueError("runtime binding requires aware current time")
+    timeout = min(
+        float(budget.timeout_seconds), (budget.deadline - now).total_seconds()
+    )
+    if timeout <= 0 or budget.max_calls < 1:
+        raise ValueError("runtime binding deadline/call budget exhausted")
+    snapshot = runtime.ledger.snapshot()
+    if snapshot["usage_invalid"] or snapshot["cost_usd_accounted"] is None:
+        raise ValueError("runtime binding shared ledger invalid or unbounded")
+    if (
+        snapshot["calls"] >= limits.max_calls
+        or call.tool_name not in limits.tool_max_calls
+        or snapshot["tool_calls"].get(call.tool_name, 0)
+        >= limits.tool_max_calls[call.tool_name]
+    ):
+        raise ValueError("runtime binding shared call budget exhausted")
+    cost = allowance.max_cost_usd
+    if cost is None:
+        raise ValueError("runtime binding requires bounded cost")
+    proposed = (
+        (
+            snapshot["input_tokens_accounted"] + allowance.input_tokens,
+            limits.max_input_tokens,
+        ),
+        (
+            snapshot["output_tokens_accounted"] + allowance.output_tokens,
+            limits.max_output_tokens,
+        ),
+        (
+            _add_cost(Decimal(snapshot["cost_usd_accounted"]), cost),
+            limits.max_cost_usd,
+        ),
+    )
+    if any(cap is None or value > cap for value, cap in proposed):
+        raise ValueError("runtime binding shared token/cost budget exhausted")
+    return {
+        "run_id": run_id,
+        "policy_version": policy_version,
+        "provider": binding.provider,
+        "tool_name": call.tool_name,
+        "checked_at": now,
+        "timeout_seconds": timeout,
+        "ledger": snapshot,
+        "compatibility": True,
+        "semantic_authority": False,
+        "live_admission": False,
+    }
 
 
 class ApprovedScoringPolicy(FrozenPolicy):
