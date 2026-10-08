@@ -118,6 +118,10 @@ def assessment_block(payload):
 
 
 def outcome_block(payload):
+    if payload.get("mode") == "source_review":
+        from skala_rag.reporting.source_review import review_disclosure
+
+        return review_disclosure(payload)
     selection = payload["selection"]
     lines = [
         f"선택 결과: {selection['selected_candidate_id'] or '없음'}; "
@@ -190,6 +194,33 @@ def validate_report_v3(
         add("SCORE_OR_SELECTION_CHANGED")
     if data["execution_mode"] == "fixture" and "가상 데이터" not in draft.markdown:
         add("FIXTURE_MARK_MISSING")
+    if data.get("mode") == "source_review":
+        if any(data[k] for k in ("scores", "decisions", "outcomes", "snapshots")):
+            add("CONTEXT_INVALID")
+        if not cited:
+            add("EVIDENCE_INVALID")
+        # Fatal identity is caller-bound below; factual Korean paraphrases still
+        # require the original semantic Judge, not a regex admission authority.
+        narrative = draft.markdown.split("## REFERENCE\n\n")[0]
+        narrative = narrative.replace(outcome_block(data), "").replace(
+            assessment_block(data), ""
+        )
+        if re.search(
+            r"RECOMMEND|WATCHLIST|normalized_score|observed_score|"
+            r"(?:점수|rating|등급)\s*[:=]\s*\w+|투자(?:를)?\s*추천한다",
+            narrative,
+            re.I,
+        ):
+            add("SOURCE_REVIEW_ASSESSMENT_FORBIDDEN")
+        numeric = set(re.findall(r"\d+(?:[.,]\d+)*", TOKEN.sub("", narrative)))
+        supplied = set(
+            re.findall(
+                r"\d+(?:[.,]\d+)*",
+                " ".join(e["excerpt"] for e in data["evidence"].values()),
+            )
+        )
+        if not numeric <= supplied:
+            add("SOURCE_REVIEW_UNSUPPORTED_NUMBER")
     return ValidationResult(
         schema_version=data["schema_version"],
         valid=not errors,
@@ -219,7 +250,10 @@ class ReportGeneratorV3:
 
     def __call__(self, context: ReportContextV3, feedback):
         data = context.snapshot()
-        if hasattr(self.llm, "call") and self.llm.call.run_id != data["run_id"]:
+        if (
+            hasattr(self.llm, "call")
+            and getattr(self.llm.call, "run_id") != data["run_id"]
+        ):
             raise ValueError("Generator runtime run mismatch")
         content = ReportContentV3.model_validate(
             self.llm.generate(
@@ -230,6 +264,16 @@ class ReportGeneratorV3:
                         "context_id": context.context_id,
                         "context": data,
                         "feedback": list(feedback),
+                        **(
+                            {
+                                "source_review": "Korean review only; no scores, "
+                                "ratings or recommendation. Attribute company claims; "
+                                "historical funding is not current financial data. "
+                                "Keep unsupported matters unknown. Aim for 2-3 pages."
+                            }
+                            if data.get("mode") == "source_review"
+                            else {}
+                        ),
                     }
                 ),
                 output_schema=ReportContentV3,
@@ -300,7 +344,7 @@ class SemanticJudgeV3:
     def __call__(self, draft, context):
         if (
             hasattr(self.llm, "call")
-            and self.llm.call.run_id != context.snapshot()["run_id"]
+            and getattr(self.llm.call, "run_id") != context.snapshot()["run_id"]
         ):
             raise ValueError("Judge runtime run mismatch")
         result = ReportJudgement.model_validate(
@@ -451,3 +495,32 @@ def run_report_v3(
             )
         )
         return finish("failed", error=code)
+
+
+def run_source_review_report(
+    context: ReportContextV3,
+    *,
+    expected_context_id: str,
+    expected_input_id: str,
+    generate: Callable,
+    judge: Callable,
+    check_pdf: Callable | None = None,
+) -> ReportRunV3:
+    """Opt-in caller identity gate around the original shared-revision controller.
+
+    No actual investment gate is relaxed. Publication/paid runtime authority is
+    external; completed without layout remains a draft, never a final PDF.
+    """
+    data = context.snapshot()
+    if (
+        context.context_id != expected_context_id
+        or data.get("input_id") != expected_input_id
+        or data.get("mode") != "source_review"
+    ):
+        raise ValueError("source review controller identity mismatch")
+    return run_report_v3(
+        context,
+        generate=generate,
+        judge=judge,
+        check_pdf=check_pdf,
+    )

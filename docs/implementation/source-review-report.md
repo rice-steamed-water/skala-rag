@@ -1,0 +1,73 @@
+# Dexory 단일 자료 기반 조사 보고서 (#96)
+
+이 경로는 사용자가 선택한 짧은 조사 범위다. 평가·rating·점수·투자 추천,
+CandidateRunV3, 선정 결과, scored snapshot을 만들지 않는다. 기존 actual 투자
+gate, Discovery/RAG/Eligibility, corpus adoption을 실행하거나 완화하지 않는다.
+`unscored-research-only-1`은 기존 HTML presentation 표식을 재사용한다.
+
+## 입력과 controller 경계
+
+`source_review.build_source_review_context(capsule, expected_input_id=...,
+expected_sources=...) -> ReportContextV3`.
+
+capsule은 다음 키만 가진 JSON-compatible dict다.
+
+- schema_version, run_id: 명시적 nonblank 문자열
+- as_of: 정확한 YYYY-MM-DD cutoff
+- execution_mode: live 또는 fixture. 실제 원문은 live, 합성 제어군은 fixture
+- research_subject: 정확히 Dexory
+- sources: 실제 Source DTO JSON payload를 source_id로 묶은 map
+- source_texts: 같은 source_id 집합의 보관 원문 extraction 문자열
+- evidence: Evidence DTO JSON payload를 evidence_id로 묶은 map
+
+Evidence는 candidate_id=dexory, company scope, reported, confidence=unknown이며
+criterion_ids/provenance/supporting_evidence_ids/conflicts_with는 빈 목록이다.
+claim은 원문 excerpt와 정확히 같고 해당 source_texts의 부분 문자열이어야 한다.
+locator는 정확한 Source URL이다. limitations는 필수이며 금액·계산·rating
+필드를 만들지 않는다. 사건 날짜는 있을 때 cutoff 이하로 보존한다.
+이 Evidence는 인용 위치를 표현할 뿐 의미 admission이나 retrieval 실행의 증거가 아니다.
+
+parent는 모델 응답 밖에 독립 보관한 Source payload들과 전체 capsule의 canonical
+JSON SHA-256(`sha256:` prefix)을 전달한다. canonical은 v3_context.canonical이다.
+검증 후 문자열로 detach하며 snapshot은 매번 새 dict다. hash는 원문 진실성이나
+심사 authority가 아니며, controller pin을 같은 모델 출력에서 만들면 안 된다.
+G015/G026 raw body 및 extraction hash 확인은 parent의 별도 offline 책임이다.
+새 파일을 다운로드하거나 accepted registry를 생성하지 않는다.
+
+## 호출
+
+`v3_pipeline.run_source_review_report(context, expected_context_id=...,
+expected_input_id=..., generate=ReportGeneratorV3(generator_llm),
+judge=SemanticJudgeV3(judge_llm), check_pdf=...)`.
+
+context ID와 input ID는 parent가 먼저 고정한다. runtime/LLM은 기존 승인된
+StructuredLLM 주입 경계만 사용한다. 이 helper는 provider/API를 선택·호출하지 않는다.
+check_pdf(draft, context, structural, judgement)는 기존
+`korean_report.build_korean_report_pdf(context, draft, structural, judgement,
+output_dir, execution_mode)`의 반환 `(render, layout_validation)`을 받고
+layout_validation을 반환하며 render를 parent가 기록한다.
+
+원래 Generator, structural validator, Semantic Judge, run_report_v3의 공유 수정
+2회와 fail/Warning lifecycle을 그대로 쓴다. 모델은 한국어 5개 body를 쓰며 기존
+REFERENCE는 controller가 인용 Evidence의 Source 집합으로 생성한다. 기존 Korean
+HTML renderer의 한국어 목차·안정적 번호·Source ID·URL·발췌 목록을 사용한다.
+권장 내용 길이는 2–3쪽이며 기존 PDF 검사 상한 5쪽, SUMMARY 반쪽을 유지한다.
+
+controller는 unscored/unrated·평가 미실행·추천 없음·self-reported·cutoff·현재성
+미확인과 역사적 fundraising 한계를 고정 표시한다. 구조 검사는 exact citation/
+reference closure, 고정 disclosure와 명백한 score/recommendation 및 원문에 없는
+숫자를 검사한다. 이 제한된 검사는 모든 한국어 의미·금액 귀속 오류를 판정하지
+않는다. 숫자가 원문에 있어도 매출·valuation으로 바꿔 쓰면 원래 Semantic Judge가
+거절해야 한다. synthetic Judge 제어군은 실제 의미 검증 성공이 아니다.
+
+check_pdf가 없으면 완료 상태도 draft일 뿐이다. Warning은 현재 draft/findings를
+보존하고 최종 발행을 금지한다. run 결과 final_allowed는 원래대로 false다.
+HTML renderer의 기술적 live final_allowed observation도 parent의 실행/발행 승인,
+실제 Judge trace 및 페이지별 visual QA를 대체하지 않는다.
+
+## 남은 actual 승인과 검증
+
+실제 Generator/Judge 실행은 finite call/token/time/USD와 runtime/ledger 승인 후
+parent가 수행한다. 이 작업은 오프라인 FakeLLM 회귀와 실제 로컬 PDF 렌더만 수행한다.
+실제 Dexory 원문에 대한 모델 결과, 최종 PDF 발행, full suite/build/독립 review와
+페이지별 실제 콘텐츠 visual QA는 parent 소관이며 완료로 주장하지 않는다.
