@@ -46,6 +46,8 @@ def test_source_review_uses_existing_korean_pdf_and_layout(tmp_path):
     assert 'id="evidence-1"' in html and 'href="#evidence-1"' in html
     assert "[@source:synthetic-dexory]" in html
     assert 'id="score-overview"' not in html
+    assert 'id="research-scoreboard"' not in html
+    assert "#sec-REFERENCE { break-before: auto; }" in html
 
 
 @pytest.mark.browser

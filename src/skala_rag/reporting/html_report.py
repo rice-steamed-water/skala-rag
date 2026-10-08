@@ -369,7 +369,11 @@ def render_report_html(draft: ReportDraft, context: ReportContextV3) -> str:
             f"{evidence_list}{builder.blocks(lines, name == 'REFERENCE')}"
             f"{extra}</section>"
         )
-        if name == "SUMMARY" and builder.research:
+        if (
+            name == "SUMMARY"
+            and builder.research
+            and data.get("mode") != "source_review"
+        ):
             score_inline = (
                 builder.inline if any(n == "REFERENCE" for n, _ in sections) else None
             )
@@ -396,6 +400,8 @@ def render_report_html(draft: ReportDraft, context: ReportContextV3) -> str:
             f"자료 기반 / {qualifier}</p>" + header + "</header>"
         )
         body_tag, styles = '<body class="research-report">', CSS + RESEARCH_CSS
+        if data.get("mode") == "source_review":
+            styles += "\n.research-report #sec-REFERENCE { break-before: auto; }\n"
     return (
         '<!DOCTYPE html>\n<html lang="ko"><head><meta charset="utf-8">'
         f'<meta http-equiv="Content-Security-Policy" content="{CSP}">'
