@@ -1,8 +1,9 @@
 """Offline synthetic envelopes against the installed five-way LangGraph barrier.
 
-Market is caller-injected terminal data, not the absent PR134 implementation.
+Market here is caller-injected terminal data, not its evaluator implementation.
 """
 
+import json
 from collections import Counter
 from copy import deepcopy
 from datetime import UTC, datetime
@@ -21,7 +22,7 @@ from skala_rag.agents.evaluation_v3_adapter import (
 from skala_rag.agents.founder import evaluate_founder_fixture
 from skala_rag.agents.technology import evaluate_technology
 from skala_rag.contracts.errors import WorkflowError
-from skala_rag.contracts.evaluation import EvaluationResult
+from skala_rag.contracts.evaluation import EvaluationResult, EvaluationSnapshot
 from skala_rag.contracts.v3 import BRANCH_DIMENSIONS, EvaluationBranchResult
 from skala_rag.fakes import FakeClock, FakeLLM
 from skala_rag.graph.evaluation_v3 import (
@@ -237,6 +238,7 @@ def test_existing_founder_fixture_binding_no_second_llm_call(case):
     )(snapshot)
     assert out.status == "success"
     assert len(results) == len(llm.calls) == 1
+    assert out.evaluations is not None
     assert (
         out.evaluations["founder"].criteria[0].evidence_ids
         == results[0].evaluation.criteria[0].evidence_ids
@@ -270,6 +272,7 @@ def test_existing_technology_explicit_result_and_caller_owned_trace_receipt(case
     )(snapshot)
     assert out.status == "success"
     assert len(receipts) == len(llm.calls) == 1
+    assert out.evaluations is not None
     receipt = receipts[0]
     assert receipt.trace and receipt.allowed_evidence_ids and receipt.prompt_version
     cited = {
@@ -331,3 +334,62 @@ def test_graph_live_mode_still_denied_before_bound_upstream(case):
     assert out["evaluations_v3"] == {}
     assert out["evaluation_status_v3"] == "failure"
     assert out["candidate_index"] == 1
+
+
+def test_explicit_live_adapter_rejects_fixture_locators_before_upstream(case):
+    snapshot, policy, baseline, _, _ = case
+    calls = []
+
+    def upstream(received):
+        calls.append(received)
+        return baseline("founder")
+
+    adapter = bind_baseline_evaluator_v3(
+        "founder",
+        upstream,
+        criteria=policy.criteria,
+        industry_evidence_dimensions=set(),
+        execution_mode="live",
+    )
+    with pytest.raises(ValueError, match="Invalid baseline"):
+        adapter(snapshot)
+    assert calls == []
+
+
+def test_explicit_live_adapter_preserves_live_shaped_control_envelope(case):
+    snapshot, policy, baseline, _, _ = case
+    # Controlled locators exercise parsing only; no actual semantic claim.
+    frozen = EvaluationSnapshot.model_validate_json(
+        json.dumps(snapshot.model_dump(mode="json")).replace(
+            "fixture://", "https://controlled.invalid/"
+        ),
+        context={"execution_mode": "live"},
+    )
+    original = baseline("founder")
+    seen = []
+
+    def upstream(received):
+        seen.append(received)
+        assert received == frozen and received is not frozen
+        return original
+
+    converted = bind_baseline_evaluator_v3(
+        "founder",
+        upstream,
+        criteria=policy.criteria,
+        industry_evidence_dimensions=set(),
+        execution_mode="live",
+    )(frozen)
+    assert len(seen) == 1
+    assert converted.status == "success"
+    assert converted.evaluations is not None
+    assert original.evaluation is not None
+    actual = converted.evaluations["founder"].model_dump()
+    expected = original.evaluation.model_dump()
+    for field, value in expected.items():
+        if field == "criteria":
+            assert len(actual[field]) == len(value)
+            for old, new in zip(value, actual[field], strict=True):
+                assert {key: new[key] for key in old} == old
+        else:
+            assert actual[field] == value
