@@ -91,8 +91,10 @@ native Preview 모든 페이지 검증 및 정리 증거는
 [PR #229](https://github.com/rice-steamed-water/skala-rag/pull/229)의 실행 증거와
 첨부를 따른다. 이 성공은 source-review 범위이며 전체 투자 평가·RAG·M3 완료가 아니다.
 
-실제 수집 자료는 Git에 넣지 않는다. PR의 `dexory-replay-bundle.zip`을
-다운로드해 저장소의 `outputs/` 아래에 풀면 다음 자료가 함께 제공된다.
+실제 수집 자료는 Git에 넣지 않는다. 현재 PR에는 화면만 첨부돼 있고
+`dexory-replay-bundle.zip`과 PDF는 로컬에 보관 중이다. 공개 release나 ZIP
+업로드는 하지 않았다. 따라서 코드 checkout만으로는 실제 보고서를 재현할 수
+없다. 재현 자료를 별도로 전달받아 `outputs/` 아래에 풀면 다음 파일을 사용한다.
 
 - 당시 공식 Source 2개의 content-decoded 보관 body와 추출 text, URL·수집일·hash
 - 원래 입력 capsule, Source DTO 2개와 정확한 발표문 Evidence 발췌 4개
