@@ -29,6 +29,7 @@ from skala_rag.contracts import (
 from skala_rag.contracts.error_codes import ErrorCode, is_retryable
 from skala_rag.contracts.evaluation import Dimension
 from skala_rag.contracts.interfaces import Clock, LLMError, StructuredLLM
+from skala_rag.scoring.approved_policy import ApprovedScoringPolicy
 from skala_rag.scoring.catalog import ScoringPolicy
 
 
@@ -95,7 +96,7 @@ def validate_output(
     *,
     dimension: Dimension,
     snapshot: EvaluationSnapshot,
-    policy: ScoringPolicy,
+    policy: ScoringPolicy | ApprovedScoringPolicy,
     rubric: Mapping[str, object],
 ) -> list[str]:
     """계약 위반 목록을 돌려준다. 빈 목록이면 통과.
@@ -156,7 +157,7 @@ def assemble_evaluation(
     *,
     dimension: Dimension,
     snapshot: EvaluationSnapshot,
-    policy: ScoringPolicy,
+    policy: ScoringPolicy | ApprovedScoringPolicy,
     rubric: Mapping[str, object],
     schema_version: str,
 ) -> Evaluation:
@@ -228,9 +229,10 @@ def build_user_prompt(
     dimension: Dimension,
     snapshot: EvaluationSnapshot,
     rubric: Mapping[str, object],
-    policy: ScoringPolicy,
+    policy: ScoringPolicy | ApprovedScoringPolicy,
+    context: Mapping[str, object] | None = None,
 ) -> str:
-    """rubric 해당 영역과 snapshot 근거만 담은 결정적 JSON prompt."""
+    """rubric 해당 영역과 snapshot 근거, 선택적 영역 맥락을 담은 JSON prompt."""
     dims = rubric.get("dimensions")
     rubric_dim = dims.get(dimension, {}) if isinstance(dims, Mapping) else {}
     payload = {
@@ -257,6 +259,8 @@ def build_user_prompt(
             for e in snapshot.evidence.values()
         ],
     }
+    if context is not None:
+        payload["context"] = dict(context)
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
 
 
@@ -304,14 +308,18 @@ def evaluate_dimension(
     rubric: Mapping[str, object],
     *,
     llm: StructuredLLM,
-    policy: ScoringPolicy,
+    policy: ScoringPolicy | ApprovedScoringPolicy,
     clock: Clock,
     schema_version: str,
     max_repairs: int = 1,
     system_prompt: str = SYSTEM_PROMPT,
     user_prompt: str | None = None,
+    prompt_context: Mapping[str, object] | None = None,
+    extra_validator: Callable[[DimensionAssessmentOutput], list[str]] | None = None,
 ) -> EvaluationResult:
     """한 영역을 평가해 terminal ``EvaluationResult``를 돌려준다(contracts §4).
+
+    영역별 추가 prompt 맥락과 검증은 기존 구조 수정 예산을 공유한다.
 
     - schema 오류(LLM_OUTPUT_INVALID·ValidationError)와 계약 위반은 위반 내용을
       붙여 ``max_repairs``회 구조 수정을 요청한다. 그래도 실패하면 failure.
@@ -323,7 +331,7 @@ def evaluate_dimension(
     user = (
         user_prompt
         if user_prompt is not None
-        else build_user_prompt(dimension, snapshot, rubric, policy)
+        else build_user_prompt(dimension, snapshot, rubric, policy, prompt_context)
     )
     prompt = user
     last_problem = ""
@@ -342,6 +350,8 @@ def evaluate_dimension(
                 rubric=rubric,
                 schema_version=schema_version,
             )
+            if extra_validator is not None and (extra := extra_validator(output)):
+                raise EvaluationValidationError(extra)
         except LLMError as err:
             if err.error_code != ErrorCode.LLM_OUTPUT_INVALID:
                 return _failure(
