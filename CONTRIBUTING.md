@@ -115,7 +115,7 @@ skala-rag/
 ├── uv.lock
 ├── .env.example                 # 비밀 없는 설정명
 ├── .github/                     # 이슈·PR 템플릿
-├── configs/                     # 승인 정책·모델·예산·보고서 설정
+├── configs/                     # runtime.json 요청값·별도 점수/rubric/PDF 설정
 ├── docs/
 │   ├── README.md                # 구현 가이드 진입점
 │   ├── implementation/          # 팀 설계 문서
@@ -128,7 +128,9 @@ skala-rag/
 │   ├── rag/                     # load·chunk·index·retrieve
 │   ├── scoring/                 # 순수 산술·정책 판단
 │   ├── reporting/               # draft·validator·judge·PDF
-│   ├── prompts/                 # 버전 관리되는 prompt
+│   ├── prompt/                  # authored prompt·text/*.json fragment·builder·버전 원본
+│   ├── prompts/                 # 기존 여섯 모듈의 import-only 호환 export
+│   ├── settings.py              # strict/frozen profile·명시 로더·credential resolver
 │   └── cli.py                   # 기존 fixture callable·CLI 호환 보존; 신규 실행은 Python 직접 호출 (#166)
 ├── data/
 │   ├── manifests/               # 공개 가능한 corpus metadata
@@ -144,6 +146,12 @@ skala-rag/
 
 - `docs/raws/`는 읽기 전용이다.
 - 협업 규칙(`.github/`, `AGENTS.md`, `CONTRIBUTING.md`)은 이슈에서 합의한 뒤 PR로 바꾼다.
+- 실행 요청값은 [설정 소유권](configs/README.md)에 따라 `configs/runtime.json`에서,
+  authored prompt는 singular `src/skala_rag/prompt/`에서 수정한다. plural 호환 모듈에
+  지시문·버전·기본값을 새로 정의하지 않는다. prompt JSON은 literal fragment array이며
+  effective 공백·개행을 보존한다. process-loaded 상수이므로 변경 후 새 프로세스로 검증한다.
+  요청 설정을 승인으로 취급하거나 key를 JSON에 넣지 않는다. source/installed 파일 선택,
+  전체 파일 override·주입 우선순위·strict replay는 위 안내를 따른다.
 
 ### 공통 파일
 
