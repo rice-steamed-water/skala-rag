@@ -8,8 +8,10 @@ import socket
 from copy import deepcopy
 from dataclasses import replace
 from datetime import date
+from typing import Literal, assert_never
 
 import pytest
+from tests.integration import test_v3_actual_controller as actual_fixture
 from tests.integration import test_v3_source_only_controller as source_only_fixture
 from tests.integration.test_v3_evidence_snapshot_consumer import setup_case
 from tests.unit.test_v3_report_pipeline import Stub
@@ -18,11 +20,15 @@ import skala_rag.graph.candidate_workflow_v3 as outer
 import skala_rag.graph.snapshot as snapshot_module
 from skala_rag.contracts import ValidationErrorDetail, ValidationResult
 from skala_rag.contracts.ids import snapshot_id
+from skala_rag.reporting.v3_context import build_report_context_from_run_v3
 from skala_rag.reporting.v3_pipeline import ReportGeneratorV3, SemanticJudgeV3
 from skala_rag.reporting.validator import artifact_hash
 from skala_rag.scoring.selector_v3 import select_best_v3
 
 source_only_inputs = source_only_fixture.inputs
+actual_admission_fixture = actual_fixture.actual_admission_fixture
+research_case = actual_fixture.research_case
+controller = actual_fixture.controller
 
 
 @pytest.fixture(autouse=True)
@@ -34,6 +40,88 @@ def deny_network(monkeypatch):
     monkeypatch.setattr(socket.socket, "connect", denied)
     monkeypatch.setattr(socket.socket, "connect_ex", denied)
     monkeypatch.setattr(socket, "getaddrinfo", denied)
+
+
+@pytest.mark.parametrize("damage", ["promotion", "decision", "run", "mode"])
+def test_actual_scored_context_rejects_changed_original_state(
+    controller, damage: Literal["promotion", "decision", "run", "mode"]
+):
+    # Given: a complete admitted original State run with synthetic evaluations.
+    stages, callbacks, options, _, _, frozen = controller
+    result = outer.run_candidate_workflow_v3(stages, callbacks, **options)
+    artifacts = deepcopy(result.research_artifacts)
+    run = stages.evidence_research.run_input
+    state = artifacts[frozen.candidate_id]["state"]
+    match damage:
+        case "promotion":
+            state["evaluations_v3"].clear()
+        case "decision":
+            state["investment_decisions"].clear()
+        case "run":
+            run = run.model_copy(update={"corpus_version": "foreign"})
+        case "mode":
+            result = replace(result, execution_mode="fixture")
+        case unreachable:
+            assert_never(unreachable)
+    # When / Then: no context can replace or detach the original scored inputs.
+    with pytest.raises(ValueError):
+        build_report_context_from_run_v3(
+            replace(result, research_artifacts=artifacts),
+            run_input=run,
+            run_id=result.run_id,
+            actual_admission=options["actual_admission"],
+        )
+
+
+def test_actual_unknown_candidate_advances_without_evaluation(controller):
+    # Given: discovery survives but eligibility remains unknown.
+    stages, callbacks, options, calls, requests, frozen = controller
+    eligibility = stages.eligibility({}, None).model_copy(update={"status": "unknown"})
+    stages = replace(stages, eligibility=lambda *_args: eligibility)
+    # When: drive the public original loop.
+    result = outer.run_candidate_workflow_v3(stages, callbacks, **options)
+    # Then: archive once, no refill, score, research or evaluator invocation.
+    assert result.outcomes[frozen.candidate_id].status == "eligibility_unknown"
+    assert result.candidate_index == 1 and not result.scores
+    assert not calls and not requests
+
+
+def test_actual_fixture_locator_rejects_before_research_or_evaluation(controller):
+    # Given: CompanyResearch carries a forbidden fixture Source in live mode.
+    stages, callbacks, options, calls, requests, frozen = controller
+    seed = stages.research({})
+    seed = replace(
+        seed,
+        sources={
+            sid: source.model_copy(update={"url": "fixture://forbidden"})
+            for sid, source in seed.sources.items()
+        },
+    )
+    stages = replace(stages, research=lambda _candidate: seed)
+    # When: the original receipt consumer parses the live seed.
+    result = outer.run_candidate_workflow_v3(stages, callbacks, **options)
+    # Then: fixture locators never reach retrieval, evaluators or scoring.
+    assert not calls and not requests and not result.scores
+    assert result.outcomes[frozen.candidate_id].status == "failed"
+
+
+def test_actual_unreviewed_response_does_not_acquire_semantic_authority(
+    controller, actual_admission_fixture
+):
+    # Given: synthetic callback success does not create a semantic review record.
+    _, _, options, _, _, frozen = controller
+    admission = options["actual_admission"]
+    _, _, _, request, receipt, _ = actual_admission_fixture
+    # When: resolve a response absent from the immutable snapshot-bound records.
+    resolved = admission.resolve_review(
+        frozen,
+        admission.registry.rubric("core-0.1.0"),
+        request,
+        receipt,
+        subject="Synthetic Robot",
+    )
+    # Then: unreviewed remains unknown rather than positive authority.
+    assert resolved is None
 
 
 def composite(case, *, generate, judge, check_pdf=None):
@@ -403,6 +491,7 @@ def test_source_only_report_composite_refused_before_any_callbacks(
             generate=forbidden,
             judge=forbidden,
             check_pdf=forbidden,
+            actual_admission=None,
             **options,
         )
     assert calls == configured == requests == callbacks == copies == []
@@ -443,6 +532,7 @@ def test_source_only_real_consumer_cannot_be_promoted_to_report(
         {},
         source_only=boundary,
         run_profile=boundary.run_profile,
+        actual_admission=None,
         **options,
     )
     assert len(originals) == 1 and not callbacks

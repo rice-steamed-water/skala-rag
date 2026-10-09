@@ -5,18 +5,20 @@ import json
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from datetime import date
+from typing import assert_never
 
 from skala_rag.contracts.evaluation import EvaluationSnapshot
-from skala_rag.contracts.ids import snapshot_id
+from skala_rag.contracts.ids import evaluation_key, snapshot_id
 from skala_rag.contracts.inputs import RunInput
 from skala_rag.contracts.reports import CandidateOutcome
-from skala_rag.contracts.v3 import InvestmentDecision, ScoreSummary
+from skala_rag.contracts.v3 import Evaluation, InvestmentDecision, ScoreSummary
 from skala_rag.graph.candidates_v3 import (
     CandidateRunV3,
     validate_snapshot_admission_v3,
 )
 from skala_rag.graph.research_artifacts_v3 import _validate_contract_generation
 from skala_rag.rag.retrieval import source_date
+from skala_rag.scoring.approved_consumers import ActualAdmissionV3
 
 
 def canonical(value):
@@ -50,9 +52,40 @@ def build_report_context_v3(
     as_of: date,
     corpus_version: str,
     execution_mode: str,
+    actual_admission: ActualAdmissionV3 | None = None,
 ) -> ReportContextV3:
     if execution_mode not in ("fixture", "live") or type(as_of) is not date:
         raise ValueError("explicit mode and date required")
+    if actual_admission is not None:
+        if type(actual_admission) is not ActualAdmissionV3:
+            raise ValueError("exact ActualAdmissionV3 required")
+        actual_admission.load_policy()
+        # Verified replay retains the original generation's input context so
+        # Generator/Judge request hashes remain unchanged. Current replay
+        # execution and zero provider calls belong to the operational receipt.
+        match actual_admission.execution_scope:
+            case "actual" | "actual_replay":
+                context_scope = "actual"
+            case "controlled_response":
+                context_scope = "controlled_response"
+            case unreachable:
+                assert_never(unreachable)
+        run = actual_admission.run_input
+        if (
+            execution_mode != result.execution_mode
+            or execution_mode != run.execution_mode
+            or (result.run_id, result.schema_version, result.policy_version)
+            != (
+                actual_admission.runtime_binding.gates.run_id,
+                run.schema_version,
+                run.policy_version,
+            )
+            or as_of != run.as_of
+            or corpus_version != run.corpus_version
+        ):
+            raise ValueError("report admission run/schema/mode mismatch")
+    elif execution_mode != "fixture" or result.execution_mode != "fixture":
+        raise ValueError("live scored context requires complete actual admission")
     if (
         result.status
         not in (
@@ -110,7 +143,7 @@ def build_report_context_v3(
         )
     ):
         raise ValueError("no-selection mismatch")
-    evidence, sources, frozen = {}, {}, {}
+    evidence, sources, frozen, evaluations = {}, {}, {}, {}
     for cid, outcome in outcomes.items():
         if (
             cid != outcome.candidate_id
@@ -122,6 +155,52 @@ def build_report_context_v3(
         snap = EvaluationSnapshot.model_validate(
             snapshots[cid], context={"execution_mode": execution_mode}
         )
+        if actual_admission is not None:
+            for version in ("core-0.1.0", "finance-0.1.0"):
+                actual_admission.verify_snapshot(
+                    snap, actual_admission.registry.rubric(version)
+                )
+            try:
+                state = result.research_artifacts[cid]["state"]
+            except (KeyError, TypeError):
+                raise ValueError("missing original scored State") from None
+            if (
+                state.get("run_input")
+                != actual_admission.run_input.model_dump(mode="json")
+                or state.get("current_candidate_id") != cid
+                or state.get("snapshots", {}).get(snap.snapshot_id)
+                != snap.model_dump(mode="json")
+                or state.get("score_summaries", {}).get(cid)
+                != score.model_dump(mode="json")
+                or state.get("investment_decisions", {}).get(cid)
+                != decision.model_dump(mode="json")
+            ):
+                raise ValueError("original scored State decision/snapshot mismatch")
+            dimensions = {c.dimension for c in actual_admission.load_policy().criteria}
+            promoted = state.get("evaluations_v3", {})
+            expected = {
+                evaluation_key(cid, score.evaluation_round, dim) for dim in dimensions
+            }
+            if set(promoted) != expected:
+                raise ValueError("original six-dimension promotion missing")
+            for key, raw_evaluation in promoted.items():
+                evaluation = Evaluation.model_validate(raw_evaluation)
+                if any(
+                    getattr(evaluation, field) != getattr(snap, field)
+                    for field in (
+                        "schema_version",
+                        "run_id",
+                        "candidate_id",
+                        "policy_version",
+                        "snapshot_id",
+                        "evaluation_round",
+                        "evidence_revision",
+                    )
+                ) or key != evaluation_key(
+                    cid, snap.evaluation_round, evaluation.dimension
+                ):
+                    raise ValueError("original evaluation generation mismatch")
+                evaluations[key] = evaluation.model_dump(mode="json")
         for field in (
             "schema_version",
             "run_id",
@@ -204,6 +283,21 @@ def build_report_context_v3(
             "as_of": as_of.isoformat(),
             "corpus_version": corpus_version,
             "execution_mode": execution_mode,
+            **(
+                {
+                    "execution_scope": context_scope,
+                    "evaluations": evaluations,
+                    "provenance": {
+                        "provider_execution": context_scope,
+                        "synthetic": context_scope == "controlled_response",
+                        "review_authority": "source_bound_resolvers",
+                    },
+                    "final_publication_allowed": False,
+                    "publication_allowed": False,
+                }
+                if actual_admission is not None
+                else {}
+            ),
             "mode": "single_candidate"
             if selection.selected_candidate_id
             else "no_recommendation",
@@ -225,21 +319,33 @@ def build_report_context_v3(
 
 
 def build_report_context_from_run_v3(
-    result: CandidateRunV3, *, run_input: RunInput, run_id: str
+    result: CandidateRunV3,
+    *,
+    run_input: RunInput,
+    run_id: str,
+    actual_admission: ActualAdmissionV3 | None = None,
 ) -> ReportContextV3:
     """Read only the original scored State generations; never rebuild a snapshot.
 
     This opt-in artifact handoff leaves the explicit-snapshot legacy API intact.
-    The public outer's actual/source-only refusal is not a scoring authorization.
+    Complete controller admission is required for live scored State.
     """
     run = RunInput.model_validate(run_input)
     if (
-        run.execution_mode != "fixture"
+        (actual_admission is None and run.execution_mode != "fixture")
         or result.execution_mode != run.execution_mode
         or (result.run_id, result.schema_version, result.policy_version)
         != (run_id, run.schema_version, run.policy_version)
     ):
         raise ValueError("original run identity/mode mismatch")
+    if actual_admission is not None:
+        if (
+            type(actual_admission) is not ActualAdmissionV3
+            or run != actual_admission.run_input
+            or run_id != actual_admission.runtime_binding.gates.run_id
+        ):
+            raise ValueError("original report admission input mismatch")
+        actual_admission.load_policy()
     # Only normal decision outcomes imply scoring, not unused State snapshots.
     scored_outcomes = {
         cid
@@ -309,4 +415,5 @@ def build_report_context_from_run_v3(
         as_of=run.as_of,
         corpus_version=run.corpus_version,
         execution_mode=run.execution_mode,
+        actual_admission=actual_admission,
     )

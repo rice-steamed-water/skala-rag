@@ -1,14 +1,24 @@
-"""Offline Moat branch: #22 wrapper bridge, not a live research node."""
+"""Moat atomic branch with separate fixture and controller-admitted entries."""
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
 from pathlib import Path
+from typing import assert_never
 
-from skala_rag.agents.evaluation import EvaluationValidationError, evaluate_dimension
+from skala_rag.agents.evaluation import (
+    CriterionOutput,
+    EvaluationValidationError,
+    evaluate_dimension,
+)
 from skala_rag.agents.moat_verification import (
+    MOAT_CRITERIA,
     CoreArtifactApproval,
+    IndependentComparison,
     ReviewedMoatAnchor,
+    VerifiedPatent,
+    frozen_moat_evidence,
+    legacy_moat_violation,
     validate_core_artifact,
+    validate_moat_catalog,
     validate_reviewed_anchor,
 )
 from skala_rag.contracts.evaluation import EvaluationSnapshot
@@ -16,6 +26,7 @@ from skala_rag.contracts.evidence import Evidence
 from skala_rag.contracts.interfaces import Clock, StructuredLLM
 from skala_rag.contracts.v3 import Evaluation, EvaluationBranchResult
 from skala_rag.prompts.moat_evaluation import SYSTEM_PROMPT, build_user_prompt
+from skala_rag.scoring.approved_consumers import ActualAdmissionV3
 from skala_rag.scoring.approved_policy import (
     ApprovalVerifier,
     ApprovedScoringPolicy,
@@ -24,25 +35,9 @@ from skala_rag.scoring.approved_policy import (
 )
 from skala_rag.scoring.catalog import ScoringPolicy
 
-MOAT_CRITERIA = frozenset(
-    {"moat.differentiation", "moat.ip", "moat.data", "moat.lock_in"}
-)
-
-
-@dataclass(frozen=True)
-class VerifiedPatent:
-    """Upstream verified facts, each backed by cited snapshot evidence."""
-
-    holder_candidate_id: str
-    rights_status: str
-    claim_scope: str
-    evidence_ids: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class IndependentComparison:
-    competitor_candidate_id: str
-    evidence_ids: tuple[str, ...]
+MoatObservationVerifier = Callable[
+    [CriterionOutput, Mapping[str, Evidence]], bool | ReviewedMoatAnchor
+]
 
 
 def _evaluate_moat(
@@ -53,100 +48,34 @@ def _evaluate_moat(
     llm: StructuredLLM,
     clock: Clock,
     schema_version: str,
-    verify_observation: Callable[
-        [object, Mapping[str, Evidence]], bool | ReviewedMoatAnchor
-    ],
+    verify_observation: MoatObservationVerifier,
     verified_patents: Mapping[str, VerifiedPatent],
     independent_comparisons: Mapping[str, IndependentComparison],
+    approved_actual: bool = False,
 ) -> EvaluationBranchResult:
-    """Injected fixture rubric/verifier; no numeric defaults, search or retries.
-
-    #22 supports observed/missing only. This explicit bridge rejects N/A rather
-    than silently converting it; approved applicability integration remains open.
-    Verifier must return a snapshot-bound reviewed anchor for approved Core,
-    checking minimum evidence and semantics rather than trusting provider prose.
-    Approved core-0.1.0 anchors allow absent rights/applications and company
-    comparisons. Their semantics (including negative facts and independent
-    cross-checks for rating 5) belong to the trusted injected reviewer. Legacy proposed
-    fixtures retain the active-patent/independent-comparison checks.
-    """
+    """Shared observed/missing atomic body; no search, defaults, repairs or N/A."""
     approved_core = (
-        rubric.get("status") == "approved"
-        and rubric.get("rubric_version") == "core-0.1.0"
-    )
+        rubric.get("status") == "approved" or approved_actual
+    ) and rubric.get("rubric_version") == "core-0.1.0"
     if (not approved_core and rubric.get("status") != "proposed") or (
         not isinstance(policy, ApprovedScoringPolicy) and policy.status != "draft"
     ):
         raise ValueError("Moat offline fixture only; unsupported rubric or policy")
     if isinstance(policy, ApprovedScoringPolicy):
-        if policy.execution_mode != "fixture" or not approved_core:
+        if (
+            policy.execution_mode != ("live" if approved_actual else "fixture")
+            or not approved_core
+        ):
             raise ValueError("Approved Moat fixture requires approved Core rubric")
     snapshot = EvaluationSnapshot.model_validate(
-        snapshot.model_dump(), context={"execution_mode": "fixture"}
+        snapshot.model_dump(),
+        context={"execution_mode": "live" if approved_actual else "fixture"},
     )
     ids = {c.criterion_id for c in policy.criteria if c.dimension == "moat"}
-    dimensions = rubric.get("dimensions", {})
-    moat = dimensions.get("moat", {}) if isinstance(dimensions, Mapping) else {}
-    criteria = moat.get("criteria", {}) if isinstance(moat, Mapping) else {}
-    if ids != MOAT_CRITERIA or set(criteria) != MOAT_CRITERIA:
-        raise ValueError("Moat criterion catalog mismatch")
-    if (
-        not isinstance(rubric.get("rubric_version"), str)
-        or not rubric["rubric_version"].strip()
-    ):
-        raise ValueError("Explicit rubric version required")
+    validate_moat_catalog(rubric, ids)
     if snapshot.policy_version != policy.policy_version:
         raise ValueError("Snapshot policy mismatch")
-    allowed = {}
-    for eid, evidence in snapshot.evidence.items():
-        if (
-            evidence.scope != "company"
-            or evidence.candidate_id != snapshot.candidate_id
-        ):
-            continue
-        if not MOAT_CRITERIA.intersection(evidence.criterion_ids):
-            continue
-        if (
-            eid not in snapshot.evidence_ids
-            or evidence.evidence_id != eid
-            or evidence.source_id not in snapshot.sources
-            or snapshot.sources[evidence.source_id].source_id != evidence.source_id
-            or not evidence.provenance
-        ):
-            raise ValueError("Invalid frozen evidence source/provenance")
-        for path in evidence.provenance:
-            record = snapshot.retrieval_records.get(path.retrieval_id)
-            if (
-                record is None
-                or record.run_id != snapshot.run_id
-                or record.candidate_id not in (None, snapshot.candidate_id)
-                or record.status != "ok"
-                or eid not in record.evidence_ids
-                or evidence.source_id not in record.source_ids
-            ):
-                raise ValueError("Invalid frozen retrieval attribution")
-            for field, expected in (
-                ("corpus_version", snapshot.corpus_version),
-                ("index_version", snapshot.index_version),
-                ("as_of", snapshot.as_of.isoformat()),
-            ):
-                if (
-                    field in record.arguments_without_secrets
-                    and record.arguments_without_secrets[field] != expected
-                ):
-                    raise ValueError("Stale frozen retrieval identity")
-            if path.chunk_id is not None:
-                chunk = snapshot.chunks.get(path.chunk_id)
-                if (
-                    chunk is None
-                    or path.chunk_id not in record.chunk_ids
-                    or chunk.source_id != evidence.source_id
-                    or chunk.corpus_version != snapshot.corpus_version
-                    or snapshot.candidate_id not in chunk.candidate_ids
-                    or evidence.excerpt not in chunk.text
-                ):
-                    raise ValueError("Invalid frozen chunk attribution")
-        allowed[eid] = evidence
+    allowed = frozen_moat_evidence(snapshot, MOAT_CRITERIA)
     scoped = snapshot.model_copy(
         update={"evidence_ids": sorted(allowed), "evidence": allowed}, deep=True
     )
@@ -160,30 +89,16 @@ def _evaluate_moat(
                 cited = set(criterion.evidence_ids)
                 if not cited or not cited <= set(allowed):
                     raise EvaluationValidationError(["MOAT_EVIDENCE_INVALID"])
-                if not approved_core and criterion.criterion_id == "moat.ip":
-                    patent = verified_patents.get(criterion.criterion_id)
-                    if (
-                        patent is None
-                        or patent.holder_candidate_id != snapshot.candidate_id
-                        or patent.rights_status != "active"
-                        or not patent.claim_scope.strip()
-                        or not patent.evidence_ids
-                        or not set(patent.evidence_ids) <= cited
-                    ):
-                        raise EvaluationValidationError(["MOAT_PATENT_UNVERIFIED"])
-                if (
-                    not approved_core
-                    and criterion.criterion_id == "moat.differentiation"
+                if not approved_core and (
+                    violations := legacy_moat_violation(
+                        snapshot.candidate_id,
+                        criterion_id=criterion.criterion_id,
+                        cited=cited,
+                        verified_patents=verified_patents,
+                        independent_comparisons=independent_comparisons,
+                    )
                 ):
-                    comparison = independent_comparisons.get(criterion.criterion_id)
-                    if (
-                        comparison is None
-                        or not comparison.competitor_candidate_id.strip()
-                        or comparison.competitor_candidate_id == snapshot.candidate_id
-                        or not comparison.evidence_ids
-                        or not set(comparison.evidence_ids) <= cited
-                    ):
-                        raise EvaluationValidationError(["MOAT_COMPARISON_UNVERIFIED"])
+                    raise EvaluationValidationError(violations)
                 review = verify_observation(
                     criterion, {eid: allowed[eid] for eid in cited}
                 )
@@ -206,7 +121,7 @@ def _evaluate_moat(
         scoped,
         rubric,
         llm=CheckedLLM(),
-        policy=policy,  # type: ignore[arg-type]  # Catalog-only shared wrapper.
+        policy=policy,
         clock=clock,
         schema_version=schema_version,
         max_repairs=0,
@@ -222,6 +137,54 @@ def _evaluate_moat(
     return EvaluationBranchResult.model_validate(payload)
 
 
+def evaluate_moat_approved(
+    snapshot: EvaluationSnapshot,
+    *,
+    actual_admission: ActualAdmissionV3,
+    llm: StructuredLLM,
+    review_request: bytes,
+    review_subject: str,
+    reviewed_anchors: Mapping[str, ReviewedMoatAnchor],
+) -> EvaluationBranchResult:
+    """Admit reviewed anchors; unknown facts support Missing, never low/N/A."""
+    if type(actual_admission) is not ActualAdmissionV3:
+        raise ValueError("Exact ActualAdmissionV3 required")
+    rubric = actual_admission.registry.rubric("core-0.1.0")
+    policy = actual_admission.verify_evaluator(snapshot, rubric, llm, "moat")
+
+    def verify(
+        criterion: CriterionOutput, _evidence: Mapping[str, Evidence]
+    ) -> ReviewedMoatAnchor | bool:
+        receipt = reviewed_anchors.get(criterion.criterion_id)
+        if receipt is None:
+            return False
+        review = actual_admission.resolve_review(
+            snapshot, rubric, review_request, receipt, subject=review_subject
+        )
+        if review is None:
+            return False
+        match review.decision:
+            case "accepted":
+                return receipt
+            case "rejected" | "unresolved":
+                return False
+            case unreachable:
+                assert_never(unreachable)
+
+    return _evaluate_moat(
+        snapshot,
+        rubric=rubric,
+        policy=policy,
+        llm=llm,
+        clock=actual_admission.runtime_binding.runtime.clock,
+        schema_version=snapshot.schema_version,
+        verify_observation=verify,
+        verified_patents={},
+        independent_comparisons={},
+        approved_actual=True,
+    )
+
+
 def evaluate_moat(
     snapshot: EvaluationSnapshot,
     *,
@@ -230,9 +193,7 @@ def evaluate_moat(
     llm: StructuredLLM,
     clock: Clock,
     schema_version: str,
-    verify_observation: Callable[
-        [object, Mapping[str, Evidence]], bool | ReviewedMoatAnchor
-    ],
+    verify_observation: MoatObservationVerifier,
     verified_patents: Mapping[str, VerifiedPatent],
     independent_comparisons: Mapping[str, IndependentComparison],
     artifact_approval: CoreArtifactApproval | None = None,
@@ -268,18 +229,12 @@ def evaluate_moat_approved_fixture(
     llm: StructuredLLM,
     clock: Clock,
     schema_version: str,
-    verify_observation: Callable[
-        [object, Mapping[str, Evidence]], bool | ReviewedMoatAnchor
-    ],
+    verify_observation: MoatObservationVerifier,
     artifact_approval: CoreArtifactApproval,
     artifact_verifier: Callable[[CoreArtifactApproval], bool],
     actual_runtime: bool = False,
 ) -> EvaluationBranchResult:
-    """Load and consume approvals in this call, never infer a loading receipt.
-
-    The trusted controller verifier must bind core approval to supplied rubric
-    contents, not merely its claimed version. No live promotion is made.
-    """
+    """Fixture-only loader; verify exact artifact contents, never promote live."""
     if actual_runtime is not False:
         raise ValueError(
             "#168: actual runtime unavailable: no trusted-loading receipt; "

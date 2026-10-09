@@ -73,6 +73,10 @@ PY
 
 기존 `exit_code=0/2/1`과 policy의 CLI 관련 필드명은 호환성 구현 사실로 보존한다([기존 매핑](fixture-cli.md#기존-exit-code-매핑)). #166은 이를 삭제/이름 변경하거나 새로운 enum·스키마를 승인하지 않는다. 신규 실행 완료 조건은 CLI 기능이나 종료 코드가 아니라 Python 상태/receipt 및 근거 산출물이다.
 
+## v3 actual·replay 직접 호출 (#168)
+
+작업 브랜치의 `examples/v3_actual_run.py`의 `preflight_sources`·`actual`·`replay`(뒤 둘은 `skala_rag.graph.actual_runner_v3.run_actual`·`run_replay` wrapper)는 이 결정대로 CLI 없이 Python으로만 호출한다. `preflight_sources`는 권위 없이 보존 Source·index·model만 확인하고 항상 `preflight_blocked`로 끝난다. `actual`의 기본은 provider 호출 없는 preflight이고, 실제 실행에는 `execute=True`, 명시적 key, 저장소에 없는 외부 `ActualAuthorityV3`가 필요하다. 인자·입력·권위·예산 경계는 [actual-v3 실행과 replay](actual-execution-v3.md)에 있다. 실제 유료 scored 실행 기록은 없다.
+
 ## v3 source-only 직접 호출 (#209)
 
 [Source-only v3 계약](source-only-v3.md)은 기존 outer의 Discovery 캡처 재생, CompanyResearch, Eligibility, archive/advance, no-selection handoff를 별도로 연결한다. 기본 fixture callable은 바꾸지 않는다. 입력의 `execution_mode="live"`는 live DTO 검증 경계이며 실제 HTTP, 새 주제 Discovery, 기업 사실 확인, 평가/점수/보고서 발행 승인을 뜻하지 않는다. source-only는 `eligible`도 명시적 not-ready 실패로 보존하고 full scoring/live evaluation의 기존 승인 gate를 열지 않는다.

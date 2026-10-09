@@ -1,20 +1,22 @@
 """Founder 평가의 인물 귀속 경계 (#58).
 
-현재 rubric/catalog는 제안 상태이므로 fixture 실행만 허용한다. 인물 동일성은
-Evidence 텍스트나 동명이인 추측으로 판정하지 않고, 상위 조사 단계가 검증해
-전달한 evidence_id → person_id 매핑을 요구한다.
+기존 fixture 경계는 유지하며 actual 진입점은 별도 shared admission을 요구한다.
+인물 동일성은 Evidence 텍스트나 동명이인 추측으로 판정하지 않고, 상위 조사
+단계가 검증해 전달한 evidence_id → person_id 매핑과 독립 review를 요구한다.
 """
 
 from collections.abc import Callable, Collection, Mapping
 from copy import deepcopy
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from skala_rag.agents.evaluation import evaluate_dimension
 from skala_rag.agents.founder_verification import (
     FOUNDER_CRITERIA,
     FounderReviewError,
     ReviewedFounderAnchor,
-    validate_founder_anchor,
+    _founder_attribution,
+    _run_founder_approved,
 )
 from skala_rag.agents.moat_verification import (
     CoreArtifactApproval,
@@ -22,9 +24,9 @@ from skala_rag.agents.moat_verification import (
 )
 from skala_rag.agents.technology_verification import (
     _exact_tree,
-    checked_fixture_output,
     checked_snapshot,
 )
+from skala_rag.contracts.assessment import CriterionAssessment
 from skala_rag.contracts.evaluation import EvaluationResult, EvaluationSnapshot
 from skala_rag.contracts.evidence import Evidence
 from skala_rag.contracts.interfaces import Clock, StructuredLLM
@@ -34,6 +36,10 @@ from skala_rag.scoring.approved_policy import (
     load_approved_policy,
 )
 from skala_rag.scoring.catalog import ScoringPolicy
+
+if TYPE_CHECKING:
+    from skala_rag.scoring.approved_consumers import ActualAdmissionV3
+    from skala_rag.tools.runtime_llm import RuntimeStructuredLLM
 
 
 def evaluate_founder_fixture(
@@ -111,8 +117,6 @@ def evaluate_founder_approved_fixture(
     Legacy draft behavior is separate. Review authenticates claims only through
     caller-owned external resolution, after the common wrapper (no repairs).
     """
-    from skala_rag.contracts.error_codes import ErrorCode
-    from skala_rag.contracts.interfaces import LLMError
     from skala_rag.fakes import FakeLLM
 
     if actual_runtime is not False:
@@ -132,12 +136,6 @@ def evaluate_founder_approved_fixture(
         validated_approvals = PolicyApprovals.model_validate(approvals.model_dump())
         _exact_tree(approvals, validated_approvals, "")
         approvals = validated_approvals
-        for evidence in snapshot.evidence.values():
-            related = [*evidence.supporting_evidence_ids, *evidence.conflicts_with]
-            if evidence.supersedes is not None:
-                related.append(evidence.supersedes)
-            if not set(related) <= set(snapshot.evidence):
-                raise ValueError("Invalid original evidence relationship closure")
         if artifact_approval.reference != approvals.core.reference:
             raise ValueError("Core artifact and policy reference mismatch")
         policy = load_approved_policy(
@@ -148,93 +146,93 @@ def evaluate_founder_approved_fixture(
         )
         if snapshot.policy_version != policy.policy_version:
             raise ValueError("Snapshot policy mismatch")
+        dimensions = rubric.get("dimensions")
+        founder = dimensions.get("founder") if isinstance(dimensions, Mapping) else None
+        criteria = founder.get("criteria") if isinstance(founder, Mapping) else None
         if (
-            set(rubric["dimensions"]["founder"]["criteria"]) != FOUNDER_CRITERIA
+            not isinstance(criteria, Mapping)
+            or set(criteria) != FOUNDER_CRITERIA
             or {c.criterion_id for c in policy.criteria if c.dimension == "founder"}
             != FOUNDER_CRITERIA
         ):
             raise ValueError("Founder criteria incomplete")
-        if (
-            not isinstance(founder_person_ids, Collection)
-            or isinstance(founder_person_ids, (str, bytes))
-            or not isinstance(verified_person_by_evidence_id, Mapping)
-        ):
-            raise ValueError(
-                "Explicit person collection and attribution mapping required"
-            )
-        people = tuple(founder_person_ids)
-        attribution = dict(verified_person_by_evidence_id)
-        if (
-            not people
-            or any(type(pid) is not str or not pid.strip() for pid in people)
-            or len(set(people)) != len(people)
-            or any(
-                type(eid) is not str
-                or not eid.strip()
-                or type(pid) is not str
-                or not pid.strip()
-                for eid, pid in attribution.items()
-            )
-            or not set(attribution) <= set(snapshot.evidence)
-        ):
-            raise ValueError("Invalid Founder person attribution")
-        allowed = {
-            eid: evidence
-            for eid, evidence in snapshot.evidence.items()
-            if attribution.get(eid) in people
-            and evidence.scope == "company"
-            and evidence.candidate_id == snapshot.candidate_id
-            and any(cid in FOUNDER_CRITERIA for cid in evidence.criterion_ids)
-        }
-        scoped = snapshot.model_copy(
-            update={"evidence_ids": list(allowed), "evidence": allowed}, deep=True
+        people, attribution, scoped = _founder_attribution(
+            snapshot, founder_person_ids, verified_person_by_evidence_id
         )
+        if not people:
+            raise ValueError("Invalid Founder person attribution")
     except Exception:
         raise ValueError("Founder approved fixture preflight rejected") from None
 
-    class CheckedFixtureLLM:
-        def generate(self, **kwargs):
-            output = llm.generate(**kwargs)
-            try:
-                return checked_fixture_output(output)
-            except Exception:
-                raise LLMError(
-                    ErrorCode.LLM_OUTPUT_INVALID, "FOUNDER_FIXTURE_OUTPUT_INVALID"
-                ) from None
-
-    result = evaluate_dimension(
-        "founder",
-        scoped,
-        rubric,
-        llm=CheckedFixtureLLM(),
+    return _run_founder_approved(
+        snapshot,
+        scoped=scoped,
+        people=people,
+        attribution=attribution,
+        rubric=rubric,
+        llm=llm,
         policy=policy,
         clock=clock,
         schema_version=schema_version,
-        max_repairs=0,
+        verify_observation=verify_observation,
+        review_verifier=review_verifier,
     )
-    if result.status == "failure":
-        return result
-    try:
-        for criterion in result.evaluation.criteria:
-            if criterion.status != "observed":
-                continue
-            receipt = verify_observation(
-                criterion.model_copy(deep=True),
-                {
-                    eid: snapshot.evidence[eid].model_copy(deep=True)
-                    for eid in criterion.evidence_ids
-                },
-            )
-            if not validate_founder_anchor(
-                receipt,
-                rubric=rubric,
-                snapshot=snapshot,
-                criterion=criterion,
-                people=people,
-                attribution=attribution,
-                verifier=review_verifier,
-            ):
-                raise FounderReviewError("FOUNDER_REVIEW_REJECTED")
-    except Exception:
-        raise FounderReviewError("FOUNDER_REVIEW_REJECTED") from None
-    return result
+
+
+def evaluate_founder_approved(
+    snapshot: EvaluationSnapshot,
+    *,
+    actual_admission: "ActualAdmissionV3",
+    founder_person_ids: Collection[str],
+    verified_person_by_evidence_id: Mapping[str, str],
+    llm: "RuntimeStructuredLLM",
+    review_request: bytes,
+    review_subject: str,
+    reviewed_anchors: Mapping[str, ReviewedFounderAnchor],
+) -> EvaluationResult:
+    """Evaluate with controller admission and independently accepted person receipts.
+
+    Empty founder identity is permitted only as missing, never invented people.
+    Controller-selected request/subject/receipts are not model approval inputs.
+    """
+    from skala_rag.scoring.approved_consumers import ActualAdmissionV3
+
+    if type(actual_admission) is not ActualAdmissionV3:
+        raise FounderReviewError("FOUNDER_ADMISSION_REJECTED")
+    rubric = actual_admission.registry.rubric("core-0.1.0")
+    snapshot = checked_snapshot(snapshot)
+    policy = actual_admission.verify_evaluator(snapshot, rubric, llm, "founder")
+    validate_core_artifact(
+        rubric,
+        actual_admission.registry.core_approval(),
+        actual_admission.registry.verify_core,
+    )
+    people, attribution, scoped = _founder_attribution(
+        snapshot, founder_person_ids, verified_person_by_evidence_id
+    )
+    anchors = deepcopy(dict(reviewed_anchors))
+
+    def observation(
+        criterion: CriterionAssessment, _evidence: Mapping[str, Evidence]
+    ) -> ReviewedFounderAnchor | None:
+        return anchors.get(criterion.criterion_id)
+
+    def accepted(receipt: ReviewedFounderAnchor) -> bool:
+        resolved = actual_admission.resolve_review(
+            snapshot, rubric, review_request, receipt, subject=review_subject
+        )
+        return resolved is not None and resolved.decision == "accepted"
+
+    return _run_founder_approved(
+        snapshot,
+        scoped=scoped,
+        people=people,
+        attribution=attribution,
+        rubric=rubric,
+        llm=llm,
+        policy=policy,
+        clock=actual_admission.runtime_binding.runtime.clock,
+        schema_version=snapshot.schema_version,
+        verify_observation=observation,
+        review_verifier=accepted,
+    )

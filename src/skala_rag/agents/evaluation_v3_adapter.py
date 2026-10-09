@@ -1,4 +1,4 @@
-"""Lossless offline terminal-envelope conversion; never evaluator admission."""
+"""Lossless terminal-envelope conversion; never evaluator admission."""
 
 from collections.abc import Callable, Collection, Sequence
 from copy import deepcopy
@@ -65,6 +65,7 @@ def adapt_baseline_branch_result(
     snapshot: EvaluationSnapshot,
     criteria: Sequence[Criterion],
     industry_evidence_dimensions: Collection[str],
+    execution_mode: Literal["fixture", "live"] = "fixture",
 ) -> EvaluationBranchResult:
     """Revalidate and convert one terminal dimension, preserving every field.
 
@@ -75,12 +76,13 @@ def adapt_baseline_branch_result(
     try:
         if (
             branch_id not in _BASELINE_BRANCHES
+            or execution_mode not in ("fixture", "live")
             or not isinstance(result, EvaluationResult)
             or not isinstance(snapshot, EvaluationSnapshot)
         ):
             raise ValueError(_INVALID)
         snapshot = EvaluationSnapshot.model_validate(
-            _payload(snapshot), context={"execution_mode": "fixture"}
+            _payload(snapshot), context={"execution_mode": execution_mode}
         )
         catalog = _catalog(criteria)
         industry = frozenset(industry_evidence_dimensions)
@@ -119,6 +121,7 @@ def bind_baseline_evaluator_v3(
     *,
     criteria: Sequence[Criterion],
     industry_evidence_dimensions: Collection[str],
+    execution_mode: Literal["fixture", "live"] = "fixture",
 ) -> Callable[[EvaluationSnapshot], EvaluationBranchResult]:
     """Bind one upstream invocation, with no new retries, repair or admission.
 
@@ -127,7 +130,11 @@ def bind_baseline_evaluator_v3(
     Technology callers must explicitly extract .result and retain their receipt.
     """
     try:
-        if branch_id not in _BASELINE_BRANCHES or not callable(evaluate):
+        if (
+            branch_id not in _BASELINE_BRANCHES
+            or execution_mode not in ("fixture", "live")
+            or not callable(evaluate)
+        ):
             raise ValueError(_INVALID)
         catalog = _catalog(criteria)
         industry = frozenset(industry_evidence_dimensions)
@@ -141,7 +148,7 @@ def bind_baseline_evaluator_v3(
             if not isinstance(snapshot, EvaluationSnapshot):
                 raise ValueError(_INVALID)
             frozen = EvaluationSnapshot.model_validate(
-                _payload(snapshot), context={"execution_mode": "fixture"}
+                _payload(snapshot), context={"execution_mode": execution_mode}
             )
             upstream_snapshot = frozen.model_copy(deep=True)
         except Exception:
@@ -154,6 +161,7 @@ def bind_baseline_evaluator_v3(
             snapshot=frozen,
             criteria=catalog,
             industry_evidence_dimensions=industry,
+            execution_mode=execution_mode,
         )
 
     return call

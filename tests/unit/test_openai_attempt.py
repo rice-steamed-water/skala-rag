@@ -1,5 +1,6 @@
 """#47 adapter → #45 runtime 브리지 (#51). MockTransport만 쓴다(실제 API 없음)."""
 
+# allow: SIZE_OK — keep this user-scoped regression set in its existing test module.
 import json
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -56,7 +57,14 @@ def body(text='{"answer": 4}', **changes):
     return data
 
 
-def build(handler, *, max_input_tokens=8000, max_output_tokens=50):
+def build(
+    handler,
+    *,
+    max_input_tokens=8000,
+    max_output_tokens=50,
+    observe_wire=None,
+    api_key=KEY,
+):
     clock = FakeClock(START)
     seen = []
 
@@ -86,11 +94,12 @@ def build(handler, *, max_input_tokens=8000, max_output_tokens=50):
         sleep=lambda seconds: None,
     )
     attempt = OpenAIResponsesAttempt(
-        api_key=KEY,
+        api_key=api_key,
         prompt_version="synthetic-prompt",
         schema_version=SCHEMA,
         clock=clock,
         http_transport=httpx.MockTransport(record),
+        observe_wire=observe_wire,
     )
     llm = RuntimeStructuredLLM(
         runtime=runtime,
@@ -163,6 +172,86 @@ def test_one_request_through_runtime_returns_parsed_output():
     assert (args["input_tokens"], args["output_tokens"]) == (120, 8)
     assert args["cost_usd_exact"] is None
     assert attempt.llm_calls[0].status == "success"
+
+
+@pytest.mark.parametrize(
+    ("response", "fails"),
+    [
+        (httpx.Response(200, json=body()), False),
+        (httpx.Response(401, content=b"unauthorized"), True),
+        (httpx.Response(200, content=b"not-json"), True),
+    ],
+)
+def test_wire_observer_receives_exact_successful_rejected_or_malformed_exchange(
+    response, fails
+):
+    observed = []
+    llm, _, seen = build(
+        lambda _request: response,
+        observe_wire=lambda _request, _status, _content: observed.append(
+            (_request, _status, _content)
+        ),
+    )
+
+    if fails:
+        with pytest.raises(LLMError):
+            llm.generate(system="s", user="u", output_schema=Output)
+    else:
+        assert llm.generate(system="s", user="u", output_schema=Output) == Output(
+            answer=4
+        )
+
+    assert observed == [(seen[0].content, response.status_code, response.content)]
+    assert KEY.encode() not in repr(observed).encode()
+    assert b"authorization" not in repr(observed).lower().encode()
+
+
+@pytest.mark.parametrize("failure_type", [RuntimeError, ValueError, OSError])
+def test_wire_observer_failure_is_terminal_without_repeating_request(failure_type):
+    def fail_to_persist(_request, _status, _content):
+        raise failure_type(KEY)
+
+    llm, _, seen = build(
+        lambda request: httpx.Response(200, json=body()),
+        observe_wire=fail_to_persist,
+    )
+    with pytest.raises(LLMError) as error:
+        llm.generate(system="s", user="u", output_schema=Output)
+
+    assert error.value.error_code == ErrorCode.LLM_FAILED
+    assert len(seen) == 1
+    assert len(llm.retrieval_records) == 1
+    assert KEY not in json.dumps(
+        [record.model_dump(mode="json") for record in llm.retrieval_records]
+    )
+
+
+def test_keyless_attempt_works_with_mock_transport_without_authorization():
+    llm, _, seen = build(
+        lambda _request: httpx.Response(200, json=body()),
+        api_key=None,
+    )
+
+    assert llm.generate(system="s", user="u", output_schema=Output) == Output(answer=4)
+    assert "authorization" not in seen[0].headers
+
+
+@pytest.mark.parametrize(
+    ("api_key", "http_transport"),
+    [
+        (None, None),
+        (" ", httpx.MockTransport(lambda _request: httpx.Response(200))),
+    ],
+)
+def test_attempt_requires_key_outside_keyless_mock_scope(api_key, http_transport):
+    with pytest.raises(ValueError, match="api_key is required"):
+        OpenAIResponsesAttempt(
+            api_key=api_key,
+            prompt_version="synthetic-prompt",
+            schema_version=SCHEMA,
+            clock=FakeClock(START),
+            http_transport=http_transport,
+        )
 
 
 @pytest.mark.parametrize(

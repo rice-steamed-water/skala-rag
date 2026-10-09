@@ -1,6 +1,6 @@
-"""Detached fixture provenance contract shared by the two existing consumers.
+"""Detached research provenance contract shared by the existing consumers.
 
-The producer stays outside State. These bindings are data, not live admission.
+The producer and explicit controller admission stay outside State.
 """
 
 import json
@@ -8,7 +8,9 @@ from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
+from typing import Literal, assert_never
 
+import httpx
 from pydantic import TypeAdapter
 
 from skala_rag.agents.evidence_research import EvidenceResearch, ResearchOutcome
@@ -31,6 +33,9 @@ from skala_rag.graph.reducers import (
 from skala_rag.graph.snapshot import _build_snapshot
 from skala_rag.rag.adapter import IndexedRetriever, index_identity
 from skala_rag.rag.retrieval import source_date
+from skala_rag.scoring.approved_consumers import ActualAdmissionV3
+from skala_rag.tools.openai_attempt import OpenAIResponsesAttempt
+from skala_rag.tools.runtime_llm import RuntimeStructuredLLM
 
 
 class ArtifactResearchFailure(ValueError):
@@ -62,24 +67,42 @@ class CompanyResearchArtifactsV3:
 
 
 class _ObservedResearchV3:
-    """Synchronous fixture observer; original adapter results remain untouched."""
+    """Synchronous observer; original adapter results remain untouched."""
 
-    def __init__(self, producer, retrieve, receipts):
+    def __init__(
+        self,
+        producer: EvidenceResearch,
+        retrieve: IndexedRetriever,
+        binding: "EvidenceResearchBindingV3",
+    ):
         self.producer = producer
         self.retrieve = retrieve
-        self.receipts = receipts
+        self.binding = binding
+        self.receipts = binding._attempt_receipts
 
     def run(self, candidate, gaps, budget):
+        return self._invoke(candidate, gaps, budget, self.producer.run)
+
+    def __call__(self, candidate, gaps, budget):
+        return self._invoke(candidate, gaps, budget, self.producer)
+
+    def _invoke(self, candidate, gaps, budget, invoke):
         producer, retrieve = self.producer, self.retrieve
         if producer._retrieve is not retrieve:
             raise ValueError("pinned research retriever changed")
-        if retrieve._runtime.policy.execution_mode != "fixture":
-            raise ValueError("fixture research runtime binding mismatch")
+        self.binding.authorized_mode()
+        if self.binding.actual_admission is not None:
+            llm = producer._llm
+            if (
+                type(llm) is not RuntimeStructuredLLM
+                or llm.call.candidate_id != candidate.candidate_id
+            ):
+                raise ValueError("actual research candidate runtime mismatch")
+            self.binding.actual_admission.load_policy(require_capacity=True)
         self.receipts.clear()
 
         def observe(request):
-            if retrieve._runtime.policy.execution_mode != "fixture":
-                raise ValueError("fixture research runtime binding mismatch")
+            self.binding.authorized_mode()
             result = retrieve(request)
             # Copy at the adapter boundary, before research links Evidence or a
             # supplied outcome can reattribute a genuine runtime error ID.
@@ -107,14 +130,14 @@ class _ObservedResearchV3:
         # consumers already invoke research synchronously. Restore even on error.
         producer._retrieve = observe
         try:
-            return producer.run(candidate, gaps, budget)
+            return invoke(candidate, gaps, budget)
         finally:
             producer._retrieve = retrieve
 
 
 @dataclass(frozen=True)
 class EvidenceResearchBindingV3:
-    research: EvidenceResearch
+    research: EvidenceResearch | _ObservedResearchV3
     budget: ToolBudget
     run_input: RunInput
     run_id: str
@@ -122,20 +145,104 @@ class EvidenceResearchBindingV3:
     index_version: str
     allowed_source_ids: frozenset[str]
     industry_evidence_ids: frozenset[str]
+    actual_admission: ActualAdmissionV3 | None = None
     _index_identity: str | None = dataclass_field(default=None, init=False, repr=False)
     _index_tool_name: str | None = dataclass_field(default=None, init=False, repr=False)
     _attempt_receipts: dict = dataclass_field(
         default_factory=dict, init=False, repr=False
     )
 
+    def authorized_mode(self) -> Literal["fixture", "live"]:
+        """Recheck captured authority before callbacks and pure boundary parsing."""
+        match self.research:
+            case _ObservedResearchV3() as observer:
+                producer, retrieve = observer.producer, observer.retrieve
+            case EvidenceResearch() as producer:
+                retrieve = producer._retrieve
+            case unreachable:
+                assert_never(unreachable)
+        admission = self.actual_admission
+        mode: Literal["fixture", "live"] = "fixture"
+        if admission is not None:
+            if type(admission) is not ActualAdmissionV3:
+                raise ValueError("exact ActualAdmissionV3 required")
+            admission.load_policy()
+            mode = "live"
+            llm = producer._llm
+            if (
+                self.run_input != admission.run_input
+                or self.run_id != admission.runtime_binding.gates.run_id
+                or self.index_version != admission.index_version
+                or type(retrieve) is not IndexedRetriever
+                or retrieve._runtime is not admission.runtime_binding.runtime
+                or retrieve._run_id != self.run_id
+                or retrieve._schema_version != self.schema_version
+                or producer._clock is not retrieve._runtime.clock
+                or type(llm) is not RuntimeStructuredLLM
+                or llm.runtime is not retrieve._runtime
+                or llm.call.run_id != self.run_id
+                or llm.call.schema_version != self.schema_version
+                or llm.call.tool_name != admission.runtime_binding.tool_name
+                or llm.call.node != "evidence_research"
+                or llm.budget != admission.runtime_binding.budget
+                or llm.readiness != admission.runtime_binding.readiness
+                or type(llm.transport) is not OpenAIResponsesAttempt
+                or llm.transport._clock is not retrieve._runtime.clock
+                or llm.transport._schema_version != self.schema_version
+                or (
+                    admission.execution_scope
+                    in ("controlled_response", "actual_replay")
+                    and type(llm.transport._http_transport) is not httpx.MockTransport
+                )
+                or (
+                    admission.execution_scope == "actual"
+                    and llm.transport._http_transport is not None
+                )
+                or producer._web
+            ):
+                raise ValueError("actual research admission/runtime binding mismatch")
+        if (
+            producer.execution_mode != mode
+            or producer._context != {"execution_mode": mode}
+            or self.run_input.execution_mode != mode
+            or self.run_input.schema_version != self.schema_version
+            or producer._run_id != self.run_id
+            or producer._schema_version != self.schema_version
+            or producer._corpus_version != self.run_input.corpus_version
+            or producer._index_version != self.index_version
+            or producer._as_of != self.run_input.as_of
+            or set(producer._allowed_source_ids) != set(self.allowed_source_ids)
+        ):
+            raise ValueError("research binding mismatch")
+        if type(retrieve) is IndexedRetriever:
+            if retrieve._runtime.policy.execution_mode != mode:
+                raise ValueError("research runtime binding mismatch")
+            identity = index_identity(retrieve._snapshot)
+            if (
+                identity != retrieve._identity
+                or (
+                    self._index_identity is not None
+                    and identity != self._index_identity
+                )
+                or retrieve._snapshot.schema_version != self.schema_version
+                or retrieve._snapshot.corpus_version != self.run_input.corpus_version
+                or retrieve._snapshot.index_version != self.index_version
+            ):
+                raise ValueError("research index binding mismatch")
+            if admission is not None:
+                index = type(retrieve._snapshot).model_validate(
+                    retrieve._snapshot.model_dump(), context={"execution_mode": mode}
+                )
+                _validate_contract_generation(index, self.schema_version)
+        return mode
+
     def pin(self, *, run_id, schema_version, policy_version):
         run = RunInput.model_validate(self.run_input)
         budget = ToolBudget.model_validate(self.budget)
         producer = self.research
+        self.authorized_mode()
         if (
             type(producer) is not EvidenceResearch
-            or producer.execution_mode != "fixture"
-            or run.execution_mode != "fixture"
             or run.schema_version != schema_version
             or self.run_id != run_id
             or self.schema_version != schema_version
@@ -158,11 +265,10 @@ class EvidenceResearchBindingV3:
             self.index_version,
             frozenset(self.allowed_source_ids),
             frozenset(self.industry_evidence_ids),
+            self.actual_admission,
         )
         retrieve = producer._retrieve
         if type(retrieve) is IndexedRetriever:
-            if retrieve._runtime.policy.execution_mode != "fixture":
-                raise ValueError("fixture research runtime binding mismatch")
             identity = index_identity(retrieve._snapshot)
             if (
                 identity != retrieve._identity
@@ -175,9 +281,39 @@ class EvidenceResearchBindingV3:
             object.__setattr__(
                 pinned,
                 "research",
-                _ObservedResearchV3(producer, retrieve, pinned._attempt_receipts),
+                _ObservedResearchV3(producer, retrieve, pinned),
             )
         return pinned
+
+
+def bind_evidence_research_v3(
+    research: EvidenceResearch,
+    budget: ToolBudget,
+    *,
+    run_input: RunInput,
+    run_id: str,
+    schema_version: str,
+    index_version: str,
+    allowed_source_ids: frozenset[str],
+    industry_evidence_ids: frozenset[str] = frozenset(),
+    actual_admission: ActualAdmissionV3 | None = None,
+) -> EvidenceResearchBindingV3:
+    """Pin the original producer with optional non-serialized live admission."""
+    return EvidenceResearchBindingV3(
+        research=research,
+        budget=budget,
+        run_input=run_input,
+        run_id=run_id,
+        schema_version=schema_version,
+        index_version=index_version,
+        allowed_source_ids=allowed_source_ids,
+        industry_evidence_ids=industry_evidence_ids,
+        actual_admission=actual_admission,
+    ).pin(
+        run_id=run_id,
+        schema_version=schema_version,
+        policy_version=run_input.policy_version,
+    )
 
 
 def _validate_contract_generation(value, schema_version):
@@ -196,7 +332,7 @@ def _validate_contract_generation(value, schema_version):
 
 
 def _payloads(artifacts, binding, cid):
-    context = {"execution_mode": "fixture"}
+    context = {"execution_mode": binding.authorized_mode()}
     result = {}
     for name, model, identifier in (
         ("sources", Source, "source_id"),
@@ -222,7 +358,6 @@ def _payloads(artifacts, binding, cid):
         )
         for r in artifacts.records
     ]
-    result["retrieval_history"] = [r.model_dump(mode="json") for r in records]
     if len({r.retrieval_id for r in records}) != len(records) or any(
         r.run_id != binding.run_id
         or r.schema_version != binding.schema_version
@@ -263,7 +398,7 @@ def _payloads(artifacts, binding, cid):
                 raise ValueError("artifact record index identity mismatch")
         if record.started_at > record.finished_at:
             raise ValueError("artifact record time order mismatch")
-    return result
+    return {**result, "retrieval_history": [r.model_dump(mode="json") for r in records]}
 
 
 def initialize_artifacts_v3(seed, eligibility: EligibilityResult, candidate, binding):
@@ -301,6 +436,7 @@ def initialize_artifacts_v3(seed, eligibility: EligibilityResult, candidate, bin
 
 
 def validate_artifacts_v3(state, binding, cid):
+    binding.authorized_mode()
     # History stays admitted and dated even when supersession removes active facts.
     _validate_admitted_payloads(state, binding, cid)
     _validate_history_provenance(state, binding, cid)
@@ -466,6 +602,38 @@ def _validate_outcome_carriers(outcome, incoming, binding, cid):
     error_payloads = merge_errors([], [e.model_dump(mode="json") for e in errors])
     error_map = {e["error_id"]: e for e in error_payloads}
     records = {r["retrieval_id"]: r for r in incoming["retrieval_history"]}
+    if binding.actual_admission is not None:
+        if type(binding.research) is not _ObservedResearchV3:
+            raise ValueError("pinned live research observer required")
+        retrieve = binding.research.retrieve
+        for chunk_id, chunk in incoming["chunks"].items():
+            original = retrieve._chunks.get(chunk_id)
+            if original is None or original.model_dump(mode="json") != chunk:
+                raise ValueError("live research Chunk differs from pinned index")
+            source_id = chunk["source_id"]
+            if incoming["sources"].get(source_id) != (
+                retrieve._snapshot.bundle.sources[source_id].model_dump(mode="json")
+            ):
+                raise ValueError("live research Source differs from pinned index")
+        for rid, record in records.items():
+            receipt = binding._attempt_receipts.get(rid)
+            originals = [] if receipt is None else receipt["records"]
+            original = next((r for r in originals if r["retrieval_id"] == rid), None)
+            if (
+                original is None
+                or any(
+                    record[k] != v
+                    for k, v in original.items()
+                    if k not in ("arguments_without_secrets", "evidence_ids")
+                )
+                or any(
+                    record["arguments_without_secrets"].get(k) != v
+                    for k, v in original["arguments_without_secrets"].items()
+                )
+            ):
+                raise ValueError(
+                    "live research record lacks original invocation receipt"
+                )
     gap_ids = {g.gap_id for g in outcome.gaps}
     if (
         len(gap_ids) != len(outcome.gaps)
@@ -560,8 +728,9 @@ def _validate_outcome_carriers(outcome, incoming, binding, cid):
 
 
 def _validate_admitted_payloads(incoming, binding, cid):
+    context = {"execution_mode": binding.authorized_mode()}
     for source in incoming["sources"].values():
-        item = Source.model_validate(source, context={"execution_mode": "fixture"})
+        item = Source.model_validate(source, context=context)
         if (
             item.source_id not in binding.allowed_source_ids
             or source_date(item) > binding.run_input.as_of
@@ -586,6 +755,7 @@ def _validate_admitted_payloads(incoming, binding, cid):
 
 
 def consume_outcome_v3(owned, outcome, binding, cid, *, initial):
+    mode = binding.authorized_mode()
     if type(outcome) is not ResearchOutcome or outcome.initial is not initial:
         raise ValueError("explicit ResearchOutcome required")
     # Retained inputs are JSON diagnostics until every carrier and closure validates.
@@ -596,7 +766,7 @@ def consume_outcome_v3(owned, outcome, binding, cid, *, initial):
     owned["batches"].append(batch)
     outcome = adapter.validate_python(
         {k: v for k, v in batch.items() if k != "admission"},
-        context={"execution_mode": "fixture"},
+        context={"execution_mode": mode},
     )
     incoming = _payloads(outcome, binding, cid)
     errors, attempt_errors = _validate_outcome_carriers(outcome, incoming, binding, cid)

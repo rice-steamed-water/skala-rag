@@ -20,6 +20,7 @@ from skala_rag.contracts.v3 import (
 )
 from skala_rag.graph.reducers import merge_errors, merge_result_maps
 from skala_rag.graph.reducers_v3 import branch_key, merge_branch_results_v3
+from skala_rag.scoring.approved_consumers import ActualAdmissionV3
 from skala_rag.scoring.catalog import Criterion
 
 IDENTITY = (
@@ -205,6 +206,7 @@ def build_evaluation_graph_v3(
     industry_evidence_dimensions: Collection[str],
     applicability_validator: ApplicabilityValidator | None,
     clock: Callable[[], datetime],
+    actual_admission: ActualAdmissionV3 | None = None,
 ):
     """Build (uncompiled) fixture StateGraph; callbacks receive detached Snapshot.
 
@@ -216,6 +218,19 @@ def build_evaluation_graph_v3(
         set(evaluators) == set(BRANCH_DIMENSIONS), "Exactly five evaluators required"
     )
     criteria = tuple(criteria)
+    execution_mode = "fixture"
+    if actual_admission is not None:
+        if type(actual_admission) is not ActualAdmissionV3:
+            raise ValueError("exact ActualAdmissionV3 required")
+        approved = actual_admission.load_policy(require_capacity=True)
+        _require(
+            run_id == actual_admission.runtime_binding.gates.run_id
+            and schema_version == actual_admission.run_input.schema_version
+            and policy_version == approved.policy_version
+            and criteria == tuple(approved.criteria),
+            "Evaluation/controller admission mismatch",
+        )
+        execution_mode = "live"
     _require(
         len(criteria) == 23 and len({c.criterion_id for c in criteria}) == 23,
         "Explicit complete 23-criterion catalog required",
@@ -232,11 +247,11 @@ def build_evaluation_graph_v3(
 
     def snapshot_for(state):
         snapshot = EvaluationSnapshot.model_validate(
-            state["snapshot_v3"], context={"execution_mode": "fixture"}
+            state["snapshot_v3"], context={"execution_mode": execution_mode}
         )
         _require(
-            state["run_input"]["execution_mode"] == "fixture",
-            "Fixture-only graph",
+            state["run_input"]["execution_mode"] == execution_mode,
+            "Evaluation/controller mode mismatch",
         )
         _require(
             snapshot.run_id == run_id
@@ -256,6 +271,11 @@ def build_evaluation_graph_v3(
             == snapshot.model_dump(mode="json"),
             "Snapshot differs from frozen controller storage",
         )
+        if actual_admission is not None:
+            for version in ("core-0.1.0", "finance-0.1.0"):
+                actual_admission.verify_snapshot(
+                    snapshot, actual_admission.registry.rubric(version)
+                )
         return snapshot
 
     def error(snapshot, node):
