@@ -48,7 +48,7 @@ from skala_rag.contracts.interfaces import LLMError, StructuredLLM
 from skala_rag.contracts.retrieval import RetrievalRecord
 from skala_rag.contracts.sources import Chunk, Source
 from skala_rag.graph.reducers import merge_evidence
-from skala_rag.prompts.evidence_extraction import (
+from skala_rag.prompt.evidence_extraction import (
     PROMPT_VERSION,
     SYSTEM_PROMPT,
     ClaimDraft,

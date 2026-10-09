@@ -26,7 +26,7 @@ from skala_rag.agents.m2_research_live import Clock
 from skala_rag.agents.m2_trace import M2Trace, TraceInvalid, run_technology_trace
 from skala_rag.contracts import Candidate, RunInput, ToolBudget
 from skala_rag.contracts.ids import evaluation_key
-from skala_rag.prompts.evidence_extraction import (
+from skala_rag.prompt.evidence_extraction import (
     SYSTEM_PROMPT,
     ExtractionOutput,
     build_user_prompt,

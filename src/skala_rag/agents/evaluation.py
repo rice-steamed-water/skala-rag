@@ -10,7 +10,6 @@ extra 필드를 거절). 점수는 이후 scoring.aggregate_scores가 rating으�
 돌려준다. 기술적 실패를 missing·0점으로 바꾸지 않는다.
 """
 
-import json
 import re
 from collections.abc import Callable, Mapping
 from typing import Literal
@@ -29,6 +28,11 @@ from skala_rag.contracts import (
 from skala_rag.contracts.error_codes import ErrorCode, is_retryable
 from skala_rag.contracts.evaluation import Dimension
 from skala_rag.contracts.interfaces import Clock, LLMError, StructuredLLM
+from skala_rag.prompt.evaluation import (
+    REPAIR_PROMPT,
+    SYSTEM_PROMPT,
+    build_user_prompt,
+)
 from skala_rag.scoring.approved_policy import ApprovedScoringPolicy
 from skala_rag.scoring.catalog import ScoringPolicy
 
@@ -216,53 +220,6 @@ def assemble_evaluation(
 
 # --- LLM 호출 wrapper -------------------------------------------------------
 
-SYSTEM_PROMPT = (
-    "당신은 Physical AI/Robotics 스타트업 투자 평가자다. 주어진 rubric과 근거만 "
-    "사용해 각 criterion을 판단한다. 근거가 부족하면 status=missing과 "
-    "missing_reason을 쓰고 추측하지 않는다. observed에는 rating(1~5)과 "
-    "snapshot 안의 evidence_ids를 반드시 쓴다. 점수·비중·ID는 출력하지 않는다."
-)
-"""fixture용 최소 prompt. 실제 prompt 문구는 M2(#47·#57~#61) 범위다."""
-
-
-def build_user_prompt(
-    dimension: Dimension,
-    snapshot: EvaluationSnapshot,
-    rubric: Mapping[str, object],
-    policy: ScoringPolicy | ApprovedScoringPolicy,
-    context: Mapping[str, object] | None = None,
-) -> str:
-    """rubric 해당 영역과 snapshot 근거, 선택적 영역 맥락을 담은 JSON prompt."""
-    dims = rubric.get("dimensions")
-    rubric_dim = dims.get(dimension, {}) if isinstance(dims, Mapping) else {}
-    payload = {
-        "dimension": dimension,
-        "criteria": [
-            c.criterion_id for c in policy.criteria if c.dimension == dimension
-        ],
-        "rubric_version": rubric.get("rubric_version"),
-        "rubric": rubric_dim,
-        "evidence": [
-            {
-                "evidence_id": e.evidence_id,
-                "scope": e.scope,
-                "criterion_ids": e.criterion_ids,
-                "claim": e.claim,
-                "excerpt": e.excerpt,
-                "value": e.value,
-                "unit": e.unit,
-                "currency": e.currency,
-                "period": e.period,
-                "evidence_kind": e.evidence_kind,
-                "limitations": e.limitations,
-            }
-            for e in snapshot.evidence.values()
-        ],
-    }
-    if context is not None:
-        payload["context"] = dict(context)
-    return json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
-
 
 def _failure(
     dimension: Dimension,
@@ -382,10 +339,7 @@ def evaluate_dimension(
                 evaluation=evaluation,
                 errors=[],
             )
-        prompt = (
-            f"{user}\n\n이전 출력이 계약을 어겼다. 다음 문제를 고쳐 다시 출력하라: "
-            f"{last_problem}"
-        )
+        prompt = f"{user}{REPAIR_PROMPT}{last_problem}"
     return _failure(
         dimension,
         snapshot,

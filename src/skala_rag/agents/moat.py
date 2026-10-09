@@ -25,7 +25,7 @@ from skala_rag.contracts.evaluation import EvaluationSnapshot
 from skala_rag.contracts.evidence import Evidence
 from skala_rag.contracts.interfaces import Clock, StructuredLLM
 from skala_rag.contracts.v3 import Evaluation, EvaluationBranchResult
-from skala_rag.prompts.moat_evaluation import SYSTEM_PROMPT, build_user_prompt
+from skala_rag.prompt.moat_evaluation import SYSTEM_PROMPT, build_user_prompt
 from skala_rag.scoring.approved_consumers import ActualAdmissionV3
 from skala_rag.scoring.approved_policy import (
     ApprovalVerifier,

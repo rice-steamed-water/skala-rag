@@ -6,9 +6,9 @@ import httpx
 
 from skala_rag.contracts import ToolBudget
 from skala_rag.contracts.interfaces import Clock
-from skala_rag.prompts.eligibility_facts import PROMPT_VERSION as ELIGIBILITY_PROMPT
-from skala_rag.prompts.evidence_extraction import PROMPT_VERSION as EVIDENCE_PROMPT
-from skala_rag.prompts.technology_evaluation import PROMPT_VERSION as TECHNOLOGY_PROMPT
+from skala_rag.prompt.eligibility_facts import PROMPT_VERSION as ELIGIBILITY_PROMPT
+from skala_rag.prompt.evidence_extraction import PROMPT_VERSION as EVIDENCE_PROMPT
+from skala_rag.prompt.technology_evaluation import PROMPT_VERSION as TECHNOLOGY_PROMPT
 from skala_rag.settings import RuntimeDocument, load_runtime_document
 from skala_rag.tools.openai_attempt import OpenAIResponsesAttempt, byte_bound_allowance
 from skala_rag.tools.runtime import (

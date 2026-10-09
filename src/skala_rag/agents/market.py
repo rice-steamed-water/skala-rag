@@ -25,7 +25,7 @@ from skala_rag.contracts.assessment import CriterionAssessment
 from skala_rag.contracts.evaluation import EvaluationResult, EvaluationSnapshot
 from skala_rag.contracts.evidence import Evidence
 from skala_rag.contracts.interfaces import Clock, StructuredLLM
-from skala_rag.prompts.market_evaluation import SYSTEM_PROMPT
+from skala_rag.prompt.market_evaluation import SYSTEM_PROMPT
 from skala_rag.scoring.approved_consumers import ActualAdmissionV3
 from skala_rag.scoring.catalog import ScoringPolicy
 
