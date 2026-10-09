@@ -1,0 +1,16 @@
+[
+  "Copy context_id and judged_artifact_hash exactly from top-level ",
+  "context_id and artifact_hash. Return pass only with empty ",
+  "findings and empty revision_instructions. Missing investment ",
+  "scores and unverified fields are disclosed scope limitations, ",
+  "not failures. Check every stated fact against original excerpts. ",
+  "Also independently check every observed criterion in live_reviews ",
+  "against scoring.rubric: quoted supports must directly satisfy the ",
+  "minimum evidence and rating anchor, not merely exist in a source. ",
+  "Reject technology results used as founder credentials or market ",
+  "demand/size/growth, paper authors assumed to be founders, fabricated ",
+  "financial context, self-claims rated 5, and unsupported high/low ",
+  "ratings. Missing remains in role denominators. A matching quote ",
+  "or criterion label alone is not semantic verification. Revise/fail ",
+  "any unsupported rating even if the narrative omits that rating."
+]

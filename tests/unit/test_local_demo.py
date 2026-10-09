@@ -181,7 +181,10 @@ def test_scope_notice_is_not_optional_model_text():
     assert enforce_scope_notice(result).summary == result.summary
 
 
-def test_demo_llm_uses_existing_approved_transport_limits(tmp_path):
+@pytest.mark.parametrize("output_tokens,timeout", [(2000, 120.0), (123, 7.0)])
+def test_demo_llm_uses_existing_approved_transport_limits(
+    tmp_path, output_tokens, timeout
+):
     import json
 
     import httpx
@@ -189,16 +192,30 @@ def test_demo_llm_uses_existing_approved_transport_limits(tmp_path):
 
     from skala_rag.demo_budget import Campaign
     from skala_rag.local_demo import SCHEMA, Clock, DemoLLM, Review
+    from skala_rag.settings import load_runtime_document
     from skala_rag.tools.openai_attempt import OpenAIResponsesAttempt
     from skala_rag.tools.structured_llm import APPROVED_MODEL
 
     approve(tmp_path)
     calls = []
+    document = load_runtime_document()
+    profile = document.profiles.local_demo.model_copy(
+        update={
+            "request_output_tokens": output_tokens,
+            "request_timeout_seconds": timeout,
+        }
+    )
+    document = document.model_copy(
+        update={
+            "profiles": document.profiles.model_copy(update={"local_demo": profile})
+        }
+    )
 
     def respond(request):
         payload = json.loads(request.content)
         calls.append(payload)
-        assert payload["max_output_tokens"] <= 2000
+        assert payload["max_output_tokens"] == output_tokens
+        assert request.extensions["timeout"]["read"] == timeout
         return httpx.Response(
             200,
             json={
@@ -227,7 +244,7 @@ def test_demo_llm_uses_existing_approved_transport_limits(tmp_path):
             },
         )
 
-    with Campaign(tmp_path) as campaign:
+    with Campaign(tmp_path, runtime_document=document) as campaign:
         llm = DemoLLM(
             key="synthetic",
             campaign=campaign,
@@ -248,6 +265,12 @@ def test_demo_llm_uses_existing_approved_transport_limits(tmp_path):
         )
         assert result.missing == ["synthetic"]
         assert len(calls) == 1
+        assert llm.runtime_document is document
+        with pytest.raises(ValueError, match="REPORT_RETRY_REQUIRES_APPROVAL"):
+            llm.generate(
+                system="Synthetic only", user="Synthetic", output_schema=Review
+            )
+        assert len(calls) == campaign.state["calls"] == 1
 
 
 def test_generator_guides_interpretation_first_without_repeated_metrics(monkeypatch):
@@ -261,6 +284,8 @@ def test_generator_guides_interpretation_first_without_repeated_metrics(monkeypa
 
     monkeypatch.setattr(demo, "byte_bound_allowance", capture)
     llm = demo.DemoLLM.__new__(demo.DemoLLM)
+    llm.runtime_document = demo.load_runtime_document()
+    llm.settings = llm.runtime_document.profiles.local_demo
     llm.called = False
     llm.node = "generator"
     llm.progress = lambda _: None

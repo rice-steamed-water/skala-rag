@@ -192,63 +192,83 @@ def test_worker_crash_is_failed_not_running_and_budget_stays_spent(
             pass
 
 
-def test_deadline_kills_renderer_descendants(tmp_path, monkeypatch):
-    import subprocess
-    import sys
-    import time
+def expire_on_started(monkeypatch, demo, started):
     from datetime import UTC, datetime, timedelta
+    from types import SimpleNamespace
 
-    from skala_rag.demo_budget import Campaign
+    from skala_rag.fakes import FakeClock
+
+    origin = datetime(2026, 9, 30, tzinfo=UTC)
+    clock = FakeClock(origin)
+
+    def monotonic():
+        if started.is_set() and clock.current == origin:
+            clock.advance(timedelta(seconds=2000))
+        return (clock.now() - origin).total_seconds()
+
+    monkeypatch.setattr(demo, "time", SimpleNamespace(monotonic=monotonic))
+
+
+def test_deadline_kills_renderer_descendants(tmp_path, monkeypatch):
+    import multiprocessing
+    import signal
 
     demo = setup_boundary(tmp_path, monkeypatch)
-    marker = tmp_path / "descendant-survived"
+    context = multiprocessing.get_context("fork")
+    started, child_ready = context.Event(), context.Event()
+    receiver, sender = context.Pipe(duplex=False)
+    expire_on_started(monkeypatch, demo, started)
+
+    def descendant():
+        receiver.close()
+        child_ready.set()
+        signal.pause()
 
     def blocked_pdf(*args):
-        subprocess.Popen(
-            [
-                sys.executable,
-                "-c",
-                "import pathlib,sys,time;time.sleep(1.2);"
-                "pathlib.Path(sys.argv[1]).touch()",
-                str(marker),
-            ]
-        )
+        child = context.Process(target=descendant)
+        child.start()
+        assert child_ready.wait(timeout=5)
         (tmp_path / "renderer-started").touch()
-        time.sleep(3)
+        started.set()
+        signal.pause()
 
     monkeypatch.setattr(demo, "build_korean_report_pdf", blocked_pdf)
-    with Campaign(tmp_path) as campaign:
-        campaign.state["deadline"] = (
-            datetime.now(UTC) + timedelta(seconds=0.6)
-        ).isoformat()
-        campaign.save()
-    output = demo.run_demo(
-        root=tmp_path, company="Physical Intelligence", progress=lambda _: None
-    )
-    assert (tmp_path / "renderer-started").exists()
-    assert (
-        json.loads((output / "run-result.json").read_text())["error_code"]
-        == "CAMPAIGN_EXPIRED"
-    )
-    time.sleep(1.3)
-    assert not marker.exists()
+    try:
+        output = demo.run_demo(
+            root=tmp_path, company="Physical Intelligence", progress=lambda _: None
+        )
+        sender.close()
+        assert (tmp_path / "renderer-started").exists()
+        assert json.loads((output / "run-result.json").read_text())["error_code"] == (
+            "CAMPAIGN_EXPIRED"
+        )
+        # Both renderer and its descendant must release the inherited write end.
+        assert receiver.poll(5)
+        with pytest.raises(EOFError):
+            receiver.recv()
+    finally:
+        receiver.close()
+        sender.close()
 
 
 @pytest.mark.parametrize("stage", ["retrieval", "model", "pdf"])
 def test_deadline_terminates_blocked_operations_and_persists_gate(
     tmp_path, monkeypatch, stage
 ):
+    import multiprocessing
     import os
-    import time
-    from datetime import UTC, datetime, timedelta
+    import signal
 
     from skala_rag.demo_budget import Campaign
 
     demo = setup_boundary(tmp_path, monkeypatch)
+    started = multiprocessing.get_context("fork").Event()
+    expire_on_started(monkeypatch, demo, started)
 
     def block(*args, **kwargs):
         (tmp_path / "blocked-pid").write_text(str(os.getpid()))
-        time.sleep(2)
+        started.set()
+        signal.pause()
         (tmp_path / "escaped-deadline").touch()
         raise ValueError("LOCAL_RETRIEVAL_FAILED")
 
@@ -258,17 +278,11 @@ def test_deadline_terminates_blocked_operations_and_persists_gate(
         monkeypatch.setattr(OpenAIResponsesAttempt, "generate_once", block)
     else:
         monkeypatch.setattr(demo, "build_korean_report_pdf", block)
-    with Campaign(tmp_path) as campaign:
-        campaign.state["deadline"] = (
-            datetime.now(UTC) + timedelta(seconds=0.6)
-        ).isoformat()
-        campaign.save()
-    start = time.monotonic()
     output = demo.run_demo(
         root=tmp_path, company="Physical Intelligence", progress=lambda _: None
     )
-    assert time.monotonic() - start < 1.5
     receipt = json.loads((output / "run-result.json").read_text())
+    assert started.is_set()
     assert receipt["status"] == "failed"
     assert receipt["error_code"] == "CAMPAIGN_EXPIRED"
     assert receipt["campaign"]["reapproval_required"] is True

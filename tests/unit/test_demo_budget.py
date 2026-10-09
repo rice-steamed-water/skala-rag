@@ -128,3 +128,89 @@ def test_reapproval_cannot_omit_review_or_failure_binding(tmp_path, missing):
     with pytest.raises(ValueError, match="REAPPROVAL_REQUIRED"):
         with Campaign(tmp_path):
             pass
+
+
+def test_requested_lower_limits_never_refill_or_extend_campaign(tmp_path):
+    from skala_rag.demo_budget import Campaign
+    from skala_rag.settings import load_runtime_document
+    from skala_rag.tools.runtime import Allowance
+
+    approve(tmp_path)
+    document = load_runtime_document()
+    profile = document.profiles.local_demo.model_copy(
+        update={"llm_calls": 2, "cost_usd": Decimal("1"), "seconds": 600}
+    )
+    lowered = document.model_copy(
+        update={
+            "profiles": document.profiles.model_copy(update={"local_demo": profile})
+        }
+    )
+    allowance = Allowance(
+        schema_version="test",
+        input_tokens=1,
+        output_tokens=1,
+        max_cost_usd=Decimal("0.4"),
+    )
+    with Campaign(tmp_path, runtime_document=lowered) as campaign:
+        campaign.reserve(allowance)
+        original = campaign.state.copy()
+        assert campaign.runtime_document is lowered
+    with Campaign(tmp_path, runtime_document=document) as campaign:
+        assert campaign.state == original
+        campaign.reserve(allowance)
+        with pytest.raises(ValueError, match="BUDGET_EXHAUSTED"):
+            campaign.reserve(allowance)
+        assert campaign.state["calls"] == 2
+        assert campaign.state["deadline"] == original["deadline"]
+        assert campaign.state["limits"] == original["limits"]
+
+
+def test_lower_request_applies_to_existing_spend_without_reset(tmp_path):
+    from skala_rag.demo_budget import Campaign
+    from skala_rag.settings import load_runtime_document
+    from skala_rag.tools.runtime import Allowance
+
+    approve(tmp_path)
+    document = load_runtime_document()
+    allowance = Allowance(
+        schema_version="test",
+        input_tokens=1,
+        output_tokens=1,
+        max_cost_usd=Decimal("1"),
+    )
+    with Campaign(tmp_path, runtime_document=document) as campaign:
+        campaign.reserve(allowance)
+        original = campaign.state.copy()
+    profile = document.profiles.local_demo.model_copy(update={"cost_usd": Decimal("1")})
+    lowered = document.model_copy(
+        update={
+            "profiles": document.profiles.model_copy(update={"local_demo": profile})
+        }
+    )
+    with Campaign(tmp_path, runtime_document=lowered) as campaign:
+        with pytest.raises(ValueError, match="BUDGET_EXHAUSTED"):
+            campaign.reserve(allowance)
+        assert campaign.state == original
+
+
+@pytest.mark.parametrize(
+    "field,value", [("llm_calls", 31), ("cost_usd", Decimal("4")), ("seconds", 1201)]
+)
+def test_injected_requested_limits_cannot_raise_approval(tmp_path, field, value):
+    from pydantic import ValidationError
+
+    from skala_rag.demo_budget import Campaign
+    from skala_rag.settings import load_runtime_document
+
+    approve(tmp_path)
+    document = load_runtime_document()
+    profile = document.profiles.local_demo.model_copy(update={field: value})
+    forged = document.model_copy(
+        update={
+            "profiles": document.profiles.model_copy(update={"local_demo": profile})
+        }
+    )
+    with pytest.raises(ValidationError):
+        with Campaign(tmp_path, runtime_document=forged):
+            pass
+    assert not (tmp_path / "outputs").exists()
