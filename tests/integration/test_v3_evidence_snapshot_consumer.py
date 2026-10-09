@@ -1,10 +1,13 @@
 """#211 public consumers, real research/freeze/Technology; offline synthetic data."""
 
+import json
 from copy import deepcopy
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 from typing import Any
 
+import httpx
 import pytest
 import yaml
 from tests.fixtures.evidence_research import (
@@ -22,6 +25,9 @@ from tests.integration.test_evidence_research_graph import (
     _gap,
     _research_node,
 )
+from tests.unit import test_actual_admission_v3 as actual_shared
+from tests.unit.test_approved_policy import gates_payload, runtime_binding
+from tests.unit.test_openai_attempt import body
 
 import skala_rag.graph.candidates_v3 as oracle
 import skala_rag.graph.snapshot as snapshot_module
@@ -30,16 +36,26 @@ from skala_rag.agents.evaluation import output_from_evaluation
 from skala_rag.agents.evaluation_v3_adapter import bind_baseline_evaluator_v3
 from skala_rag.agents.evidence_research import EvidenceResearch
 from skala_rag.agents.technology import evaluate_technology
+from skala_rag.contracts import EligibilityResult, RetrievalBundle
 from skala_rag.contracts.candidates import Candidate, CompanyProfile
 from skala_rag.contracts.evaluation import Evaluation as BaselineEvaluation
 from skala_rag.contracts.evidence import Evidence
 from skala_rag.contracts.inputs import RunInput
-from skala_rag.contracts.sources import Source
+from skala_rag.contracts.sources import Chunk, Source
 from skala_rag.contracts.v3 import BRANCH_DIMENSIONS, EvaluationBranchResult
 from skala_rag.fakes import FakeClock, FakeLLM
 from skala_rag.graph.candidate_workflow_v3 import run_candidate_workflow_v3
+from skala_rag.graph.research_artifacts_v3 import (
+    CompanyResearchArtifactsV3,
+    EvidenceResearchBindingV3,
+)
+from skala_rag.prompts.evidence_extraction import ClaimDraft
+from skala_rag.rag.adapter import IndexedRetriever, IndexSnapshot
 from skala_rag.scoring.catalog import load_policy
 from skala_rag.scoring.v3_policy import load_v3_policy
+from skala_rag.tools.runtime import Allowance
+
+actual_admission_fixture = actual_shared.configured
 
 
 def setup_case(*, gap=False, count=1) -> dict[str, Any]:
@@ -2226,3 +2242,174 @@ def test_runtime_mode_changed_inside_producer_is_refused_before_mock_backend(
     assert runtime.ledger.snapshot() == before[0][0]
     assert len(c["backend"].calls) == before[0][1]
     assert c["producer"]._retrieve is retrieve
+
+
+class _ControlledResearchSearch:
+    """In-memory index backend; no embedding model or external request."""
+
+    retry_owner = "runtime"
+
+    def __init__(self, bundle: RetrievalBundle) -> None:
+        self.bundle = bundle
+
+    def search_once(
+        self, request, *, snapshot, allowed_chunk_ids, timeout_seconds
+    ) -> RetrievalBundle:
+        return self.bundle.model_copy(deep=True)
+
+
+@pytest.fixture
+def actual_research_case(actual_admission_fixture):
+    admission, snapshot, llm, *_ = actual_admission_fixture
+    payload = gates_payload()
+    payload.update(provider="openai")
+    payload["limits"].update(max_calls=8, tool_max_calls={"openai": 4, "retrieve": 4})
+    payload["limits"]["max_cost_usd"] = "1.00"
+    payload["limits"].update(max_input_tokens=20000, max_output_tokens=8000)
+    payload["allowance"].update(input_tokens=8000, output_tokens=2000)
+    runtime = runtime_binding(
+        run_id=snapshot.run_id, schema_version=snapshot.schema_version, payload=payload
+    )
+    source = replace(
+        admission.source,
+        live_gates=runtime.gates,
+        live_gate_verifier=lambda _gate, gates: gates == runtime.gates,
+    )
+    admission = replace(admission, source=source, runtime_binding=runtime)
+    llm.runtime = runtime.runtime
+    llm.budget, llm.readiness = runtime.budget, runtime.readiness
+    llm.allowance_for = lambda _system, _user, _schema: runtime.allowance
+    llm.call = runtime.call.model_copy(
+        update={"candidate_id": snapshot.candidate_id, "node": "evidence_research"}
+    )
+    llm.transport._clock = runtime.runtime.clock
+    requests = []
+    text = "Synthetic Robot supplies warehouse robots."
+
+    def respond(request):
+        requests.append(request)
+        output = {
+            "claims": [
+                ClaimDraft(
+                    claim=text, excerpt=text, subject="Synthetic Robot"
+                ).model_dump(mode="json")
+            ]
+        }
+        return httpx.Response(
+            200,
+            json=body(
+                json.dumps(output), usage={"input_tokens": 10, "output_tokens": 10}
+            ),
+        )
+
+    llm.transport._http_transport = httpx.MockTransport(respond)
+    sid, source = next(iter(snapshot.sources.items()))
+    item = Chunk(
+        schema_version=snapshot.schema_version,
+        chunk_id="synthetic-live-chunk",
+        source_id=sid,
+        corpus_version=snapshot.corpus_version,
+        text=text,
+        locator=source.url,
+        candidate_ids=[snapshot.candidate_id],
+        scope="company",
+        language="en",
+        embedding_model="synthetic-model",
+        embedding_revision="synthetic-1",
+    )
+    bundle = RetrievalBundle(
+        schema_version=snapshot.schema_version, chunks=[item], sources={sid: source}
+    )
+    index = IndexSnapshot(
+        schema_version=snapshot.schema_version,
+        corpus_version=snapshot.corpus_version,
+        corpus_hash="synthetic-index-hash",
+        index_version=snapshot.index_version,
+        embedding_model=item.embedding_model,
+        embedding_revision=item.embedding_revision,
+        search_settings={"synthetic": True},
+        bundle=bundle,
+    )
+    retrieve = IndexedRetriever(
+        snapshot=index,
+        backend=_ControlledResearchSearch(bundle),
+        runtime=runtime.runtime,
+        readiness=runtime.readiness,
+        budget=runtime.budget,
+        allowance=Allowance(
+            schema_version=snapshot.schema_version,
+            input_tokens=0,
+            output_tokens=0,
+            max_cost_usd=Decimal(0),
+        ),
+        run_id=snapshot.run_id,
+        schema_version=snapshot.schema_version,
+        tool_name="retrieve",
+    )
+    gap = _gap(snapshot.candidate_id, "technology.integration").model_copy(
+        update={"schema_version": snapshot.schema_version}
+    )
+    producer = EvidenceResearch(
+        retrieve=retrieve,
+        rag_required=True,
+        llm=llm,
+        initial_plan=lambda _c: [gap],
+        run_id=snapshot.run_id,
+        corpus_version=snapshot.corpus_version,
+        index_version=snapshot.index_version,
+        as_of=snapshot.as_of,
+        top_k=1,
+        allowed_source_ids=[sid],
+        clock=runtime.runtime.clock,
+        schema_version=snapshot.schema_version,
+        execution_mode="live",
+    )
+    binding = EvidenceResearchBindingV3(
+        research=producer,
+        budget=runtime.budget,
+        run_input=admission.run_input,
+        run_id=snapshot.run_id,
+        schema_version=snapshot.schema_version,
+        index_version=snapshot.index_version,
+        allowed_source_ids=frozenset([sid]),
+        industry_evidence_ids=frozenset(),
+        actual_admission=admission,
+    )
+    candidate = Candidate(
+        schema_version=snapshot.schema_version,
+        candidate_id=snapshot.candidate_id,
+        canonical_name="Synthetic Robot",
+        aliases=[],
+        country="US",
+        legal_identifiers={},
+        discovery_source_ids=[sid],
+    )
+    eligibility = EligibilityResult(
+        schema_version=snapshot.schema_version,
+        eligibility_result_id="synthetic-eligible",
+        run_id=snapshot.run_id,
+        candidate_id=snapshot.candidate_id,
+        evidence_revision=snapshot.evidence_revision,
+        policy_version=snapshot.policy_version,
+        as_of=snapshot.as_of,
+        status="eligible",
+        checks={},
+        reason_codes=[],
+        evidence_ids=snapshot.evidence_ids,
+    )
+    seed = CompanyResearchArtifactsV3(
+        candidate_id=snapshot.candidate_id,
+        run_id=snapshot.run_id,
+        schema_version=snapshot.schema_version,
+        evidence_revision=snapshot.evidence_revision,
+        sources=snapshot.sources,
+        chunks={},
+        evidence=snapshot.evidence,
+        records=[
+            record.model_copy(
+                update={"arguments_without_secrets": {"execution_mode": "live"}}
+            )
+            for record in snapshot.retrieval_records.values()
+        ],
+    )
+    return binding, candidate, eligibility, seed, requests

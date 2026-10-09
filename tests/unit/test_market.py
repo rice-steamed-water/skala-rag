@@ -1,14 +1,22 @@
 """#59 Market market-context boundary; all values are synthetic fixtures."""
 
 import json
+from dataclasses import replace
 from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
 import yaml
 from tests.fixtures.loader import load_common_fixtures
+from tests.integration import test_market_actual_connection as market_wire
 
-from skala_rag.agents.market import MarketLink, MarketTarget, evaluate_market
+from skala_rag.agents.market import (
+    MarketLink,
+    MarketTarget,
+    evaluate_market,
+    evaluate_market_approved,
+)
+from skala_rag.agents.source_fact_verification import SourceFactError
 from skala_rag.contracts.error_codes import ErrorCode
 from skala_rag.contracts.interfaces import LLMError
 from skala_rag.fakes import FakeClock, FakeLLM
@@ -21,6 +29,9 @@ RUBRIC = {**SOURCE_RUBRIC, "status": "approved"}
 CLOCK = FakeClock(datetime(2026, 9, 30, tzinfo=UTC))
 SEGMENT = "kr-logistics-amr"
 TARGET = MarketTarget(segment_id=SEGMENT, geographies=("KR", "GLOBAL"))
+market_case = market_wire.market_case
+admission_fixture = market_wire.admission_fixture
+offline_fixture = market_wire.offline_fixture
 
 
 def _sam(value=8e8, *, year=2025, geography="KR", basis="actual", metric="sam"):
@@ -207,9 +218,7 @@ def test_size_matching_source_year_reaches_llm(case, metric):
     assert result.status == "success"
     assert len(llm.calls) == 1
     assert (
-        _payload(llm)["context"]["market_figures"]["ev-matching-date"][
-            "reference_year"
-        ]
+        _payload(llm)["context"]["market_figures"]["ev-matching-date"]["reference_year"]
         == 2025
     )
 
@@ -492,3 +501,87 @@ def test_non_draft_policy_rejected_before_call(case):
             schema_version=case.snapshot.schema_version,
         )
     assert llm.calls == []
+
+
+@pytest.mark.parametrize("admission", [None, {"approved": True}])
+def test_approved_path_requires_controller_admission_before_call(case, admission):
+    # Given: SYNTHETIC JSON is not controller runtime/semantic authority.
+    llm = FakeLLM([])
+    # When / Then
+    with pytest.raises(ValueError, match="MARKET_ACTUAL_ADMISSION_REQUIRED"):
+        evaluate_market_approved(
+            case.snapshot,
+            target_market=None,
+            market_links={},
+            rubric=RUBRIC,
+            llm=llm,
+            actual_admission=admission,
+        )
+    assert llm.calls == []
+
+
+@pytest.mark.parametrize(
+    "attack",
+    [
+        "unreviewed",
+        "rating",
+        "citation",
+        "request",
+        "target",
+        "link",
+        "subject",
+        "receipt",
+        "unregistered-receipt",
+        "unknown-target",
+        "no-links",
+    ],
+)
+def test_observed_adversary_denied_without_repairs(market_case, attack):
+    # Given: tampering with one independently bound SYNTHETIC commitment.
+    case = market_case
+    supplied = case.reviews["market.demand"]
+    if attack == "unreviewed":
+        case.reviews = {}
+    elif attack == "rating":
+        case.output.criteria[2].rating = 5
+    elif attack == "citation":
+        case.output.criteria[2].evidence_ids = ["foreign-evidence"]
+    elif attack == "request":
+        case.reviews["market.demand"] = replace(supplied, request=b"{}")
+    elif attack == "target":
+        case.target = MarketTarget(segment_id="invented", geographies=("global",))
+    elif attack == "link":
+        case.links["ev-capture"] = MarketLink(segment_id="other-segment")
+    elif attack == "subject":
+        case.reviews["market.demand"] = replace(supplied, subject="foreign-subject")
+    elif attack in ("receipt", "unregistered-receipt"):
+        case.reviews["market.demand"] = replace(
+            supplied, receipt=supplied.receipt.model_copy(update={"rating": 5})
+        )
+        if attack == "unregistered-receipt":
+            case.output.criteria[2].rating = 5
+    elif attack == "unknown-target":
+        case.target = None
+    else:
+        case.links = {}
+    # When / Then: technical/context mismatch never produces Missing.
+    result = case.run()
+    assert result.status == "failure"
+    assert result.evaluation is None
+    assert result.errors[0].attempt == 1
+    assert len(case.seen) == case.llm.runtime.ledger.snapshot()["calls"] == 1
+
+
+@pytest.mark.parametrize("field", ["content_hash", "excerpt", "candidate_id"])
+def test_original_source_context_tamper_denied_before_wire(market_case, field):
+    # Given: captured SYNTHETIC source/snapshot is changed after admission.
+    case = market_case
+    if field == "content_hash":
+        next(iter(case.snapshot.sources.values())).content_hash = "sha256:" + "0" * 64
+    else:
+        setattr(case.snapshot.evidence["ev-capture"], field, "foreign")
+    # When / Then
+    with pytest.raises(SourceFactError, match="REVIEW_BINDING_REJECTED"):
+        case.run()
+    assert case.seen == []
+    assert case.llm.runtime.ledger.snapshot()["calls"] == 0

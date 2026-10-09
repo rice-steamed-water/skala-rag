@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
+from pydantic import JsonValue, TypeAdapter
 
 from skala_rag.agents.moat_verification import (
     CoreArtifactApproval,
@@ -198,6 +199,20 @@ class PinnedApprovalRegistry:
     def core_approval(self) -> CoreArtifactApproval:
         pin = _PINS[1]
         return CoreArtifactApproval(pin.reference, pin.version, pin.content_sha256)
+
+    def rubric(self, rubric_version: str) -> dict[str, JsonValue]:
+        """Return freshly pinned rubric content, retaining its current header.
+
+        JSON-normalized anchor keys match serialized evaluator input. This is
+        content verification, not independent semantic review or live admission.
+        """
+        pin = next((p for p in _PINS[1:] if p.version == rubric_version), None)
+        if pin is None:
+            raise ValueError("unknown pinned rubric version")
+        payload, digest = self._artifact(pin)
+        if digest != pin.content_sha256:
+            raise ValueError("current rubric differs from pinned content")
+        return TypeAdapter(dict[str, JsonValue]).validate_json(json.dumps(payload))
 
     def verify_pin(self, claim: object) -> bool:
         """Match the entire provenance row; caller content cannot redefine it."""

@@ -2,15 +2,31 @@
 
 from collections import Counter
 from collections.abc import Iterable, Mapping
-from typing import Literal, Self, TypedDict
+from dataclasses import dataclass
+from typing import Literal, Self, TypedDict, assert_never
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    TypeAdapter,
+    model_validator,
+)
 
-from skala_rag.agents.evaluation import DimensionAssessmentOutput, evaluate_dimension
+from skala_rag.agents.evaluation import (
+    DimensionAssessmentOutput,
+    EvaluationValidationError,
+    build_user_prompt,
+    evaluate_dimension,
+)
+from skala_rag.agents.source_fact_verification import SourceFactError
+from skala_rag.contracts.assessment import CriterionAssessment
 from skala_rag.contracts.evaluation import EvaluationResult, EvaluationSnapshot
 from skala_rag.contracts.evidence import Evidence
 from skala_rag.contracts.interfaces import Clock, StructuredLLM
 from skala_rag.prompts.market_evaluation import SYSTEM_PROMPT
+from skala_rag.scoring.approved_consumers import ActualAdmissionV3
 from skala_rag.scoring.catalog import ScoringPolicy
 
 MarketMetric = Literal["tam", "sam", "cagr"]
@@ -139,9 +155,7 @@ def _prompt_figure(figure: _MarketFigure, rules: _MarketRules) -> dict:
     """Attach the rubric band and deterministic TAM cap to a figure."""
     out = {key: figure[key] for key in _PROMPT_FIGURE_FIELDS}
     bands = (
-        rules.size_bands
-        if figure["metric"] in ("tam", "sam")
-        else rules.growth_bands
+        rules.size_bands if figure["metric"] in ("tam", "sam") else rules.growth_bands
     )
     out["rubric_band"] = _band(bands, figure["value"])
     if figure["metric"] == "tam":
@@ -233,8 +247,7 @@ def market_output_violations(
             violations.append(_code("MARKET_FIGURE_REQUIRED", criterion_id))
             continue
         if any(
-            _METRIC_CRITERION[str(figure["metric"])] != criterion_id
-            for figure in cited
+            _METRIC_CRITERION[str(figure["metric"])] != criterion_id for figure in cited
         ):
             violations.append(_code("MARKET_METRIC_MISMATCH", criterion_id))
             continue
@@ -270,6 +283,28 @@ def market_output_violations(
     return violations
 
 
+class MarketObservationReviewRequest(_Frozen):
+    """Exact Market context consumed by SourceBoundReviewResolver.
+
+    Request bytes are supplied by the trusted controller, not reconstructed as
+    approval. Excerpts are keyed by the independently reviewed citation IDs.
+    """
+
+    target: MarketTarget
+    links: dict[str, MarketLink]
+    criterion: Literal["market.size", "market.growth", "market.demand"]
+    excerpts: dict[str, str]
+
+
+@dataclass(frozen=True, slots=True)
+class MarketObservationReview:
+    """Controller-selected baseline receipt and its independently reviewed request."""
+
+    request: bytes
+    subject: str
+    receipt: CriterionAssessment
+
+
 def evaluate_market(
     snapshot: EvaluationSnapshot,
     *,
@@ -290,15 +325,43 @@ def evaluate_market(
         raise ValueError("Market evaluation requires approved core-0.1.0")
     if rubric.get("status") != "approved":
         raise ValueError("Market evaluation requires approved rubric (D14 core)")
+    rules = _MarketRules(rubric)
+    scoped, figures, context = _market_context(
+        snapshot, target_market, market_links, rules
+    )
+    return evaluate_dimension(
+        "market",
+        scoped,
+        rubric,
+        llm=llm,
+        policy=policy,
+        clock=clock,
+        schema_version=schema_version,
+        system_prompt=SYSTEM_PROMPT,
+        prompt_context=context,
+        extra_validator=lambda output: market_output_violations(
+            output, figures=figures, rules=rules
+        ),
+    )
+
+
+def _market_context(
+    snapshot: EvaluationSnapshot,
+    target_market: MarketTarget | None,
+    market_links: Mapping[str, MarketLink],
+    rules: _MarketRules,
+) -> tuple[EvaluationSnapshot, dict[str, _MarketFigure], dict[str, JsonValue]]:
+    """Preserve the legacy numerical and attribution filter for both paths."""
     if not set(market_links) <= set(snapshot.evidence):
         raise ValueError("Market link references evidence outside snapshot")
-    rules = _MarketRules(rubric)
-
     allowed: dict[str, Evidence] = {}
     figures: dict[str, _MarketFigure] = {}
     excluded: Counter[str] = Counter()
     for evidence_id, evidence in snapshot.evidence.items():
         if not any(cid.startswith("market.") for cid in evidence.criterion_ids):
+            continue
+        if target_market is None:
+            excluded["attribution_unverified"] += 1
             continue
         link = market_links.get(evidence_id)
         reason = _exclusion(
@@ -319,7 +382,9 @@ def evaluate_market(
         update={"evidence_ids": list(allowed), "evidence": allowed}, deep=True
     )
     context = {
-        "target_market": target_market.model_dump(mode="json"),
+        "target_market": (
+            target_market.model_dump(mode="json") if target_market is not None else None
+        ),
         "market_figures": {
             evidence_id: _prompt_figure(figure, rules)
             for evidence_id, figure in figures.items()
@@ -327,17 +392,110 @@ def evaluate_market(
         "excluded_evidence_reasons": dict(sorted(excluded.items())),
         "missing_reasons": sorted(rules.missing_reasons),
     }
+    return scoped, figures, TypeAdapter(dict[str, JsonValue]).validate_python(context)
+
+
+def evaluate_market_approved(
+    snapshot: EvaluationSnapshot,
+    *,
+    target_market: MarketTarget | None,
+    market_links: Mapping[str, MarketLink],
+    rubric: Mapping[str, JsonValue],
+    llm: StructuredLLM,
+    actual_admission: ActualAdmissionV3 | None = None,
+    reviewed_observations: Mapping[str, MarketObservationReview] | None = None,
+) -> EvaluationResult:
+    """Evaluate through exact admission, source reviews and zero output repairs.
+
+    Unknown target or absent links support all-Missing only. Observed criteria
+    require existing independently reviewed baseline receipts; numeric criteria
+    additionally retain the deterministic Market bands and context checks.
+    """
+    if type(actual_admission) is not ActualAdmissionV3:
+        raise EvaluationValidationError(["MARKET_ACTUAL_ADMISSION_REQUIRED"])
+    policy = actual_admission.verify_evaluator(snapshot, rubric, llm, "market")
+    rules = _MarketRules(rubric)
+    scoped, figures, context = _market_context(
+        snapshot, target_market, market_links, rules
+    )
+    reviews = {} if reviewed_observations is None else dict(reviewed_observations)
+
+    def violations(output: DimensionAssessmentOutput) -> list[str]:
+        try:
+            actual_admission.verify_snapshot(snapshot, rubric)
+        except SourceFactError:
+            return ["MARKET_SOURCE_REVIEW_INVALID"]
+        errors = market_output_violations(output, figures=figures, rules=rules)
+        for criterion in output.criteria:
+            if not set(criterion.evidence_ids) <= set(scoped.evidence):
+                errors.append("MARKET_EXCLUDED_EVIDENCE")
+            match criterion.status:
+                case "missing":
+                    continue
+                case "observed":
+                    pass
+                case unreachable:
+                    assert_never(unreachable)
+            if target_market is None or not market_links:
+                errors.append("MARKET_TARGET_LINK_REQUIRED")
+                continue
+            supplied = reviews.get(criterion.criterion_id)
+            if supplied is None:
+                errors.append("MARKET_REVIEW_REQUIRED")
+                continue
+            receipt = CriterionAssessment.model_validate(supplied.receipt.model_dump())
+            request = MarketObservationReviewRequest.model_validate_json(
+                supplied.request
+            )
+            expected_links = {
+                eid: market_links[eid]
+                for eid in receipt.evidence_ids
+                if eid in scoped.evidence
+            }
+            if (
+                receipt.schema_version != snapshot.schema_version
+                or receipt.model_dump(exclude={"schema_version"})
+                != criterion.model_dump()
+                or request.criterion != criterion.criterion_id
+                or request.target != target_market
+                or request.links != expected_links
+                or request.excerpts
+                != {
+                    eid: scoped.evidence[eid].excerpt
+                    for eid in receipt.evidence_ids
+                    if eid in scoped.evidence
+                }
+                or set(expected_links) != set(receipt.evidence_ids)
+            ):
+                errors.append("MARKET_REVIEW_CONTEXT_MISMATCH")
+                continue
+            try:
+                review = actual_admission.resolve_review(
+                    snapshot,
+                    rubric,
+                    supplied.request,
+                    receipt,
+                    subject=supplied.subject,
+                )
+            except SourceFactError:
+                errors.append("MARKET_SOURCE_REVIEW_INVALID")
+                continue
+            if review is None or review.decision != "accepted":
+                errors.append("MARKET_REVIEW_NOT_ACCEPTED")
+        return errors
+
+    # Filtering affects only the prompt. Admission and the result retain the
+    # original snapshot identity/context; extra validation closes filtered IDs.
     return evaluate_dimension(
         "market",
-        scoped,
+        snapshot,
         rubric,
         llm=llm,
         policy=policy,
-        clock=clock,
-        schema_version=schema_version,
+        clock=actual_admission.runtime_binding.runtime.clock,
+        schema_version=snapshot.schema_version,
+        max_repairs=0,
         system_prompt=SYSTEM_PROMPT,
-        prompt_context=context,
-        extra_validator=lambda output: market_output_violations(
-            output, figures=figures, rules=rules
-        ),
+        user_prompt=build_user_prompt("market", scoped, rubric, policy, context),
+        extra_validator=violations,
     )

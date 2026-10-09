@@ -10,6 +10,7 @@
 """
 
 import json
+from collections.abc import Callable
 from decimal import Decimal
 
 import httpx
@@ -68,19 +69,23 @@ class OpenAIResponsesAttempt:
     def __init__(
         self,
         *,
-        api_key: str,
+        api_key: str | None,
         prompt_version: str,
         schema_version: str,
         clock: Clock,
         http_transport: httpx.BaseTransport | None = None,
+        observe_wire: Callable[[bytes, int, bytes], None] | None = None,
     ) -> None:
-        if not api_key.strip():
+        if api_key is None and type(http_transport) is not httpx.MockTransport:
             raise ValueError("api_key is required")
-        self._key = api_key.strip()
+        if api_key is not None and not api_key.strip():
+            raise ValueError("api_key is required")
+        self._key = api_key.strip() if api_key is not None else None
         self._prompt_version = prompt_version
         self._schema_version = schema_version
         self._clock = clock
         self._http_transport = http_transport
+        self._observe_wire = observe_wire
         self.llm_calls = []
 
     def generate_once(
@@ -101,11 +106,26 @@ class OpenAIResponsesAttempt:
         ) as client:
 
             def post(payload: dict) -> httpx.Response:
-                return client.post(
+                headers = (
+                    {"Authorization": f"Bearer {self._key}"}
+                    if self._key is not None
+                    else {}
+                )
+                response = client.post(
                     RESPONSES_URL,
                     json=payload,
-                    headers={"Authorization": f"Bearer {self._key}"},
+                    headers=headers,
                 )
+                if self._observe_wire is not None:
+                    try:
+                        self._observe_wire(
+                            response.request.content,
+                            response.status_code,
+                            response.content,
+                        )
+                    except (ValueError, TypeError, KeyError, AttributeError):
+                        raise TransportFailure(ErrorCode.TOOL_FAILED) from None
+                return response
 
             llm = OpenAIStructuredLLM(
                 transport=post,
@@ -124,6 +144,8 @@ class OpenAIResponsesAttempt:
                 raise TransportFailure(code, usage=self._usage(llm)) from None
             finally:
                 self.llm_calls.extend(llm.calls)
+        usage = self._usage(llm)
+        assert usage is not None
         return AttemptResponse(
             schema_version=self._schema_version,
             status="ok",
@@ -131,7 +153,7 @@ class OpenAIResponsesAttempt:
             source_ids=[],
             chunk_ids=[],
             evidence_ids=[],
-            usage=self._usage(llm),
+            usage=usage,
         )
 
     def _usage(self, llm: OpenAIStructuredLLM) -> Usage | None:

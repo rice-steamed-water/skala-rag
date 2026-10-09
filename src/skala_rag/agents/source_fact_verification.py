@@ -23,7 +23,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import date
 from pathlib import Path
 from types import MappingProxyType
-from typing import Annotated, Literal, TypeAlias, assert_never
+from typing import TYPE_CHECKING, Annotated, Literal, TypeAlias, assert_never
 
 from pydantic import (
     BaseModel,
@@ -34,6 +34,9 @@ from pydantic import (
     ValidationError,
 )
 from pydantic_core import PydanticSerializationError
+
+if TYPE_CHECKING:
+    from skala_rag.scoring.approval_registry import PinnedApprovalRegistry
 
 from skala_rag.agents.finance_verification import ReviewedFinancialFact
 from skala_rag.agents.founder_verification import ReviewedFounderAnchor
@@ -1000,6 +1003,7 @@ class SourceBoundReviewResolver:
         *,
         sources: Mapping[str, TrustedSource | TrustedCapture],
         reviews: tuple[SourceBoundReview, ...],
+        approval_registry: "PinnedApprovalRegistry | None" = None,
     ) -> None:
         self._snapshot = checked_snapshot(snapshot)
         self._snapshot_sha256 = frozen_snapshot_digest(self._snapshot)
@@ -1010,8 +1014,21 @@ class SourceBoundReviewResolver:
             if isinstance(rules, dict)
             else None
         )
+        pinned_core = False
+        if approval_registry is not None:
+            from skala_rag.scoring.approval_registry import PinnedApprovalRegistry
+
+            if type(approval_registry) is not PinnedApprovalRegistry:
+                raise SourceFactError("ARTIFACT_BINDING_REJECTED")
+            approval = approval_registry.core_approval()
+            pinned_core = (
+                approval_registry.verify_core(approval) is True
+                and core_artifact_digest(rubric) == approval.content_sha256
+            )
+            if not pinned_core:
+                raise SourceFactError("ARTIFACT_BINDING_REJECTED")
         self._market_industry_allowed = (
-            rubric.get("status") == "approved"
+            (rubric.get("status") == "approved" or pinned_core)
             and type(dimensions) is list
             and all(type(dimension) is str for dimension in dimensions)
             and "market" in dimensions

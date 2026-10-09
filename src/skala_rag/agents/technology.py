@@ -17,9 +17,12 @@ snapshot은 #55 Evidence 조사 산출물이어야 한다(Market #59와 같은 �
 
 from collections.abc import Callable, Mapping
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal, assert_never
+
+if TYPE_CHECKING:
+    from skala_rag.scoring.approved_consumers import ActualAdmissionV3
 
 from skala_rag.agents.evaluation import evaluate_dimension
 from skala_rag.agents.moat_verification import CoreArtifactApproval
@@ -284,6 +287,7 @@ def evaluate_technology_approved_fixture(
     )
     if result.result.status == "failure":
         return result
+    assert result.result.evaluation is not None
     # Detached callback arguments cannot mutate the original evaluation/snapshot.
     try:
         for criterion in result.result.evaluation.criteria:
@@ -306,4 +310,103 @@ def evaluate_technology_approved_fixture(
                 raise TechnologyReviewError("TECHNOLOGY_REVIEW_REJECTED")
     except Exception:
         raise TechnologyReviewError("TECHNOLOGY_REVIEW_REJECTED") from None
+    return result
+
+
+def evaluate_technology_approved(
+    snapshot: EvaluationSnapshot,
+    *,
+    llm: StructuredLLM,
+    review_request: bytes,
+    review_subject: str,
+    receipts: Mapping[str, ReviewedTechnologyAnchor],
+    actual_admission: "ActualAdmissionV3 | None" = None,
+) -> TechnologyEvaluation:
+    """Admit one runtime request and independently review every observed rating.
+
+    Receipts and exact request bytes come from the trusted controller, not this
+    evaluator or its proposing model. Missing needs no positive review. Review
+    failure is terminal with no repair, and never leaks an observed trace.
+    """
+    from skala_rag.agents.evaluation import _failure
+    from skala_rag.agents.technology_verification import (
+        TechnologyReviewError,
+        checked_snapshot,
+        validate_technology_anchor,
+    )
+    from skala_rag.contracts.error_codes import ErrorCode
+    from skala_rag.scoring.approved_consumers import ActualAdmissionV3
+
+    if type(actual_admission) is not ActualAdmissionV3:
+        raise TechnologyReviewError("TECHNOLOGY_ACTUAL_ADMISSION_REQUIRED")
+    if (
+        type(review_request) is not bytes
+        or not review_request
+        or type(review_subject) is not str
+        or not review_subject.strip()
+    ):
+        raise TechnologyReviewError("TECHNOLOGY_REVIEW_CONTEXT_REQUIRED")
+    frozen = checked_snapshot(snapshot)
+    rubric = actual_admission.registry.rubric("core-0.1.0")
+    policy = actual_admission.verify_evaluator(frozen, rubric, llm, "technology")
+    _check_criteria(rubric, policy)
+    supplied = deepcopy(dict(receipts))
+    clock = actual_admission.runtime_binding.runtime.clock
+    result = _run_technology(
+        frozen,
+        rubric=rubric,
+        llm=llm,
+        policy=policy,
+        clock=clock,
+        schema_version=frozen.schema_version,
+        max_repairs=0,
+    )
+    evaluation = result.result.evaluation
+    if evaluation is None:
+        return result
+    try:
+        # Recheck full original lineage even when all output criteria are missing.
+        actual_admission.verify_snapshot(frozen, rubric)
+        for criterion in evaluation.criteria:
+            match criterion.status:
+                case "missing":
+                    continue
+                case "observed":
+                    receipt = supplied.get(criterion.criterion_id)
+                    if not validate_technology_anchor(
+                        receipt,
+                        rubric=rubric,
+                        snapshot=frozen,
+                        criterion=criterion,
+                        verifier=lambda anchor: (
+                            (
+                                review := actual_admission.resolve_review(
+                                    frozen,
+                                    rubric,
+                                    review_request,
+                                    anchor,
+                                    subject=review_subject,
+                                )
+                            )
+                            is not None
+                            and review.decision == "accepted"
+                        ),
+                    ):
+                        raise TechnologyReviewError("TECHNOLOGY_REVIEW_REJECTED")
+                case unreachable:
+                    assert_never(unreachable)
+    except ValueError:
+        return replace(
+            result,
+            result=_failure(
+                "technology",
+                frozen,
+                code=ErrorCode.LLM_OUTPUT_INVALID,
+                message="TECHNOLOGY_REVIEW_REJECTED",
+                attempt=1,
+                clock=clock,
+                schema_version=frozen.schema_version,
+            ),
+            trace=(),
+        )
     return result

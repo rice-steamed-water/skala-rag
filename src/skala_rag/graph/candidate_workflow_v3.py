@@ -1,9 +1,4 @@
-"""Fixture-only outer LangGraph, with node-local detached state.
-
-An explicit profile consumes the existing pre-research selection API. No live
-admission, model, provider, or checkpoint persistence is introduced. The Python
-controller remains the independent compatibility oracle.
-"""
+"""Original outer LangGraph with explicit controller-held actual admission."""
 
 import hashlib
 import json
@@ -59,6 +54,7 @@ from skala_rag.scoring.aggregate_v3 import (
     aggregate_scores_v3,
 )
 from skala_rag.scoring.approved_consumers import (
+    ActualAdmissionV3,
     ApprovedPolicySource,
     aggregate_scores_approved,
     decide_approved,
@@ -85,6 +81,10 @@ if TYPE_CHECKING:
 class CandidateWorkflowStateV3(TypedDict, total=False):
     data: dict
     result: CandidateRunV3
+
+
+class _ActualAdmissionOptions(TypedDict, total=False):
+    actual_admission: ActualAdmissionV3
 
 
 def candidate_recursion_limit_v3(candidate_count: int, policy: V3Policy) -> int:
@@ -125,7 +125,7 @@ def _encode(value):
     return deepcopy(value)
 
 
-def _decode(payload):
+def _decode(payload, *, execution_mode="fixture"):
     data = deepcopy(payload)
     research = data.get("research")
     if type(research) is dict and set(research) == {"_artifact_seed_v3"}:
@@ -139,7 +139,7 @@ def _decode(payload):
     ):
         if data.get(key) is not None:
             data[key] = model.model_validate(
-                data[key], context={"execution_mode": "fixture"}
+                data[key], context={"execution_mode": execution_mode}
             )
     for key, model in (
         ("coverages", CoverageResult),
@@ -155,19 +155,27 @@ def _decode(payload):
     for key in ("errors", "failures"):
         data[key] = [WorkflowError.model_validate(e) for e in data.get(key, [])]
     data["evidence"] = [
-        Evidence.model_validate(e, context={"execution_mode": "fixture"})
+        Evidence.model_validate(e, context={"execution_mode": execution_mode})
         for e in data.get("evidence", [])
     ]
     data["new_evidence_ids"] = set(data.get("new_evidence_ids", []))
     return data
 
 
-def _pin_approved_policy_source(source, *, source_only):
+def _pin_approved_policy_source(source, *, source_only, actual_admission=None):
     """Detach configuration only; retain the trusted verifier's current state."""
     if not isinstance(source, ApprovedPolicySource):
         raise ValueError("loader-backed ApprovedPolicySource required")
     if source_only is not None:
         raise ValueError("source-only cannot carry approved scoring source")
+    if actual_admission is not None:
+        if (
+            type(actual_admission) is not ActualAdmissionV3
+            or source is not actual_admission.source
+        ):
+            raise ValueError("exact controller admission source required")
+        actual_admission.load_policy(require_capacity=True)
+        return source
     if source.execution_mode != "fixture":
         raise ValueError("actual approved registry/runtime unavailable; live denied")
     if source.live_gates is not None or source.live_gate_verifier is not None:
@@ -207,6 +215,7 @@ def build_candidate_workflow_v3(
     run_profile: run_settings.RunProfile | None = None,
     source_only: SourceOnlyV3 | None = None,
     approved_policy_source: ApprovedPolicySource | None = None,
+    actual_admission: ActualAdmissionV3 | None = None,
 ) -> StateGraph:
     """Build the existing outer graph; source-only needs an explicit boundary."""
     return _build_candidate_workflow_v3(
@@ -227,6 +236,7 @@ def build_candidate_workflow_v3(
         run_profile=run_profile,
         source_only=source_only,
         approved_policy_source=approved_policy_source,
+        actual_admission=actual_admission,
         _entrypoint="discover",
     )
 
@@ -250,13 +260,38 @@ def _build_candidate_workflow_v3(
     run_profile: run_settings.RunProfile | None = None,
     source_only: SourceOnlyV3 | None = None,
     approved_policy_source: ApprovedPolicySource | None = None,
+    actual_admission: ActualAdmissionV3 | None = None,
     _entrypoint: str,
 ) -> StateGraph:
     if _entrypoint not in ("discover", "candidate_iterator", "selector"):
         raise ValueError("invalid internal outer graph entrypoint")
     if not isinstance(policy, V3Policy) or policy.execution_mode != "fixture":
         raise ValueError("fixture V3Policy required")
-    if approved_policy_source is not None:
+    if actual_admission is not None:
+        if type(actual_admission) is not ActualAdmissionV3:
+            raise ValueError("exact ActualAdmissionV3 required")
+        policy = V3Policy.model_validate(policy.model_dump(warnings="error"))
+        if (
+            source_only is not None
+            or approved_policy_source is not actual_admission.source
+            or run_id != actual_admission.runtime_binding.gates.run_id
+            or schema_version != actual_admission.run_input.schema_version
+            or stages is None
+            or stages.evidence_research is None
+            or stages.evidence_research.actual_admission is not actual_admission
+        ):
+            raise ValueError("actual controller run/source/research mismatch")
+        approved = actual_admission.load_policy(require_capacity=True)
+        if approved.operational.model_dump(warnings="error") != policy.model_dump(
+            warnings="error"
+        ):
+            raise ValueError("approved source differs from whole operational policy")
+        approved_policy_source = _pin_approved_policy_source(
+            approved_policy_source,
+            source_only=source_only,
+            actual_admission=actual_admission,
+        )
+    elif approved_policy_source is not None:
         approved_policy_source = _pin_approved_policy_source(
             approved_policy_source, source_only=source_only
         )
@@ -310,7 +345,13 @@ def _build_candidate_workflow_v3(
         )
     elif stages is None:
         raise ValueError("fixture stages required")
-    execution_mode = "live" if source_only else "fixture"
+    execution_mode = "live" if source_only or actual_admission else "fixture"
+    if (
+        stages is not None
+        and stages.evidence_research is not None
+        and stages.evidence_research.actual_admission is not actual_admission
+    ):
+        raise ValueError("research requires the same controller admission")
     binding = (
         stages.evidence_research.pin(
             run_id=run_id,
@@ -322,6 +363,9 @@ def _build_candidate_workflow_v3(
     )
     research_tool = None
     research_tool_configuration_failed = False
+    admission_options: _ActualAdmissionOptions = (
+        {"actual_admission": actual_admission} if actual_admission is not None else {}
+    )
     if (
         catalog.policy_version != catalog_policy_version
         or {c.criterion_id: (c.dimension, c.weight) for c in catalog.criteria}
@@ -342,6 +386,7 @@ def _build_candidate_workflow_v3(
             industry_evidence_dimensions=industry_evidence_dimensions,
             applicability_validator=applicability_verifier,
             clock=clock,
+            actual_admission=actual_admission,
         ).compile()
     )
 
@@ -510,7 +555,7 @@ def _build_candidate_workflow_v3(
             return
         data["discovered"] = [
             Candidate.model_validate(
-                c, context={"execution_mode": "fixture"}
+                c, context={"execution_mode": execution_mode}
             ).model_dump(mode="json")
             for c in stages.discover()
         ]
@@ -679,7 +724,7 @@ def _build_candidate_workflow_v3(
             data["research_artifacts"][data["cid"]] = owned
             outcome = binding.research.run(
                 Candidate.model_validate(
-                    data["candidate"], context={"execution_mode": "fixture"}
+                    data["candidate"], context={"execution_mode": execution_mode}
                 ),
                 (),
                 binding.budget.model_copy(deep=True),
@@ -687,12 +732,14 @@ def _build_candidate_workflow_v3(
             consume_outcome_v3(owned, outcome, binding, data["cid"], initial=True)
             data["errors"] = retain_outcome_errors_v3(data["errors"], owned)
             data["evidence"] = [
-                Evidence.model_validate(e, context={"execution_mode": "fixture"})
+                Evidence.model_validate(e, context={"execution_mode": execution_mode})
                 for e in active_evidence_v3(owned, binding, data["cid"]).values()
             ]
         else:
             data["evidence"] = [
-                Evidence.model_validate(item, context={"execution_mode": "fixture"})
+                Evidence.model_validate(
+                    item, context={"execution_mode": execution_mode}
+                )
                 for item in stages.collect(
                     deepcopy(data["candidate"]), deepcopy(data["research"])
                 )
@@ -747,6 +794,8 @@ def _build_candidate_workflow_v3(
                 catalog,
                 evidence_revision=data["evidence_revision"],
                 schema_version=schema_version,
+                # Historical catalog arithmetic grants no authority. Evidence
+                # boundaries and the research binding use the admitted mode.
                 execution_mode="fixture",
                 policy_version=policy.policy_version,
                 support_check=support_check,
@@ -826,7 +875,7 @@ def _build_candidate_workflow_v3(
                 data["cid"],
                 lambda: binding.research.run(
                     Candidate.model_validate(
-                        data["candidate"], context={"execution_mode": "fixture"}
+                        data["candidate"], context={"execution_mode": execution_mode}
                     ),
                     request.research_gaps,
                     binding.budget.model_copy(deep=True),
@@ -844,7 +893,7 @@ def _build_candidate_workflow_v3(
             data["collected"] = active_evidence_v3(owned, binding, data["cid"])
             data["new_evidence_ids"].intersection_update(data["collected"])
             data["evidence"] = [
-                Evidence.model_validate(e, context={"execution_mode": "fixture"})
+                Evidence.model_validate(e, context={"execution_mode": execution_mode})
                 for e in data["collected"].values()
             ]
             data["route"] = "coverage"
@@ -881,7 +930,7 @@ def _build_candidate_workflow_v3(
         ):
             raise ResearchLoopFailure("RESEARCH_RESPONSE_INVALID")
         batch = [
-            Evidence.model_validate(e, context={"execution_mode": "fixture"})
+            Evidence.model_validate(e, context={"execution_mode": execution_mode})
             for e in response.evidence
         ]
         if len({e.evidence_id for e in batch}) != len(batch) or any(
@@ -951,7 +1000,7 @@ def _build_candidate_workflow_v3(
                 )
             )
             return EvaluationSnapshot.model_validate(
-                payload, context={"execution_mode": "fixture"}
+                payload, context={"execution_mode": execution_mode}
             )
 
         data["snapshot"] = timed(
@@ -973,6 +1022,11 @@ def _build_candidate_workflow_v3(
             new_evidence_ids=data["new_evidence_ids"],
             collected=data["collected"],
         )
+        if actual_admission is not None:
+            for version in ("core-0.1.0", "finance-0.1.0"):
+                actual_admission.verify_snapshot(
+                    data["snapshot"], actual_admission.registry.rubric(version)
+                )
         data["route"] = "evaluation_join"
 
     def evaluation_join(data, timed, error, finish):
@@ -984,7 +1038,7 @@ def _build_candidate_workflow_v3(
             evaluation_rounds={data["cid"]: data["snapshot"].evaluation_round},
             evidence_revisions={data["cid"]: data["snapshot"].evidence_revision},
             run_input={
-                "execution_mode": "fixture",
+                "execution_mode": execution_mode,
                 "policy_version": policy.policy_version,
             },
             snapshots={data["snapshot"].snapshot_id: frozen},
@@ -1017,6 +1071,15 @@ def _build_candidate_workflow_v3(
             data["terminal_status"] = "failed"
             data["route"] = "archive"
             return
+        if binding and actual_admission is not None:
+            # Persist the original atomic promotion, not rebuilt evaluations.
+            owned_state = data["research_artifacts"][data["cid"]]["state"]
+            owned_state["evaluations_v3"] = deepcopy(
+                data["evaluated"]["evaluations_v3"]
+            )
+            owned_state["branch_results_v3"] = deepcopy(
+                data["evaluated"]["branch_results_v3"]
+            )
         data["route"] = "score"
 
     def score(data, timed, error, finish):
@@ -1050,6 +1113,7 @@ def _build_candidate_workflow_v3(
                     approved_policy_source,
                     applicability_verifier=applicability_verifier,
                     snapshot=data["snapshot"],
+                    **admission_options,
                 )
                 if approved_policy_source is not None
                 else aggregate_scores_v3(
@@ -1068,7 +1132,11 @@ def _build_candidate_workflow_v3(
             "decision",
             data["cid"],
             lambda: (
-                decide_approved(data["summary"], approved_policy_source)
+                decide_approved(
+                    data["summary"],
+                    approved_policy_source,
+                    **admission_options,
+                )
                 if approved_policy_source is not None
                 else decide_v3(data["summary"], policy)
             ),
@@ -1076,6 +1144,14 @@ def _build_candidate_workflow_v3(
         )
         data["scores"][data["cid"]] = data["summary"]
         data["decisions"][data["cid"]] = data["decision"]
+        if binding and actual_admission is not None:
+            owned_state = data["research_artifacts"][data["cid"]]["state"]
+            owned_state["score_summaries"][data["cid"]] = data["summary"].model_dump(
+                mode="json"
+            )
+            owned_state["investment_decisions"][data["cid"]] = data[
+                "decision"
+            ].model_dump(mode="json")
         data["terminal_status"] = (
             "recommend"
             if data["decision"].label.startswith("RECOMMEND")
@@ -1145,6 +1221,7 @@ def _build_candidate_workflow_v3(
                     approved_policy_source,
                     run_id=run_id,
                     schema_version=schema_version,
+                    **admission_options,
                 )
                 if approved_policy_source is not None
                 else (
@@ -1249,7 +1326,10 @@ def _build_candidate_workflow_v3(
 
     def node(name, operation):
         def call(state):
-            data = _decode(state.get("data", {}))
+            if actual_admission is not None and binding is not None:
+                actual_admission.load_policy()
+                binding.authorized_mode()
+            data = _decode(state.get("data", {}), execution_mode=execution_mode)
             timed, error, finish = helpers(data)
             try:
                 if source_only is not None and name in (
@@ -1353,6 +1433,7 @@ def run_candidate_workflow_v3(
     *,
     graph_events: list | None = None,
     run_profile: run_settings.RunProfile | None = None,
+    actual_admission: ActualAdmissionV3 | None = None,
     **options,
 ) -> CandidateRunV3:
     """Execute the real outer flow with its exact normalized-population bound.
@@ -1369,13 +1450,18 @@ def run_candidate_workflow_v3(
             "approved_policy_source": _pin_approved_policy_source(
                 options["approved_policy_source"],
                 source_only=options.get("source_only"),
+                actual_admission=actual_admission,
             ),
             "policy": V3Policy.model_validate(
                 options["policy"].model_dump(warnings="error")
             ),
         }
     graph = build_candidate_workflow_v3(
-        stages, evaluators, run_profile=run_profile, **options
+        stages,
+        evaluators,
+        run_profile=run_profile,
+        actual_admission=actual_admission,
+        **options,
     ).compile(checkpointer=False)
     # Pin the validated binding before any callback can mutate caller-owned data.
     run_profile = deepcopy(run_profile)
@@ -1427,6 +1513,7 @@ def run_candidate_workflow_v3(
         evaluators,
         run_profile=run_profile,
         _entrypoint=state["data"]["route"],
+        actual_admission=actual_admission,
         **options,
     ).compile(checkpointer=False)
     consume(continuation, deepcopy(state))
@@ -1445,6 +1532,7 @@ def run_candidate_report_v3(
     check_pdf: Callable | None = None,
     graph_events: list | None = None,
     run_profile: run_settings.RunProfile | None = None,
+    actual_admission: ActualAdmissionV3 | None = None,
     **options,
 ) -> tuple[CandidateRunV3, "ReportContextV3", "ReportRunV3"]:
     """Original public outer once -> original scored State -> existing report.
@@ -1454,8 +1542,18 @@ def run_candidate_report_v3(
     Input errors propagate; report technical failures retain ReportRunV3 semantics.
     """
     run = RunInput.model_validate(run_input)
-    if run.execution_mode != "fixture" or options.get("source_only") is not None:
+    if (actual_admission is None and run.execution_mode != "fixture") or options.get(
+        "source_only"
+    ) is not None:
         raise ValueError("report composite requires fixture mode without source-only")
+    if actual_admission is not None:
+        if (
+            type(actual_admission) is not ActualAdmissionV3
+            or run != actual_admission.run_input
+            or options.get("approved_policy_source") is not actual_admission.source
+        ):
+            raise ValueError("report requires the same controller admission")
+        actual_admission.load_policy(require_capacity=True)
 
     # Lazy imports avoid context -> CandidateRunV3 module dependencies at startup.
     from skala_rag.reporting.v3_context import build_report_context_from_run_v3
@@ -1490,10 +1588,14 @@ def run_candidate_report_v3(
         dict(evaluators),
         graph_events=graph_events,
         run_profile=deepcopy(run_profile),
+        actual_admission=actual_admission,
         **pinned,
     )
     context = build_report_context_from_run_v3(
-        result, run_input=run, run_id=pinned["run_id"]
+        result,
+        run_input=run,
+        run_id=pinned["run_id"],
+        actual_admission=actual_admission,
     )
     report = run_report_v3(context, generate=generate, judge=judge, check_pdf=check_pdf)
     return result, context, report

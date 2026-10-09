@@ -1,10 +1,12 @@
-"""Atomic v3 snapshot boundary; actual Finance semantic verification is blocked."""
+"""Atomic Business/Deal evaluation with separate fixture and actual admission."""
+
+# allow: SIZE_OK - scoped shared atomic branch validator retains legacy contracts.
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Literal
+from typing import Final, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, JsonValue, TypeAdapter
 
 from skala_rag.agents.evaluation import (
     CriterionOutput,
@@ -19,7 +21,7 @@ from skala_rag.agents.finance_verification import (
     validate_financial_rating,
 )
 from skala_rag.contracts.error_codes import ErrorCode, is_retryable
-from skala_rag.contracts.evaluation import EvaluationSnapshot
+from skala_rag.contracts.evaluation import Dimension, EvaluationSnapshot
 from skala_rag.contracts.interfaces import Clock, LLMError, StructuredLLM
 from skala_rag.contracts.v3 import (
     CriterionAssessment,
@@ -28,12 +30,16 @@ from skala_rag.contracts.v3 import (
     WorkflowError,
 )
 from skala_rag.prompts.business_deal_evaluation import SYSTEM_PROMPT, build_user_prompt
+from skala_rag.scoring.approved_consumers import ActualAdmissionV3
 from skala_rag.scoring.approved_policy import ApprovedScoringPolicy
 from skala_rag.scoring.catalog import ScoringPolicy
 from skala_rag.scoring.finance import Unavailable, to_amount
 from skala_rag.scoring.v3_policy import CATALOG
 
-DOMAINS = ("traction", "deal_terms")
+DOMAINS: Final[tuple[Literal["traction"], Literal["deal_terms"]]] = (
+    "traction",
+    "deal_terms",
+)
 Verifier = Callable[[CriterionAssessment, EvaluationSnapshot], bool]
 
 
@@ -101,6 +107,79 @@ def evaluate_business_deal(
             "and authoritative metric-role/round/accounting-subject facts required; "
             "#55 merge alone is not evaluation readiness"
         )
+    return _evaluate_business_deal(
+        snapshot,
+        rubric=rubric,
+        policy=policy,
+        llm=llm,
+        clock=clock,
+        schema_version=schema_version,
+        verifiers=verifiers,
+        financial_facts=financial_facts,
+    )
+
+
+def evaluate_business_deal_approved(
+    snapshot: EvaluationSnapshot,
+    *,
+    rubric: Mapping[str, JsonValue],
+    admission: ActualAdmissionV3,
+    llm: StructuredLLM,
+    review_request: bytes,
+    review_subject: str,
+    financial_facts: tuple[ReviewedFinancialFact, ...] = (),
+) -> EvaluationBranchResult:
+    """Use exact Finance pins, original-source reviews and one admitted runtime call.
+
+    Controller-selected facts require separately accepted receipts; empty facts
+    permit Missing only. Admission errors raise before transport. Domain errors
+    return an atomic failure, never a partially promoted or scored dimension.
+    """
+    if type(admission) is not ActualAdmissionV3:
+        raise ValueError("exact ActualAdmissionV3 required")
+    policy = admission.verify_evaluator(snapshot, rubric, llm, "business_deal")
+    frozen = EvaluationSnapshot.model_validate(
+        snapshot.model_dump(), context={"execution_mode": "live"}
+    )
+    facts = tuple(
+        ReviewedFinancialFact.model_validate(
+            {**fact.model_dump(exclude={"period"}), "period": fact.period}
+        )
+        for fact in financial_facts
+    )
+    validate_financial_facts(facts, frozen)
+    for fact in facts:
+        review = admission.resolve_review(
+            frozen, rubric, review_request, fact, subject=review_subject
+        )
+        if review is None or review.decision != "accepted":
+            raise ValueError("accepted original-source financial receipt required")
+    return _evaluate_business_deal(
+        frozen,
+        rubric=rubric,
+        policy=policy,
+        llm=llm,
+        clock=admission.runtime_binding.runtime.clock,
+        schema_version=frozen.schema_version,
+        verifiers=None,
+        financial_facts=facts,
+        admission=admission,
+    )
+
+
+def _evaluate_business_deal(
+    snapshot: EvaluationSnapshot,
+    *,
+    rubric: Mapping[str, object],
+    policy: ScoringPolicy | ApprovedScoringPolicy,
+    llm: StructuredLLM,
+    clock: Clock,
+    schema_version: str,
+    verifiers: ApprovedVerifiers | None,
+    financial_facts: tuple[ReviewedFinancialFact, ...],
+    admission: ActualAdmissionV3 | None = None,
+) -> EvaluationBranchResult:
+    """Shared atomic validation; actual authority is never a fixture verifier."""
     identity = {
         k: getattr(snapshot, k)
         for k in (
@@ -118,19 +197,28 @@ def evaluate_business_deal(
         approved = isinstance(policy, ApprovedScoringPolicy)
         if approved:
             policy = ApprovedScoringPolicy.model_validate(policy.model_dump())
-            if policy.execution_mode != "fixture":
+            if admission is None and policy.execution_mode != "fixture":
                 raise ValueError("live policy cannot enter fixture consumer")
             if (
                 rubric.get("rubric_version") != policy.approvals.finance.version
                 or rubric.get("status") != "approved"
-                or verifiers.finance_version != policy.approvals.finance.version
-                or verifiers.applicability_version != policy.approvals.finance.version
+                or (
+                    verifiers is not None
+                    and (
+                        verifiers.finance_version != policy.approvals.finance.version
+                        or verifiers.applicability_version
+                        != policy.approvals.finance.version
+                    )
+                )
             ):
                 raise ValueError("approved finance version mismatch")
         facts = validate_financial_facts(financial_facts, snapshot)
         if snapshot.policy_version != policy.policy_version:
             raise ValueError("policy mismatch")
-        if rubric.get("rubric_version") != verifiers.rubric_version:
+        if (
+            verifiers is not None
+            and rubric.get("rubric_version") != verifiers.rubric_version
+        ):
             raise ValueError("rubric verifier version mismatch")
         dimensions = rubric.get("dimensions")
         for d in DOMAINS:
@@ -138,10 +226,13 @@ def evaluate_business_deal(
             policy_ids = {c.criterion_id for c in policy.criteria if c.dimension == d}
             if policy_ids != expected:
                 raise ValueError("catalog mismatch")
-            if (
-                not isinstance(dimensions, Mapping)
-                or set(dimensions[d]["criteria"]) != expected
-            ):
+            if not isinstance(dimensions, Mapping):
+                raise ValueError("rubric catalog mismatch")
+            dimension = dimensions.get(d)
+            if not isinstance(dimension, Mapping):
+                raise ValueError("rubric catalog mismatch")
+            criteria = dimension.get("criteria")
+            if not isinstance(criteria, Mapping) or set(criteria) != expected:
                 raise ValueError("rubric catalog mismatch")
         allowed = {
             eid: e
@@ -161,9 +252,14 @@ def evaluate_business_deal(
         )
         output = BusinessDealOutput.model_validate(
             raw.model_dump() if isinstance(raw, BaseModel) else raw,
-            context={"execution_mode": "fixture"},
+            context={"execution_mode": "live" if admission is not None else "fixture"},
         )
-        evaluations = {}
+        if admission is not None:
+            admission.verify_snapshot(
+                snapshot, TypeAdapter(dict[str, JsonValue]).validate_python(rubric)
+            )
+            facts = validate_financial_facts(financial_facts, snapshot)
+        evaluations: dict[Dimension, Evaluation] = {}
         for d in DOMAINS:
             domain = getattr(output, d)
             neutral = []
@@ -190,9 +286,10 @@ def evaluate_business_deal(
                             if roles != {"confirmed_pre_revenue"}:
                                 raise ValueError("confirmed pre-revenue fact required")
                         elif c.criterion_id == "traction.runway":
+                            amounts = [to_amount(facts[eid].evidence) for eid in cited]
                             if roles != {"operating_cash_flow"} or any(
-                                to_amount(facts[eid].evidence).value < 0
-                                for eid in cited
+                                isinstance(amount, Unavailable) or amount.value < 0
+                                for amount in amounts
                             ):
                                 raise ValueError("confirmed nonnegative OCF required")
                         else:
@@ -227,7 +324,7 @@ def evaluate_business_deal(
                             to_amount(e), Unavailable
                         ):
                             raise ValueError("unknown monetary unit")
-                    if (
+                    if verifiers is not None and (
                         verifiers.finance(c, scoped) is not True
                         or verifiers.rubric(c, scoped) is not True
                     ):
@@ -245,6 +342,7 @@ def evaluate_business_deal(
                         raise ValueError("applicability outside approved finance rules")
                 if (
                     c.status == "not_applicable"
+                    and verifiers is not None
                     and verifiers.applicability(c, scoped) is not True
                 ):
                     raise ValueError("unapproved applicability")
@@ -279,8 +377,8 @@ def evaluate_business_deal(
                 rubric=rubric,
                 schema_version=schema_version,
             )
-            evaluations[d] = Evaluation(
-                **{
+            evaluations[d] = Evaluation.model_validate(
+                {
                     **assembled.model_dump(),
                     "criteria": [
                         {**c.model_dump(), "schema_version": schema_version}

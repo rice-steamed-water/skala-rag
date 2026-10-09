@@ -95,8 +95,7 @@ def test_original_graph_real_market_callback(case, fault):
         assert calls == Counter({branch: 1 for branch in BRANCH_DIMENSIONS})
         assert len(llm.calls) == 1
         assert (
-            sum("join_v3" in value for mode, value in events if mode == "updates")
-            == 1
+            sum("join_v3" in value for mode, value in events if mode == "updates") == 1
         )
     if fault is None:
         assert out["evaluation_status_v3"] == "success"

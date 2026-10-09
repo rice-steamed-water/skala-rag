@@ -1,11 +1,15 @@
 """Synthetic offline tests; no policy approval or live measurements."""
 
+# allow: SIZE_OK - preserve the legacy matrix and scoped synthetic Finance fixture.
+
 from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from tests.fixtures.loader import load_common_fixtures
+from tests.unit.test_actual_admission_v3 import configured as configured
+from tests.unit.test_actual_admission_v3 import offline as offline
 
 from skala_rag.agents.business_deal import ApprovedVerifiers, evaluate_business_deal
 from skala_rag.contracts.error_codes import ErrorCode
@@ -235,25 +239,27 @@ def test_approved_observed_gross_margin(case, wrong_rating):
         snapshot.evidence[e.evidence_id] = e
         snapshot.evidence_ids.append(e.evidence_id)
         facts.append(
-            ReviewedFinancialFact(
-                **{
-                    k: getattr(snapshot, k)
-                    for k in (
-                        "run_id",
-                        "snapshot_id",
-                        "candidate_id",
-                        "evaluation_round",
-                        "evidence_revision",
-                        "policy_version",
-                    )
-                },
-                reviewer_reference="fixture:review",
-                accounting_entity=snapshot.candidate_id,
-                metric_role=role,
-                funding_round=None,
-                valuation_basis=None,
-                period=parse_period(e.period),
-                evidence=e,
+            ReviewedFinancialFact.model_validate(
+                {
+                    **{
+                        k: getattr(snapshot, k)
+                        for k in (
+                            "run_id",
+                            "snapshot_id",
+                            "candidate_id",
+                            "evaluation_round",
+                            "evidence_revision",
+                            "policy_version",
+                        )
+                    },
+                    "reviewer_reference": "fixture:review",
+                    "accounting_entity": snapshot.candidate_id,
+                    "metric_role": role,
+                    "funding_round": None,
+                    "valuation_basis": None,
+                    "period": parse_period(e.period),
+                    "evidence": e,
+                }
             )
         )
     c = next(
@@ -320,5 +326,252 @@ def test_approved_contract_fixture_consumer(case):
         schema_version="test",
     )
     assert result.status == "success"
+    assert result.evaluations is not None
     assert set(result.evaluations) == {"traction", "deal_terms"}
     assert len(llm.calls) == 1
+
+
+REQUEST = b"SYNTHETIC independent financial review; test budget only"
+
+
+@pytest.fixture
+def finance_case(configured):
+    import json
+    from dataclasses import replace
+
+    import httpx
+    from tests.unit.test_openai_attempt import body
+
+    from skala_rag.agents.finance_verification import ReviewedFinancialFact
+    from skala_rag.agents.moat_verification import _digest, frozen_snapshot_digest
+    from skala_rag.agents.source_fact_verification import (
+        SourceBoundReviewResolver,
+        SourceTextSpan,
+        review_receipt_digest,
+    )
+    from skala_rag.rag.text_review import text_hash
+    from skala_rag.scoring.finance import parse_period
+    from skala_rag.tools.source_fetch import content_hash
+
+    admission, snapshot, llm, _, _, template_review = configured
+    rubric = admission.registry.rubric("finance-0.1.0")
+    original = admission.review_resolvers[(snapshot.snapshot_id, "finance-0.1.0")]
+    trusted = next(iter(original._sources.values()))
+    rows = (
+        ("revenue", 100, "Revenue 100 KRW in 2025.", "traction.gross_margin"),
+        (
+            "cost_of_revenue",
+            50,
+            "Cost of revenue 50 KRW in 2025.",
+            "traction.gross_margin",
+        ),
+        (
+            "operating_cash_flow",
+            0,
+            "Operating cash flow 0 KRW in 2025.",
+            "traction.runway",
+        ),
+        (
+            "confirmed_pre_revenue",
+            0,
+            "Confirmed pre-revenue in 2025.",
+            "traction.rule_of_40",
+        ),
+    )
+    text = "\n".join(row[2] for row in rows)
+    digest = content_hash(text.encode())
+    trusted.path.write_bytes(text.encode())
+    trusted.extracted_path.write_text(text)
+    source = trusted.source.model_copy(
+        update={
+            "content_hash": digest,
+            "bibliographic_metadata": {
+                "original_receipt": {
+                    "source_id": trusted.source.source_id,
+                    "raw_path": "raw/company.html",
+                    "extracted_path": "text/company.txt",
+                    "raw_sha256": digest.removeprefix("sha256:"),
+                    "extracted_sha256": digest.removeprefix("sha256:"),
+                    "charset": "utf-8",
+                }
+            },
+        }
+    )
+    trusted = replace(
+        trusted,
+        source=source,
+        format="text",
+        extracted_text=text,
+        extracted_sha256=digest,
+    )
+    template = snapshot.evidence["ev-capture"]
+    evidence = {
+        role: template.model_copy(
+            update={
+                "evidence_id": role,
+                "excerpt": quote,
+                "criterion_ids": [criterion],
+                "value": value,
+                "unit": "one",
+                "currency": "KRW",
+                "period": "2025-01-01/2025-12-31",
+                "value_as_of": snapshot.as_of,
+                "evidence_kind": "reported",
+                "supporting_evidence_ids": [],
+                "conflicts_with": [],
+            }
+        )
+        for role, value, quote, criterion in rows
+    }
+    record = next(iter(snapshot.retrieval_records.values())).model_copy(
+        update={"evidence_ids": list(evidence)}
+    )
+    snapshot = snapshot.model_copy(
+        update={
+            "sources": {source.source_id: source},
+            "evidence": evidence,
+            "evidence_ids": list(evidence),
+            "retrieval_records": {record.retrieval_id: record},
+        }
+    )
+    facts = tuple(
+        ReviewedFinancialFact.model_validate(
+            {
+                **{
+                    name: getattr(snapshot, name)
+                    for name in (
+                        "run_id",
+                        "snapshot_id",
+                        "candidate_id",
+                        "evaluation_round",
+                        "evidence_revision",
+                        "policy_version",
+                    )
+                },
+                "reviewer_reference": "SYNTHETIC independent Finance reviewer",
+                "accounting_entity": snapshot.candidate_id,
+                "metric_role": role,
+                "funding_round": None,
+                "valuation_basis": None,
+                "period": parse_period(item.period),
+                "evidence": item,
+            }
+        )
+        for role, item in evidence.items()
+    )
+    reviews = tuple(
+        template_review.model_copy(
+            update={
+                "request_sha256": content_hash(REQUEST).removeprefix("sha256:"),
+                "receipt_sha256": review_receipt_digest(fact),
+                "subject": snapshot.candidate_id,
+                "snapshot_sha256": frozen_snapshot_digest(snapshot),
+                "rubric_sha256": _digest(rubric),
+                "spans": (
+                    SourceTextSpan(
+                        source.source_id,
+                        text.index(fact.evidence.excerpt),
+                        text.index(fact.evidence.excerpt) + len(fact.evidence.excerpt),
+                        fact.evidence.excerpt,
+                        text_hash(text),
+                        None,
+                    ),
+                ),
+            }
+        )
+        for fact in facts
+    )
+    admission = replace(
+        admission,
+        review_resolvers={
+            (snapshot.snapshot_id, "finance-0.1.0"): SourceBoundReviewResolver(
+                snapshot, rubric, sources={source.source_id: trusted}, reviews=reviews
+            )
+        },
+    )
+    policy = admission.load_policy()
+    output = {
+        dimension: {
+            "criteria": [
+                dict(
+                    schema_version=snapshot.schema_version,
+                    criterion_id=c.criterion_id,
+                    status="missing",
+                    rating=None,
+                    evidence_ids=[],
+                    rationale="SYNTHETIC not disclosed",
+                    missing_reason="not_disclosed",
+                    applicability_reason=None,
+                    applicability_rule_id=None,
+                    applicability_evidence_ids=None,
+                    applicability_note=None,
+                )
+                for c in policy.criteria
+                if c.dimension == dimension
+            ],
+            "research_gaps": [],
+            "caveats": [],
+        }
+        for dimension in ("traction", "deal_terms")
+    }
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        return httpx.Response(
+            200,
+            json=body(
+                json.dumps(output), usage={"input_tokens": 10, "output_tokens": 10}
+            ),
+        )
+
+    llm.call = llm.call.model_copy(update={"node": "business_deal_evaluation"})
+    llm.transport._http_transport = httpx.MockTransport(handler)
+    return admission, snapshot, llm, rubric, facts, output, seen, trusted, reviews
+
+
+def invoke(case, *, facts=None):
+    from skala_rag.agents.business_deal import evaluate_business_deal_approved
+
+    admission, snapshot, llm, rubric, reviewed, _, _, _, _ = case
+    return evaluate_business_deal_approved(
+        snapshot,
+        rubric=rubric,
+        admission=admission,
+        llm=llm,
+        review_request=REQUEST,
+        review_subject=snapshot.candidate_id,
+        financial_facts=reviewed if facts is None else facts,
+    )
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"accounting_entity": "foreign"},
+        {"metric_role": "cash"},
+        {"period": None},
+        {"evidence_revision": 99},
+    ],
+)
+def test_fact_context_denied_when_reviewed_receipt_is_changed(finance_case, change):
+    # Given: authentic source bytes and an altered metric-role/context receipt.
+    fact = finance_case[4][0].model_copy(update=change)
+    # When / Then: original review cannot authorize a different role or subject.
+    with pytest.raises(ValueError):
+        invoke(finance_case, facts=(fact,))
+    assert finance_case[6] == []
+    assert finance_case[2].runtime.ledger.snapshot()["calls"] == 0
+
+
+@pytest.mark.parametrize(
+    "change", [{"value": 999}, {"unit": "million"}, {"period": "2024"}]
+)
+def test_fact_value_denied_when_frozen_evidence_differs(finance_case, change):
+    # Given
+    fact = finance_case[4][0]
+    fact = fact.model_copy(update={"evidence": fact.evidence.model_copy(update=change)})
+    # When / Then
+    with pytest.raises(ValueError):
+        invoke(finance_case, facts=(fact,))
+    assert finance_case[6] == []
