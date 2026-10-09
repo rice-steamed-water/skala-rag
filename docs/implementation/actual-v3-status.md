@@ -2,11 +2,67 @@
 
 [문서 홈](../README.md) · [루트 README](../../README.md) · [Python 직접 실행](python-execution.md) · [Source-only 계약](source-only-v3.md)
 
-기준: 2026-10-07, 현재 main 커밋 `a830c7d7271544eefe4a9447401291e788fdfb74`(#223/PR #225 병합). 이 문서는 해당 소스와 부모 검증 기록을 대조한 상태 기록이다. 본문 5절+REFERENCE 구현·병합·합성 실행은 확인됐지만 전체 actual-v3는 HOLD다. 목표는 실제 자료로 조사부터 평가·선정·의미 검증·PDF·재현까지 연결하는 전체 actual-v3이며, #96/#168은 OPEN/blocked다. #219/#220의 [합성 offline 데모](offline-delivery.md)는 완료 이력으로 보존한다.
+기준: 2026-10-07, 현재 main 커밋 `a830c7d7271544eefe4a9447401291e788fdfb74`(#223/PR #225 병합). 이 문서는 해당 소스와 부모 검증 기록을 대조한 상태 기록이다. 본문 5절+REFERENCE 구현·병합·합성 실행은 확인됐지만 전체 actual-v3는 HOLD다. 목표는 실제 자료로 조사부터 평가·선정·의미 검증·PDF·재현까지 연결하는 전체 actual-v3다. #96은 PR #229 병합으로 CLOSED이고 #168은 아래 [무과금 연결 갱신](#168-무과금-연결-갱신-2026-10-08) 상태다. #219/#220의 [합성 offline 데모](offline-delivery.md)는 완료 이력으로 보존한다.
+
+## #168 무과금 연결 갱신 (2026-10-08)
+
+작업 브랜치 `feat/168-completion-connections`의 상태다. 아직 main에 병합되지 않았다.
+
+- 사용자가 고른 순서는 연결 구현을 먼저 하고, 원문 기반 독립 agent review를 붙이는 것이다. 유료 full scored actual E2E는 계속 보류다. 새 actual scored run은 실행되거나 증명되지 않았다.
+- 공개 연결 점검 [`examples/v3_connection_check.py`](../../examples/v3_connection_check.py)가 원래 outer graph, 5개 approved evaluator(Founder/Technology/Market/Moat/Business & Deal), EvidenceResearch, Generator/Judge, PDF를 공유 runtime·ledger 하나로 실행한다. 응답은 MockTransport 통제 응답이고 `actual_provider_calls=0`, `external_requests=0`이다. capture/replay/tamper 사용법은 [연결 점검](connection-check.md)에 있다.
+- 제안된 Core artifact는 [`approval_registry.py`](../../src/skala_rag/scoring/approval_registry.py)의 code-owned pin으로 bytes 그대로 보존된다. pin 일치, 원문 capture 무결성(`verify_original_capture`), 의미 심사(`SourceBoundReviewResolver`)는 서로 다른 검사다. 연결 점검에는 positive semantic review가 하나도 없고 미상 기준 23개는 모두 Missing이다.
+- 부모 검증 기록: evaluator 테스트 525개, audit 수정 테스트 353개, controller 테스트 954개 통과, 실제 provider 호출 0. 이 문서 작업에서는 재실행하지 않았다. 합성 통과이지 실제 평가 성공은 아니다.
+- Dexory의 기존 actual source-review PDF는 [Source 검토 보고서](source-review-report.md)에 보관된 점수 없는 최소 최종 보고서다(PR #229 병합, #96 CLOSED). 새 scored run이 아니다.
+- 저장소 정적 타입 검사는 깨끗하지 않다. 이전부터 쌓인 type debt가 남아 있고, 이번 연결 작업이 이를 해소했다고 주장하지 않는다.
+- 남은 gate: 비용 승인 아래 실제 provider로 하는 유료 scored E2E, 그리고 원문 근거에 대한 신뢰된 reviewer의 positive semantic review. 둘 다 없으면 `final_allowed=False`와 점수 없음 상태를 유지한다.
+
+### 실제 원문 독립 심사와 사전 검증
+
+2026-10-08 보존 public-discovery packet의 후보 5개(avatarin, Autman Robotics, Kisui, Dexory, Unbox Robotics)를 독립 심사했다. claim 35개, 인용 59개, 참조 capture 8개 전체를 검토했고, 부모도 원본 body·추출문·파일 hash, codepoint/UTF-8 인용 범위, 입력 pin과 HTML 재추출을 직접 대조했다. 무결성 오류는 0건이다. 역사적 발행 진술로 제한해 지지되는 claim은 24개, 미상은 11개다. 제안 observation 14개는 operational 승인 기록이 아니며 실제 자격 승인·criterion rating·scored 후보는 모두 0개다.
+
+로컬 심사 산출물은 `outputs/issue168-original-agent-review/report.json`과 `findings.md`다. JSON SHA-256은 `d3381ac6836cdcc97c16e55327a0ec66084b8a0f19a5890c56df282366290d7f`, Markdown SHA-256은 `066728b558c723e67782320fe026104b9b08fb4cff634d9b47ac8adb04736602`다. 출력과 원문은 Git에 포함하지 않는다.
+
+현재 실행을 막는 구체 조건은 다음과 같다.
+
+- 요청 기준일은 2026-10-07인데 참조 capture 8개 모두 10월 8일 획득이다. 과거 기사 발행일만으로 기준일 이전의 동일 edition을 증명하지 못한다. 사용자가 10월 9일 재개에서 “10월 7일 유지”를 명시했으므로 이 packet을 실제 평가 입력에 사용하지 않는다.
+- 역사적 투자·제품 설명은 현재 비상장 여부, 최신 투자 단계·정확한 closing date, Exit 상태, 평가 충분성이나 등급 근거를 대신하지 않는다. Dexory의 USD165M headline은 본문의 USD100M Series C와 확대된 debt facility를 합친 funding 설명이며 전액 equity나 revenue가 아니다.
+- packet의 `simple-html-text-v1`과 resolver의 HTML parser는 다르다. 원문 심사 결과를 사용할 때에도 승인된 추출문에 인용 범위를 다시 맞추고 정확한 candidate·기준일·snapshot·rubric·request/receipt에 결속해야 한다. 이 보고서는 그 기록을 발급하지 않았다.
+- 기존 SQLite index는 실제 PI 기술 PDF 2개·Chunk 36개다. fresh-process read-only 재개 검증과 BGE-M3 revision `5617a9f61b028005a4858fdac845db406aefb181`의 파일 15개 hash 검증은 통과했다. 보존 query vector를 사용한 재개 확인이며 새 embedding 추론은 아니다. 이 corpus를 위 5개 기업의 근거로 이름만 바꿔 사용할 수 없다.
+- 사용자가 10월 9일 “예산 1$ 승인”을 명시했다. 새 실제 실행의 누적 USD1 한도에 최대 40회 호출·60분·입력 200만/출력 12만 토큰·transport 재시도 없음 제한을 적용한다. 기존 소진된 Dexory 예산은 초기화하지 않는다. 이 승인은 누락된 기업 사실이나 자격 판정을 대신하지 않는다.
+
+따라서 전체 actual-v3는 계속 HOLD다. 이번 심사·사전 검증의 새 외부 요청·provider 호출·다운로드는 0이며, 실제 scored 실행·그 실행의 replay·최종 scored PDF는 아직 검증되지 않았다.
+
+### 10월 7일 보존본으로 재개 (2026-10-09)
+
+기준일을 유지한 대안 입력은 기존 `2026-10-07-initial` archive의 PI·Skild 자료다. 부모가 봉인 파일 71개와 claim 22개의 원문·추출문 hash, Unicode 인용 범위 hash, 10월 7일 획득 시각을 확인했고 오류는 0건이다. 원래 Source-only 소비자의 기준일 포함·이전 기준일 제외 테스트도 `2 passed in 1.36s`, exit 0으로 통과했다. 이는 PI 7개·Skild 12개 Source의 미심사 입력 소비이며 실제 평가 성공은 아니다.
+
+독립 원문 심사 산출물은 `outputs/issue168-cutoff-original-review/report.json`(SHA-256 `cd4a8f68f51198496da0c7d0ed8f23236190d1f609fbd8155ccb65cb63b73af5`)과 `findings.md`(SHA-256 `a0c7fb06b1d2a62205ee01ce5ee5df2330d76f350af05433194aa80c6927e925`)다. 부모가 22개 claim의 누락 없는 수록과 입력 pin을 확인했다. 역사적 발행 진술의 제한된 지지와 실제 자격·등급 승인은 다르며 이 심사는 operational resolver 기록을 만들지 않았다.
+
+PI의 Series C 날짜는 Caplight의 2026-03-28과 CB Insights의 2026-06-01이 충돌하고, 인수 rumor는 Exit 완료나 미완료 어느 쪽도 증명하지 않는다. Skild의 Zebra 거래는 Skild가 매수자이며 Skild 자체의 Exit가 아니다. 회사가 발표한 USD100M ARR와 약 10개월 배포 이후 누적 인식 USD50M은 별개로 보존하고 회계 기간이 정렬된 매출로 변환하지 않는다. 원문 심사의 짧은 anchor만으로 CapitalG의 투자주체를 부정하거나 S1 날짜를 완전히 미상으로 확정하지도 않는다. CapitalG의 전체 문장과 Skild blog index의 2026-08-18 날짜는 추가 맥락으로 보존하되 자격·등급을 대신하지 않는다.
+
+원래 `check_eligibility` 계약은 `exit_completed=false`에도 같은 후보의 유효한 company Evidence를 요구한다. 검색 결과가 없거나 인수 rumor가 미확인이라는 이유로 false를 만들 수 없다. 보존된 성공 Source 19개의 전체 추출문을 추가로 확인했지만, 두 후보의 Exit 미완료를 승인할 명시 근거는 확보하지 못했다. navigation의 다른 회사 투자 단계나 일반 broker 문구도 후보 사실로 승격하지 않았다.
+
+승인 모델 `gpt-4.1-mini-2025-04-14`에 기존 키로 `GET https://api.openai.com/v1/models/gpt-4.1-mini-2025-04-14`를 1회 요청해 HTTP200과 정확한 model ID 접근을 확인했다. 키는 기록하지 않았고 재시도·모델 추론은 0회다. 이 metadata 확인은 실제 Responses 생성 성공이나 runtime reserve/settle 성공의 증거가 아니다. 사전 검증 기록은 `outputs/issue168-actual-preflight-20261009/receipt.json`이며 공식 RunManifest가 아니다.
+
+실행 예산·모델 접근은 확인됐지만 자격 필드·현재 단계·D05/D06 충분성의 정확한 근거와 snapshot 결속은 여전히 부족하다. 따라서 PI·Skild도 아직 적격 후보로 승격하지 않았고 유료 추론·scored replay·최종 PDF는 미실행이다.
+
+같은 브랜치에 Python callable `preflight_sources`, `actual`, `replay`(`run_actual`, `run_replay` wrapper)가 구현됐다. 누적 USD1·40회·60분·토큰 한도와 campaign marker가 코드에 들어 있고 controlled 테스트로 연결을 확인했다. 부모가 socket을 차단하고 새 준비 함수를 실제 자산으로 실행해 Source 19개·PI PDF 2개·Chunk 36개·모델 파일 15개를 검증했다(exit 0). 두 후보의 반환 eligibility는 `unknown`이고, `outputs/parent-retained-source-preflight-20261009/receipt.json`은 `EXTERNAL_AUTHORITY_REQUIRED`, provider 0, 발행 금지다. 이는 실제 scored 실행이 아니다. 호출 형태와 운영자가 공급해야 하는 packet·권위는 [actual-v3 실행과 replay](actual-execution-v3.md)에 정리했다.
 
 ## 요구사항별 현재 상태
 
+### 최종 연결 실행과 전달 범위 (2026-10-09)
+
+사용자가 완료 범위를 “전체 그래프 연결 및 구현 완료 후 최종 1회 실행”으로 정했다. 전체 Graph 연결은 원래 5개 approved evaluator와 6개 차원의 원자적 합류, selector, Generator/Judge, PDF 경로를 유지한 구현 기준이다. 실제 기업의 scored 완료와 구분한다.
+
+최종 연결 실행은 `uv run --offline --no-sync python examples/v3_connection_check.py outputs/final-graph-connection-20261009` 한 번이며 exit 0이었다. 같은 snapshot을 쓴 5개 branch와 6개 차원 승격, 보고서 completed, PDF 3페이지·SUMMARY 비율 0.1164를 확인했다. 응답은 명시적 통제 응답으로 mock 8회·index retrieval 1회이며 실제 provider·외부 요청은 0회다. ledger의 비용 값 8은 합성 예약 단위이지 청구액이나 실제 USD 사용량이 아니다. PDF SHA-256은 `06c8ea26083185eeb8f7c4ee698d1fda5f73cf10d8cf08a9c9b8147c03a4faa0`으로 이 세션에서 모든 페이지를 확인한 PDF와 같다. 발행·final은 false다.
+
+동일 소스의 부모 전체 회귀는 5,702 passed·10 skipped, exit 0이었다. skip은 미제공 실제 review, opt-in live API, 일부 Git 제외 원문 자산 때문이며 actual 성공으로 세지 않는다. Ruff·389개 파일 format·격리 offline build는 통과했다. 새 production 연결 코드의 LSP 오류는 0이고 기존 controller의 타입 오류 51개는 별도 부채로 남는다.
+
+실제 실행 입력은 로컬 `outputs/actual-execution-inputs-20261009/inputs.json`에 두 후보·회사 Source 19개·index Source 2개와 원문 심사 보고서 pin을 연결했다. 관찰·rating 승인 기록은 0이므로 실제 기업 평가가 가능해졌다고 주장하지 않는다. 실제 유료 scored 실행·그 실행의 replay·scored PDF는 별도 미완료 상태로 Draft PR에 명시한다.
+
 R01~R12는 [팀 가이드의 필수 요구](../README.md#필수-요구사항과-검증-위치) ID다. 아래 경로는 현재 소스·기존 테스트 위치이며, 테스트 파일의 존재를 이번 실행 PASS로 해석하지 않는다.
+
+아래 표는 기준 main의 검증 이력이다. `fixture-only`, live 거절, Market callable 부재는 그 기준의 제한이며, #168 작업 브랜치에서는 위 연결 갱신처럼 명시적인 admission과 실제 callable 연결을 구현했다. 실제 provider·기업 사실·긍정적 의미 심사·최종 발행은 여전히 증명되지 않았다.
 
 | 요구사항 | 현재 소스 / 테스트 / 산출물 | fixture와 actual의 경계 | 남은 작업 |
 | --- | --- | --- | --- |
@@ -38,7 +94,7 @@ R01~R12는 [팀 가이드의 필수 요구](../README.md#필수-요구사항과-
 
 [목차 승인 #35](https://github.com/rice-steamed-water/skala-rag/issues/35#issuecomment-6029117687), [#96 기록](https://github.com/rice-steamed-water/skala-rag/issues/96#issuecomment-6029118157), [#168 기록](https://github.com/rice-steamed-water/skala-rag/issues/168#issuecomment-6029118571)에 따라 제목은 정확히 `SUMMARY` → `COMPANY & TEAM` → `TECHNOLOGY` → `MARKET` → `INVESTMENT ASSESSMENT & RISKS` → `REFERENCE`다. [#223](https://github.com/rice-steamed-water/skala-rag/issues/223)/[PR #225](https://github.com/rice-steamed-water/skala-rag/pull/225)에서 기존 Generator/Validator/HTML/PDF 정합화를 구현·병합·검증했다. 목차 완료와 실제 평가·최종 발행은 별개이며 `ReportRunV3.final_allowed=False` guard는 유지한다.
 
-구현 담당에게 남은 것은 fixture-only research/scoring/context 및 Finance guard의 정당한 actual admission, 실제 callable·review resolver 연결, 공유 AdapterRuntime reserve/settle와 누적 ledger, 같은 run의 Generator/Judge/PDF·발행·저장·replay다. flag 하나나 승인 문자열로 guard를 해제하지 않는다. 사용자/controller에게 필요한 것은 구체 원문 근거의 심사 범위와 신뢰된 reviewer 권위, D05/D06 적용·충돌 처리의 run-scoped 판단, 실제 실행 시 authoritative 누적 budget/사용량과 제출 시 재배포 권한이다. 이미 승인된 Core/Finance 숫자·운영 산술을 다시 미승인으로 취급하지 않으며, 누락된 사실은 권한 승인만으로 채울 수 없다. `unknown`→`eligible`, missing→0점, 기술실패→투자 비추천, Warning→final 자동 승격은 금지한다.
+기준 main의 fixture-only research/scoring/context 및 Finance guard에 대한 명시적 admission, 실제 callable·review resolver, 공유 AdapterRuntime reserve/settle·누적 ledger와 같은 run의 Generator/Judge/PDF·저장·replay 연결은 #168 작업 브랜치에서 통제 응답으로 검증했다. 실제 기업 원문에 대한 긍정적 의미 심사와 실제 provider 실행·최종 발행은 남아 있다. 사용자/controller에게 필요한 것은 구체 원문 근거의 심사 범위와 신뢰된 reviewer 권위, D05/D06 적용·충돌 처리의 run-scoped 판단, 실제 실행 시 authoritative 누적 budget/사용량과 제출 시 재배포 권한이다. 이미 승인된 Core/Finance 숫자·운영 산술을 다시 미승인으로 취급하지 않으며, 누락된 사실은 권한 승인만으로 채울 수 없다. `unknown`→`eligible`, missing→0점, 기술실패→투자 비추천, Warning→final 자동 승격은 금지한다.
 
 ## 팀원 재현 전제
 
@@ -49,7 +105,7 @@ uv sync --frozen --offline
 uv run --offline --frozen python examples/v3_offline_demo.py
 ```
 
-의존성 캐시가 있어야 offline 설치가 된다. 캐시가 없는 최초 준비는 `uv sync --frozen`으로 설치하며 네트워크가 필요할 수 있다. 이 예제는 실제 기업 archive/PDF/index나 모델을 소비하지 않고 ReportLab 합성 데모를 만든다. [기존 Python 직접 호출](python-execution.md)과 [데모 산출물 확인법](offline-delivery.md)을 따른다. 새 entrypoint/runner는 없다.
+의존성 캐시가 있어야 offline 설치가 된다. 캐시가 없는 최초 준비는 `uv sync --frozen`으로 설치하며 네트워크가 필요할 수 있다. 이 예제는 실제 기업 archive/PDF/index나 모델을 소비하지 않고 ReportLab 합성 데모를 만든다. [기존 Python 직접 호출](python-execution.md)과 [데모 산출물 확인법](offline-delivery.md)을 따른다. #168 작업 브랜치의 추가 연결 실행·replay entrypoint는 [연결 점검](connection-check.md)을 따른다.
 
 actual 보유본 테스트는 fresh clone만으로 재현되지 않는다. archive는 Git 제외 로컬 자산이며 아래 `SKALA_COMPANY_ARCHIVE_ROOT`는 원래 봉인 collection 전체가 있는 경로여야 한다. PDF source-proof의 `SKALA_APPROVED_SOURCE_ROOT`는 승인된 `data/local`과 `data/manifests`를 포함하는 root, `SKALA_APPROVED_INDEX`는 기존 승인 SQLite index 파일이다. 예시 경로는 개인 경로가 아닌 placeholder이며 실제 자산 경로로 바꾼다.
 
