@@ -59,6 +59,7 @@ from skala_rag.graph.actual_replay_v3 import (
 from skala_rag.graph.candidate_workflow_v3 import run_candidate_report_v3
 from skala_rag.graph.candidates_v3 import CandidateStagesV3
 from skala_rag.graph.research_artifacts_v3 import EvidenceResearchBindingV3
+from skala_rag.prompt.versions import ACTUAL_COMPOSITION_VERSION
 from skala_rag.rag.adapter import IndexedRetriever
 from skala_rag.rag.sqlite_index import SQLiteIndexStore
 from skala_rag.rag.sqlite_retrieve import SQLiteDenseSearch
@@ -752,7 +753,7 @@ def _run(
 
                 attempt = OpenAIResponsesAttempt(
                     api_key=api_key if scope == "actual" else None,
-                    prompt_version="actual-v3-1",
+                    prompt_version=ACTUAL_COMPOSITION_VERSION,
                     schema_version=schema,
                     clock=journal,
                     http_transport=wire,
@@ -1073,7 +1074,7 @@ def _run(
                 uncommitted=True,
                 policy_version=packet.run_input.policy_version,
                 corpus_version=packet.run_input.corpus_version,
-                prompt_versions={"actual_composition": "actual-v3-1"},
+                prompt_versions={"actual_composition": ACTUAL_COMPOSITION_VERSION},
                 model_versions={
                     "openai": APPROVED_MODEL,
                     "embedding": metadata.model_revision,

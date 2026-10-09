@@ -7,6 +7,7 @@ HTTP request leaves the process. Synthetic model files/vectors are not BGE proof
 
 import importlib.util
 import json
+import shutil
 import socket
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
@@ -66,6 +67,7 @@ from skala_rag.graph.actual_inputs_v3 import (
 )
 from skala_rag.graph.actual_replay_v3 import CapturedLocalEncoder
 from skala_rag.graph.actual_runner_v3 import ROOT, run_actual, run_replay
+from skala_rag.prompt.versions import ACTUAL_COMPOSITION_VERSION
 from skala_rag.prompts.evidence_extraction import ClaimDraft
 from skala_rag.rag.corpus import manifest_hash
 from skala_rag.rag.dense import QueryVector
@@ -1240,6 +1242,103 @@ def test_same_runner_actual_origin_replay_and_repeated_report_roles(case, monkey
         json.loads((replay / "context.json").read_bytes())["execution_scope"]
         == "actual"
     )
+    manifest = json.loads((replay / "manifest.json").read_bytes())
+    assert manifest["prompt_versions"]["actual_composition"] == (
+        ACTUAL_COMPOSITION_VERSION
+    )
+    assert ACTUAL_COMPOSITION_VERSION == "actual-v3-1"
+
+
+def test_prompt_resource_commitment_changes_reject_replay_before_authority(
+    case, monkeypatch, tmp_path
+):
+    # Given: a synthetic original capture and every shipped prompt JSON committed.
+    transport, seen, _ = wire(case)
+    intercept_native(monkeypatch, transport)
+    original = invoke(case, execute=True, api_key="SYNTHETIC-NOT-A-CREDENTIAL")
+    assert receipt(original)["status"] == "completed", receipt(original)
+    requests_before = len(seen)
+    expected_resources = {
+        str(path.relative_to(ROOT))
+        for path in (ROOT / "src/skala_rag/prompt/text").glob("*.json")
+    }
+    committed_resources = {
+        name
+        for name in runner_module.implementation_commitments(ROOT)
+        if name.startswith("src/skala_rag/prompt/text/") and name.endswith(".json")
+    }
+    commitment_function = runner_module.implementation_commitments
+    assert expected_resources
+    assert committed_resources == expected_resources
+
+    mirror = tmp_path / "commitment-mirror"
+    for name in [*sorted(expected_resources), "uv.lock"]:
+        destination = mirror / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / name, destination)
+    assert {
+        name: pin
+        for name, pin in commitment_function(mirror).items()
+        if name in expected_resources
+    } == {
+        name: pin
+        for name, pin in commitment_function(ROOT).items()
+        if name in expected_resources
+    }
+
+    def mirrored_commitments(root):
+        assert root == ROOT
+        commitments = commitment_function(root)
+        commitments = {
+            name: pin
+            for name, pin in commitments.items()
+            if name not in expected_resources
+        }
+        mirror_commitments = commitment_function(mirror)
+        commitments.update(
+            {
+                name: pin
+                for name, pin in mirror_commitments.items()
+                if name in expected_resources
+            }
+        )
+        return dict(sorted(commitments.items()))
+
+    callbacks = []
+    authority = replace(
+        case["authority"],
+        authenticate_inputs=lambda _: callbacks.append("input") or True,
+        verify_replay_origin=lambda _: callbacks.append("origin") or True,
+    )
+
+    def replay(reason, suffix):
+        out = run_replay(
+            case["tmp"] / suffix,
+            inputs=case["path"],
+            inputs_sha256=file_digest(case["path"]),
+            authority=authority,
+            original_capture=original / "capture.json",
+            original_capture_sha256=file_digest(original / "capture.json"),
+        )
+        assert receipt(out)["reason"] == reason, receipt(out)
+        assert receipt(out)["actual_provider_calls"] == 0
+        assert callbacks == []
+        assert len(seen) == requests_before
+
+    monkeypatch.setattr(
+        runner_module, "implementation_commitments", mirrored_commitments
+    )
+    resource = mirror / "src/skala_rag/prompt/text/demo_common.json"
+    original_fragments = json.loads(resource.read_bytes())
+    changed_fragments = list(original_fragments)
+    changed_fragments[0] += " task10"
+    resource.write_text(
+        json.dumps(changed_fragments, ensure_ascii=False), encoding="utf-8"
+    )
+    assert mirrored_commitments(ROOT) != commitment_function(ROOT)
+    replay("REPLAY_ORIGIN_MISMATCH", "changed-prompt-replay")
+    resource.unlink()
+    replay("REPLAY_ORIGIN_MISMATCH", "missing-prompt-replay")
 
 
 def test_native_intercepted_stub_judge_cannot_complete_or_authorize_replay(

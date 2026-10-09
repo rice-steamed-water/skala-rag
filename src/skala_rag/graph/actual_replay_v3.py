@@ -165,14 +165,18 @@ class CapturedLocalEncoder:
 
 
 def implementation_commitments(root: Path) -> dict[str, str]:
-    """Commit dirty code bytes, original configuration and actual renderer fonts."""
-    paths = [
-        *sorted((root / "src/skala_rag").rglob("*.py")),
-        *sorted((root / "configs").rglob("*.json")),
-        *sorted((root / "configs").rglob("*.yaml")),
-        *sorted((root / "src/skala_rag/reporting/fonts").glob("*.ttf")),
-        root / "uv.lock",
-    ]
+    """Commit code, configuration, prompt resources and renderer fonts."""
+    paths = sorted(
+        [
+            *sorted((root / "src/skala_rag").rglob("*.py")),
+            *sorted((root / "configs").rglob("*.json")),
+            *sorted((root / "configs").rglob("*.yaml")),
+            *sorted((root / "src/skala_rag/prompt/text").glob("*.json")),
+            *sorted((root / "src/skala_rag/reporting/fonts").glob("*.ttf")),
+            root / "uv.lock",
+        ],
+        key=lambda path: str(path.relative_to(root)),
+    )
     return {str(p.relative_to(root)): file_digest(p) for p in paths}
 
 
