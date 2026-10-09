@@ -68,6 +68,7 @@ from skala_rag.scoring.approval_registry import pinned_approval_registry
 from skala_rag.scoring.approved_consumers import ActualAdmissionV3, ApprovedPolicySource
 from skala_rag.scoring.approved_policy import LiveScoringGates, ScoringRuntimeBinding
 from skala_rag.scoring.catalog import load_policy
+from skala_rag.settings import RuntimeDocument, load_runtime_document
 from skala_rag.tools.actual_wire_capture import ActualWireCapture
 from skala_rag.tools.company_archive import _load_archive
 from skala_rag.tools.openai_attempt import OpenAIResponsesAttempt, byte_bound_allowance
@@ -93,15 +94,25 @@ def _write(out: Path, name: str, value) -> None:
     (out / name).write_bytes(canonical(value))
 
 
-def _allowance(schema_version: str, system: str, user: str, schema: type[BaseModel]):
+def _allowance(
+    schema_version: str,
+    system: str,
+    user: str,
+    schema: type[BaseModel],
+    *,
+    runtime_document: RuntimeDocument | None = None,
+):
+    document = (
+        runtime_document if runtime_document is not None else load_runtime_document()
+    )
     return byte_bound_allowance(
         system,
         user,
         schema,
         schema_version=schema_version,
-        max_output_tokens=2000,
-        usd_per_input_token=Decimal("0.0000004"),
-        usd_per_output_token=Decimal("0.0000016"),
+        max_output_tokens=document.profiles.actual_v3.request_output_tokens,
+        usd_per_input_token=document.llm.usd_per_input_token,
+        usd_per_output_token=document.llm.usd_per_output_token,
     )
 
 
@@ -236,6 +247,7 @@ def run_actual(
     api_key: str | None = None,
     execution_scope: Literal["actual", "controlled_response"] = "actual",
     transport_for: Callable[[str], httpx.MockTransport] | None = None,
+    runtime_document: RuntimeDocument | None = None,
 ) -> Path:
     """Preflight by default; explicitly execute original consumers when admitted.
 
@@ -252,6 +264,7 @@ def run_actual(
         api_key=api_key,
         scope=execution_scope,
         transport_for=transport_for,
+        runtime_document=runtime_document,
     )
 
 
@@ -263,6 +276,7 @@ def run_replay(
     authority: ActualAuthorityV3,
     original_capture: Path,
     original_capture_sha256: str,
+    runtime_document: RuntimeDocument | None = None,
 ) -> Path:
     """Replay only an externally pinned actual-origin campaign, without a key."""
     return _run(
@@ -276,6 +290,7 @@ def run_replay(
         transport_for=None,
         original_capture=original_capture,
         original_capture_sha256=original_capture_sha256,
+        runtime_document=runtime_document,
     )
 
 
@@ -291,6 +306,7 @@ def _run(
     transport_for,
     original_capture=None,
     original_capture_sha256=None,
+    runtime_document=None,
 ) -> Path:
     out = Path(output_dir).resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -424,16 +440,28 @@ def _run(
             raise ActualInputError("REPLAY_AUTHORITY_REJECTED")
         if authority.authenticate_inputs(packet.model_copy(deep=True)) is not True:
             raise ActualInputError("INPUT_AUTHORITY_REJECTED")
+        document = (
+            runtime_document
+            if runtime_document is not None
+            else load_runtime_document()
+        )
+        # Supplied snapshots retain identity, but copies cannot grant authority.
+        RuntimeDocument.model_validate_json(document.model_dump_json(), strict=True)
+        actual_settings = document.profiles.actual_v3
+        llm_settings = document.llm
         with journal.installed():
             started = journal.now()
             schema = packet.run_input.schema_version
             limits = RuntimeLimits(
                 schema_version=schema,
-                max_calls=40,
-                tool_max_calls={"openai": 40, "retrieve": 40},
-                max_input_tokens=2_000_000,
-                max_output_tokens=120_000,
-                max_cost_usd=Decimal("1"),
+                max_calls=actual_settings.max_calls,
+                tool_max_calls={
+                    "openai": actual_settings.openai_max_calls,
+                    "retrieve": actual_settings.retrieval_max_calls,
+                },
+                max_input_tokens=actual_settings.max_input_tokens,
+                max_output_tokens=actual_settings.max_output_tokens,
+                max_cost_usd=actual_settings.max_cost_usd,
             )
             runtime_policy = RuntimePolicy(
                 schema_version=schema,
@@ -450,10 +478,10 @@ def _run(
             )
             budget = ToolBudget(
                 schema_version=schema,
-                max_calls=40,
-                max_retries=0,
-                timeout_seconds=60,
-                deadline=started + timedelta(hours=1),
+                max_calls=actual_settings.max_calls,
+                max_retries=actual_settings.max_retries,
+                timeout_seconds=actual_settings.timeout_seconds,
+                deadline=started + timedelta(seconds=actual_settings.deadline_seconds),
             )
             readiness = Readiness(
                 schema_version=schema,
@@ -470,9 +498,14 @@ def _run(
             )
             allowance = Allowance(
                 schema_version=schema,
-                input_tokens=1,
-                output_tokens=2000,
-                max_cost_usd=Decimal("0.0032004"),
+                input_tokens=actual_settings.request_input_tokens,
+                output_tokens=actual_settings.request_output_tokens,
+                max_cost_usd=(
+                    actual_settings.request_input_tokens
+                    * llm_settings.usd_per_input_token
+                    + actual_settings.request_output_tokens
+                    * llm_settings.usd_per_output_token
+                ),
             )
             gates = LiveScoringGates(
                 run_id=packet.run_id,
@@ -598,11 +631,25 @@ def _run(
                     "scope": scope,
                     "limits": limits.model_dump(mode="json"),
                     "started_at": started.isoformat(),
-                    "deadline": (started + timedelta(hours=1)).isoformat(),
-                    "input_usd_per_token": "0.0000004",
-                    "output_usd_per_token": "0.0000016",
-                    "full_token_caps_upper_bound_usd": "0.992",
-                    "transport_retries": 0,
+                    "deadline": (
+                        started + timedelta(seconds=actual_settings.deadline_seconds)
+                    ).isoformat(),
+                    "input_usd_per_token": format(
+                        llm_settings.usd_per_input_token, "f"
+                    ),
+                    "output_usd_per_token": format(
+                        llm_settings.usd_per_output_token, "f"
+                    ),
+                    "full_token_caps_upper_bound_usd": format(
+                        (
+                            actual_settings.max_input_tokens
+                            * llm_settings.usd_per_input_token
+                            + actual_settings.max_output_tokens
+                            * llm_settings.usd_per_output_token
+                        ).normalize(),
+                        "f",
+                    ),
+                    "transport_retries": actual_settings.max_retries,
                 }
                 authority.campaign_directory.mkdir(parents=True, exist_ok=True)
                 with authority.campaign_marker.open("x", encoding="utf-8") as marker:
@@ -710,6 +757,7 @@ def _run(
                     clock=journal,
                     http_transport=wire,
                     observe_wire=observe_wire,
+                    llm_settings=llm_settings,
                 )
                 attempts.append(attempt)
                 return attempt
@@ -731,7 +779,9 @@ def _run(
                     budget=budget,
                     readiness=readiness,
                     transport=transport(role),
-                    allowance_for=lambda s, u, t: _allowance(schema, s, u, t),
+                    allowance_for=lambda s, u, t: _allowance(
+                        schema, s, u, t, runtime_document=document
+                    ),
                 )
 
             def evaluate(role: Branch, frozen):
@@ -834,7 +884,7 @@ def _run(
                 corpus_version=packet.run_input.corpus_version,
                 index_version=snapshot.index_version,
                 as_of=packet.run_input.as_of,
-                top_k=3,
+                top_k=actual_settings.retrieval_top_k,
                 allowed_source_ids=tuple(packet.allowed_source_ids),
                 clock=journal,
                 schema_version=schema,
@@ -878,7 +928,9 @@ def _run(
                 readiness=readiness,
                 generator_transport=transport("generator"),
                 judge_transport=transport("judge"),
-                allowance_for=lambda s, u, t: _allowance(schema, s, u, t),
+                allowance_for=lambda s, u, t: _allowance(
+                    schema, s, u, t, runtime_document=document
+                ),
             )
             renders = []
 

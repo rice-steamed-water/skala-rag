@@ -73,6 +73,7 @@ from skala_rag.rag.index_v3 import build_index_plan, write_index
 from skala_rag.rag.sqlite_index import SQLiteIndexStore
 from skala_rag.scoring.approval_registry import pinned_approval_registry
 from skala_rag.scoring.catalog import load_policy
+from skala_rag.settings import load_runtime_document
 from skala_rag.tools.company_research import FieldObservation, StageObservation
 from skala_rag.tools.source_fetch import content_hash
 
@@ -597,6 +598,154 @@ def test_preflight_defaults_to_no_paid_action(case):
     assert receipt(out)["ledger"]["calls"] == 0
     assert not case["encoder_calls"]
     assert not case["authority"].campaign_marker.exists()
+
+
+def test_actual_composition_loads_once_and_preserves_snapshot_identity(
+    case, monkeypatch
+):
+    # Given
+    document = load_runtime_document()
+    loads, attempts = [], []
+    original_attempt = runner_module.OpenAIResponsesAttempt
+
+    def load():
+        loads.append(document)
+        return document
+
+    def attempt(**kwargs):
+        attempts.append(kwargs)
+        return original_attempt(**kwargs)
+
+    monkeypatch.setattr(runner_module, "load_runtime_document", load)
+    monkeypatch.setattr(runner_module, "OpenAIResponsesAttempt", attempt)
+    transport, seen, _ = wire(case)
+    # When
+    out = invoke(
+        case,
+        execute=True,
+        execution_scope="controlled_response",
+        transport_for=transport,
+    )
+    # Then
+    assert receipt(out)["status"] == "completed", receipt(out)
+    assert loads == [document]
+    assert attempts and seen
+    assert all(a["llm_settings"] is document.llm for a in attempts)
+    assert all(type(a["http_transport"]) is httpx.MockTransport for a in attempts)
+    assert len({id(a["clock"]) for a in attempts}) == 1
+    campaign = json.loads((out / "campaign.json").read_bytes())
+    assert campaign["limits"]["max_calls"] == 40
+    assert campaign["input_usd_per_token"] == "0.0000004"
+    assert campaign["output_usd_per_token"] == "0.0000016"
+    assert campaign["full_token_caps_upper_bound_usd"] == "0.992"
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("max_calls", 41),
+        ("openai_max_calls", 41),
+        ("retrieval_max_calls", 41),
+        ("max_cost_usd", Decimal("2")),
+        ("timeout_seconds", 61.0),
+        ("max_retries", 1),
+    ],
+)
+def test_actual_document_copy_cannot_raise_authority(case, field, value):
+    # Given
+    document = load_runtime_document()
+    supplied = document.model_copy(
+        update={
+            "profiles": document.profiles.model_copy(
+                update={
+                    "actual_v3": document.profiles.actual_v3.model_copy(
+                        update={field: value}
+                    )
+                }
+            )
+        }
+    )
+    transport, seen, _ = wire(case)
+    # When
+    out = invoke(
+        case,
+        execute=True,
+        execution_scope="controlled_response",
+        transport_for=transport,
+        runtime_document=supplied,
+    )
+    # Then
+    assert receipt(out)["status"] == "preflight_blocked", receipt(out)
+    assert receipt(out)["actual_provider_calls"] == 0
+    assert seen == case["encoder_calls"] == []
+    assert not case["authority"].campaign_marker.exists()
+
+
+def test_actual_lower_shared_total_stops_before_second_request(case, monkeypatch):
+    # Given: independently approved lower total, not 40 for each tool.
+    document = load_runtime_document()
+    supplied = document.model_copy(
+        update={
+            "profiles": document.profiles.model_copy(
+                update={
+                    "actual_v3": document.profiles.actual_v3.model_copy(
+                        update={
+                            "max_calls": 1,
+                            "timeout_seconds": 12.0,
+                            "deadline_seconds": 90.0,
+                            "retrieval_top_k": 1,
+                        }
+                    )
+                }
+            )
+        }
+    )
+    case["authority"] = replace(
+        case["authority"],
+        live_gate_verifier=lambda gate, gates: (
+            getattr(gates, f"{gate}_reference") == case["packet"].approval_reference
+            and gates.limits.max_calls == 1
+            and gates.limits.max_cost_usd == 1
+        ),
+    )
+
+    def forbidden():
+        pytest.fail("supplied document must not reload defaults")
+
+    monkeypatch.setattr(runner_module, "load_runtime_document", forbidden)
+    transport, seen, _ = wire(case)
+    # When
+    out = invoke(
+        case,
+        execute=True,
+        execution_scope="controlled_response",
+        transport_for=transport,
+        runtime_document=supplied,
+    )
+    # Then: retrieval spends the shared total; no model request is available.
+    result = receipt(out)
+    assert result["status"] != "completed"
+    assert result["ledger"]["calls"] == 1
+    assert result["ledger"]["tool_calls"] == {"retrieve": 1}
+    assert seen == []
+    assert len(case["encoder_calls"]) == 1
+    campaign = json.loads((out / "campaign.json").read_bytes())
+    assert campaign["limits"]["max_calls"] == 1
+
+
+def test_input_authentication_rejects_before_operator_settings(case, monkeypatch):
+    # Given
+    case["authority"] = replace(case["authority"], authenticate_inputs=lambda _: False)
+
+    def forbidden():
+        pytest.fail("settings accessed before input authentication")
+
+    monkeypatch.setattr(runner_module, "load_runtime_document", forbidden)
+    # When
+    out = invoke(case)
+    # Then
+    assert receipt(out)["reason"] == "INPUT_AUTHORITY_REJECTED"
+    assert case["encoder_calls"] == []
 
 
 @pytest.mark.parametrize(

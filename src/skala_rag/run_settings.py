@@ -6,11 +6,12 @@ import platform
 import random
 import sys
 from collections.abc import Sequence
-from dataclasses import asdict, dataclass, field
+from dataclasses import InitVar, asdict, dataclass, field
 from pathlib import Path
 
 from skala_rag.agents import discovery
 from skala_rag.contracts import Candidate
+from skala_rag.settings import RuntimeDocument, load_runtime_document
 
 
 def _text(value: str) -> None:
@@ -31,25 +32,52 @@ class RunProfile:
     authority_reference: str
     policy_references: tuple[str, ...]
     code_version: str | None
-    max_candidates: int = field(default=5, init=False)
-    seed: int = field(default=42, init=False)
-    initial_company_research: int = field(default=1, init=False)
-    unknown_additional_retries: int = field(default=0, init=False)
-    evaluate_unknown: bool = field(default=False, init=False)
-    refill: bool = field(default=False, init=False)
-    paid_call_allowance: int = field(default=0, init=False)
-    paid_cost_usd: int = field(default=0, init=False)
-    past_paid_ledger: str = field(default="not_supplied_unverified", init=False)
-    enforcement: str = field(default="controller_handoff_only", init=False)
-    criterion_support: str = field(
-        default="actual_fact_verifier_approved_minimum_evidence", init=False
+    max_candidates: int = field(init=False)
+    seed: int = field(init=False)
+    initial_company_research: int = field(init=False)
+    unknown_additional_retries: int = field(init=False)
+    evaluate_unknown: bool = field(init=False)
+    refill: bool = field(init=False)
+    paid_call_allowance: int = field(init=False)
+    paid_cost_usd: int = field(init=False)
+    past_paid_ledger: str = field(init=False)
+    enforcement: str = field(init=False)
+    criterion_support: str = field(init=False)
+    coverage_target: str = field(init=False)
+    profile_version: str = field(init=False)
+    runtime_document: InitVar[RuntimeDocument | None] = field(
+        default=None, kw_only=True
     )
-    coverage_target: str = field(
-        default="missing_weight*100 < 30*applicable_weight", init=False
-    )
-    profile_version: str = field(default="recommended-run-profile-v1", init=False)
 
-    def __post_init__(self) -> None:
+    def __post_init__(self, runtime_document: RuntimeDocument | None) -> None:
+        self._validate_identity()
+        document = (
+            runtime_document
+            if runtime_document is not None
+            else load_runtime_document()
+        )
+        RuntimeDocument.model_validate_json(document.model_dump_json(), strict=True)
+        settings = document.profiles.recommended_run
+        object.__setattr__(self, "max_candidates", settings.max_candidates)
+        object.__setattr__(self, "seed", settings.seed)
+        object.__setattr__(
+            self, "initial_company_research", settings.initial_company_research
+        )
+        object.__setattr__(
+            self, "unknown_additional_retries", settings.unknown_additional_retries
+        )
+        object.__setattr__(self, "evaluate_unknown", settings.evaluate_unknown)
+        object.__setattr__(self, "refill", settings.refill)
+        object.__setattr__(self, "paid_call_allowance", settings.paid_call_allowance)
+        object.__setattr__(self, "paid_cost_usd", int(settings.paid_cost_usd))
+        object.__setattr__(self, "past_paid_ledger", settings.past_paid_ledger)
+        object.__setattr__(self, "enforcement", settings.enforcement)
+        object.__setattr__(self, "criterion_support", settings.criterion_support)
+        object.__setattr__(self, "coverage_target", settings.coverage_target)
+        object.__setattr__(self, "profile_version", settings.profile_version)
+        _validate_profile(self)
+
+    def _validate_identity(self) -> None:
         _identifier(self.run_id)
         _text(self.selection_source)
         _text(self.authority_reference)
@@ -70,10 +98,16 @@ def recommended_profile(
     authority_reference: str,
     policy_references: tuple[str, ...],
     code_version: str | None,
+    runtime_document: RuntimeDocument | None = None,
 ) -> RunProfile:
     """Select this profile explicitly; references are declarations, not attestations."""
     return RunProfile(
-        run_id, selection_source, authority_reference, policy_references, code_version
+        run_id,
+        selection_source,
+        authority_reference,
+        policy_references,
+        code_version,
+        runtime_document=runtime_document,
     )
 
 
@@ -200,15 +234,31 @@ class CandidateSelection:
 def _validate_profile(profile: RunProfile) -> None:
     if type(profile) is not RunProfile:
         raise ValueError("an explicit RunProfile is required")
-    expected = recommended_profile(
-        run_id=profile.run_id,
-        selection_source=profile.selection_source,
-        authority_reference=profile.authority_reference,
-        policy_references=profile.policy_references,
-        code_version=profile.code_version,
-    )
+    profile._validate_identity()
+    # These approved handoff choices are authority, not construction defaults.
+    # Compare without loading new operator settings into an existing receipt.
+    expected = {
+        "run_id": profile.run_id,
+        "selection_source": profile.selection_source,
+        "authority_reference": profile.authority_reference,
+        "policy_references": profile.policy_references,
+        "code_version": profile.code_version,
+        "max_candidates": 5,
+        "seed": 42,
+        "initial_company_research": 1,
+        "unknown_additional_retries": 0,
+        "evaluate_unknown": False,
+        "refill": False,
+        "paid_call_allowance": 0,
+        "paid_cost_usd": 0,
+        "past_paid_ledger": "not_supplied_unverified",
+        "enforcement": "controller_handoff_only",
+        "criterion_support": "actual_fact_verifier_approved_minimum_evidence",
+        "coverage_target": "missing_weight*100 < 30*applicable_weight",
+        "profile_version": "recommended-run-profile-v1",
+    }
     # JSON comparison is type-sensitive (unlike True == 1).
-    if _json(asdict(profile)) != _json(asdict(expected)):
+    if _json(asdict(profile)) != _json(expected):
         raise ValueError("profile differs from the recommended run choices")
 
 

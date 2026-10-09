@@ -14,6 +14,73 @@ from skala_rag.run_settings import (
     recommended_profile,
     replay_selection,
 )
+from skala_rag.settings import load_runtime_document
+
+
+def test_profile_resolves_once_after_required_identity_guards(monkeypatch):
+    # Given
+    document = load_runtime_document()
+    loads = []
+
+    def load():
+        loads.append(document)
+        return document
+
+    monkeypatch.setattr("skala_rag.run_settings.load_runtime_document", load)
+    # When
+    selected = profile()
+    normalize_and_select([], profile=selected, execution_mode="fixture")
+    # Then
+    assert loads == [document]
+    with pytest.raises(ValueError):
+        profile(run_id=" ")
+    assert loads == [document]
+
+
+def test_supplied_profile_document_avoids_reload_and_preserves_fields(monkeypatch):
+    # Given
+    from dataclasses import asdict, fields
+
+    document = load_runtime_document()
+
+    def forbidden():
+        pytest.fail("unused default document loaded")
+
+    monkeypatch.setattr("skala_rag.run_settings.load_runtime_document", forbidden)
+    # When
+    selected = profile(runtime_document=document)
+    # Then
+    assert tuple(asdict(selected)) == tuple(f.name for f in fields(selected))
+    assert "runtime_document" not in asdict(selected)
+    assert type(selected.paid_cost_usd) is int
+    assert selected.max_candidates == 5 and selected.seed == 42
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("max_candidates", 6),
+        ("seed", 43),
+        ("refill", True),
+        ("evaluate_unknown", True),
+        ("unknown_additional_retries", 1),
+        ("paid_call_allowance", 1),
+    ],
+)
+def test_operator_profile_cannot_change_approved_handoff(field, value):
+    # Given
+    document = load_runtime_document()
+    requested = document.profiles.recommended_run.model_copy(update={field: value})
+    supplied = document.model_copy(
+        update={
+            "profiles": document.profiles.model_copy(
+                update={"recommended_run": requested}
+            )
+        }
+    )
+    # When / Then
+    with pytest.raises(ValueError):
+        profile(runtime_document=supplied)
 
 
 def profile(**overrides):
