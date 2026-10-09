@@ -18,11 +18,9 @@ import argparse
 import hashlib
 import json
 import math
-import os
 import time
 from collections import Counter
 from datetime import UTC, date, datetime, timedelta
-from decimal import Decimal
 from pathlib import Path
 
 from skala_rag.agents.evidence_research import (
@@ -32,6 +30,7 @@ from skala_rag.agents.evidence_research import (
 from skala_rag.contracts import ToolBudget
 from skala_rag.contracts.candidates import Candidate
 from skala_rag.contracts.coverage import ResearchGap
+from skala_rag.contracts.interfaces import Clock as RuntimeClock
 from skala_rag.graph.candidates import StageFailure
 from skala_rag.prompts.evidence_extraction import PROMPT_VERSION, ExtractionOutput
 from skala_rag.rag.adapter import IndexedRetriever
@@ -43,6 +42,12 @@ from skala_rag.rag.local_bge_validation import MODEL, REVISION, LocalEncoder
 from skala_rag.rag.query_local import LocalQueryEncoder
 from skala_rag.rag.sqlite_index import SQLiteIndexStore
 from skala_rag.rag.sqlite_retrieve import SQLiteDenseSearch
+from skala_rag.settings import (
+    M2EvidenceValidationSettings,
+    RuntimeDocument,
+    load_runtime_document,
+    resolve_environment_credential,
+)
 from skala_rag.tools.openai_attempt import OpenAIResponsesAttempt, byte_bound_allowance
 from skala_rag.tools.runtime import (
     AdapterRuntime,
@@ -61,17 +66,6 @@ CANDIDATE_ID = "co-physical-intelligence"
 AS_OF = date(2026, 9, 30)
 RETRIEVE_TOOL = "local-retrieve"
 LLM_TOOL = "openai-evidence-extraction"
-# M2 승인 B(docs/implementation/m2-live-approval-proposal.md §3). 승인 코드 기본값 아님.
-LLM_MAX_CALLS = 8
-LLM_REQUEST_INPUT_TOKENS = 8_000
-LLM_REQUEST_OUTPUT_TOKENS = 2_000
-LLM_TOTAL_INPUT_TOKENS = 64_000
-LLM_TOTAL_OUTPUT_TOKENS = 16_000
-LLM_MAX_COST_USD = Decimal("1.00")
-LLM_TIMEOUT_SECONDS = 30.0  # D08 시도별 timeout
-# gpt-4.1-mini 공식 요금(#51 live smoke와 같은 2026-09-30 확인값).
-USD_PER_INPUT_TOKEN = Decimal("0.40") / 1_000_000
-USD_PER_OUTPUT_TOKEN = Decimal("1.60") / 1_000_000
 
 
 class Clock:
@@ -103,7 +97,16 @@ class NoClaimsLLM:
         return ExtractionOutput(claims=[])
 
 
-def _retriever(root, model_path, store_path, receipt_path, timeout_seconds, clock):
+def _retriever(
+    root,
+    model_path,
+    store_path,
+    receipt_path,
+    timeout_seconds,
+    clock,
+    *,
+    runtime_profile: M2EvidenceValidationSettings | None = None,
+):
     """#54 retrieve_validation과 같은 순서로 #145 산출물을 재검증한다."""
     previous = json.loads(receipt_path.read_text())
     manifest, sources, results, chunks = prepare_corpus(
@@ -148,6 +151,11 @@ def _retriever(root, model_path, store_path, receipt_path, timeout_seconds, cloc
         source_inputs=sources,
     )
     local = LocalEncoder(model)
+    profile = (
+        runtime_profile
+        if runtime_profile is not None
+        else load_runtime_document().profiles.m2_evidence_validation
+    )
     runtime = AdapterRuntime(
         policy=RuntimePolicy(
             schema_version=SCHEMA,
@@ -159,8 +167,8 @@ def _retriever(root, model_path, store_path, receipt_path, timeout_seconds, cloc
         ledger=BudgetLedger(
             RuntimeLimits(
                 schema_version=SCHEMA,
-                max_calls=4,
-                tool_max_calls={RETRIEVE_TOOL: 4},
+                max_calls=profile.retrieval_max_calls,
+                tool_max_calls={RETRIEVE_TOOL: profile.retrieval_max_calls},
                 max_input_tokens=0,
                 max_output_tokens=0,
                 max_cost_usd=0,
@@ -191,8 +199,8 @@ def _retriever(root, model_path, store_path, receipt_path, timeout_seconds, cloc
         ),
         budget=ToolBudget(
             schema_version=SCHEMA,
-            max_calls=1,
-            max_retries=0,
+            max_calls=profile.retrieval_attempt_max_calls,
+            max_retries=profile.retrieval_max_retries,
             timeout_seconds=timeout_seconds,
             deadline=clock.now() + timedelta(seconds=timeout_seconds),
         ),
@@ -206,7 +214,22 @@ def _retriever(root, model_path, store_path, receipt_path, timeout_seconds, cloc
     return retriever, snapshot, sources, runtime, local
 
 
-def _openai_llm(api_key: str, clock: Clock) -> RuntimeStructuredLLM:
+def _openai_llm(
+    api_key: str,
+    clock: RuntimeClock,
+    *,
+    runtime_document: RuntimeDocument | None = None,
+) -> RuntimeStructuredLLM:
+    if not api_key.strip():
+        raise ValueError("api_key is required")
+    document = (
+        runtime_document if runtime_document is not None else load_runtime_document()
+    )
+    if runtime_document is not None:
+        RuntimeDocument.model_validate_json(
+            runtime_document.model_dump_json(), strict=True
+        )
+    profile = document.profiles.m2_evidence_validation
     runtime = AdapterRuntime(
         policy=RuntimePolicy(
             schema_version=SCHEMA,
@@ -218,11 +241,11 @@ def _openai_llm(api_key: str, clock: Clock) -> RuntimeStructuredLLM:
         ledger=BudgetLedger(
             RuntimeLimits(
                 schema_version=SCHEMA,
-                max_calls=LLM_MAX_CALLS,
-                tool_max_calls={LLM_TOOL: LLM_MAX_CALLS},
-                max_input_tokens=LLM_TOTAL_INPUT_TOKENS,
-                max_output_tokens=LLM_TOTAL_OUTPUT_TOKENS,
-                max_cost_usd=LLM_MAX_COST_USD,
+                max_calls=profile.max_calls,
+                tool_max_calls={LLM_TOOL: profile.max_calls},
+                max_input_tokens=profile.max_input_tokens,
+                max_output_tokens=profile.max_output_tokens,
+                max_cost_usd=profile.max_cost_usd,
             )
         ),
         clock=clock,
@@ -235,11 +258,11 @@ def _openai_llm(api_key: str, clock: Clock) -> RuntimeStructuredLLM:
             user,
             schema,
             schema_version=SCHEMA,
-            max_output_tokens=LLM_REQUEST_OUTPUT_TOKENS,
-            usd_per_input_token=USD_PER_INPUT_TOKEN,
-            usd_per_output_token=USD_PER_OUTPUT_TOKEN,
+            max_output_tokens=profile.request_output_tokens,
+            usd_per_input_token=document.llm.usd_per_input_token,
+            usd_per_output_token=document.llm.usd_per_output_token,
         )
-        if bound.input_tokens > LLM_REQUEST_INPUT_TOKENS:
+        if bound.input_tokens > profile.request_input_tokens:
             # 요청당 입력 상한 초과: 호출하지 않고 LLM_FAILED로 batch를 멈춘다.
             raise ValueError("request input bound exceeds approval B")
         return bound
@@ -256,10 +279,10 @@ def _openai_llm(api_key: str, clock: Clock) -> RuntimeStructuredLLM:
         ),
         budget=ToolBudget(
             schema_version=SCHEMA,
-            max_calls=1,
-            max_retries=0,
-            timeout_seconds=LLM_TIMEOUT_SECONDS,
-            deadline=clock.now() + timedelta(minutes=10),
+            max_calls=profile.attempt_max_calls,
+            max_retries=profile.max_retries,
+            timeout_seconds=profile.timeout_seconds,
+            deadline=clock.now() + timedelta(seconds=profile.deadline_seconds),
         ),
         readiness=Readiness(
             schema_version=SCHEMA,
@@ -277,6 +300,7 @@ def _openai_llm(api_key: str, clock: Clock) -> RuntimeStructuredLLM:
             prompt_version=PROMPT_VERSION,
             schema_version=SCHEMA,
             clock=clock,
+            llm_settings=document.llm,
         ),
         allowance_for=allowance,
     )
@@ -311,6 +335,7 @@ def run(
     gap_query: str,
     top_k: int,
     max_segment_bytes: int,
+    runtime_document: RuntimeDocument | None = None,
 ):
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
         raise ValueError("explicit positive finite local bound required")
@@ -321,16 +346,29 @@ def run(
         raise ValueError("validation artifacts must remain in outputs")
     if output_dir.exists():
         raise ValueError("validation artifacts already exist")
+    document = (
+        runtime_document if runtime_document is not None else load_runtime_document()
+    )
+    if runtime_document is not None:
+        RuntimeDocument.model_validate_json(
+            runtime_document.model_dump_json(), strict=True
+        )
     started = time.monotonic()
     clock = Clock()
     retriever, snapshot, sources, retrieve_runtime, local = _retriever(
-        root, model_path, store_path, receipt_path, timeout_seconds, clock
+        root,
+        model_path,
+        store_path,
+        receipt_path,
+        timeout_seconds,
+        clock,
+        runtime_profile=document.profiles.m2_evidence_validation,
     )
     if llm == "openai":
-        key = os.environ.get("OPENAI_API_KEY", "").strip()
+        key = resolve_environment_credential("OPENAI_API_KEY")
         if not key:
             raise ValueError("--llm openai requires OPENAI_API_KEY")
-        extractor = _openai_llm(key, clock)
+        extractor = _openai_llm(key, clock, runtime_document=document)
     else:
         key, extractor = "", NoClaimsLLM()
 

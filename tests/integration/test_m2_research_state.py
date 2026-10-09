@@ -5,12 +5,14 @@ import hashlib
 import json
 import socket
 import stat
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import httpx
 import pytest
 
+from skala_rag.agents import m2_research_live
 from skala_rag.agents.eligibility_extraction import LLMEligibilityExtractor
 from skala_rag.agents.m2_research import (
     assemble_research_state,
@@ -23,6 +25,7 @@ from skala_rag.contracts.error_codes import ERROR_SPECS, ErrorCode
 from skala_rag.contracts.interfaces import LLMError
 from skala_rag.fakes import FakeClock
 from skala_rag.graph.snapshot import freeze_snapshot
+from skala_rag.settings import load_runtime_document
 from skala_rag.tools.company_research import (
     FieldObservation,
     LiveResearchCompany,
@@ -774,3 +777,82 @@ def test_failure_retains_previous_successful_provider_sources(research, tmp_path
     assert result.retrieval_records[-1].arguments_without_secrets["requests_used"] == 2
     assert json.loads((target / "research-state.json").read_text()) == out.state
     callback.assert_not_called()
+
+
+def test_source_only_composition_uses_named_profile_and_never_constructs_llm(
+    research, tmp_path, monkeypatch
+):
+    candidate, run_input, _, _, clock = research
+    document = load_runtime_document()
+    profile = document.profiles.m2_source.model_copy(
+        update={
+            "max_calls": 2,
+            "timeout_seconds": 12.0,
+            "deadline_seconds": 120.0,
+            "max_name_matches": 2,
+            "max_index_bytes": 12345,
+            "fetch": document.profiles.m2_source.fetch.model_copy(
+                update={"max_bytes": 7777, "timeout_seconds": 9.0, "max_redirects": 1}
+            ),
+        }
+    )
+    document = document.model_copy(
+        update={"profiles": document.profiles.model_copy(update={"m2_source": profile})}
+    )
+    run_input.execution_mode = "live"
+    path = tmp_path / "input.json"
+    path.write_text(
+        json.dumps(
+            {
+                "candidate": candidate.model_dump(mode="json"),
+                "run_input": run_input.model_dump(mode="json"),
+                "run_id": "run-test",
+            }
+        )
+    )
+    loaded = []
+    policies = []
+    calls = []
+
+    def load():
+        loaded.append(True)
+        return document
+
+    def fetcher(policy, **kwargs):
+        policies.append(policy)
+        return SafeFetcher(policy, **kwargs)
+
+    def research_to_trace(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(receipt={"status": "synthetic-source-only"})
+
+    monkeypatch.setattr(m2_research_live, "load_runtime_document", load)
+    monkeypatch.setattr(m2_research_live, "SafeFetcher", fetcher)
+    monkeypatch.setattr(m2_research_live, "Clock", lambda: clock)
+    monkeypatch.setattr(m2_research_live, "run_research_to_trace", research_to_trace)
+    monkeypatch.setenv("OPENDART_API_KEY", "  synthetic-key  ")
+    result = m2_research_live.run(
+        root=tmp_path,
+        input_path=path,
+        output_dir=tmp_path / "outputs/source",
+        live=True,
+    )
+
+    assert result.receipt["status"] == "synthetic-source-only"
+    assert loaded == [True]
+    assert len(policies) == 2
+    assert all(
+        (p.max_bytes, p.timeout_seconds, p.max_redirects) == (7777, 9, 1)
+        for p in policies
+    )
+    call = calls[0]
+    assert call["budget"].max_calls == 2
+    assert call["budget"].timeout_seconds == 12
+    assert call["budget"].deadline == clock.now() + timedelta(seconds=120)
+    assert call["technology"] is None
+    assert call["runtime_observations"]["llm_requests"] == 0
+    dart = call["research_tool"]._providers[1]
+    assert dart._max_name_matches == 2
+    assert dart._max_index_bytes == 12345
+    assert dart._key == "synthetic-key"
+    assert call["research_tool"].calls == 0

@@ -227,17 +227,8 @@ def _reject_nonfinite_json(_value: str) -> None:
     raise ValueError(message)
 
 
-def load_runtime_settings(
-    profile: ProfileName, *, path: str | Path | None = None
-) -> RuntimeSettings:
-    """Load one snapshot from an explicit file or the module's default resource.
-
-    A reload creates a new snapshot. It never mutates an existing composition,
-    discovers .env files, or grants the request any execution authority.
-    """
-    profile_name = TypeAdapter[ProfileName](ProfileName).validate_python(
-        profile, strict=True
-    )
+def load_runtime_document(*, path: str | Path | None = None) -> RuntimeDocument:
+    """Load the complete immutable document once for a multi-profile composition."""
     if path is None:
         module_path = Path(__file__).resolve()
         if module_path.parts[-3:] == ("src", "skala_rag", "settings.py"):
@@ -253,7 +244,17 @@ def load_runtime_settings(
     )
     # JSON validation accepts decimal strings and immutable tuples without
     # relaxing strict integer/bool checks on the file boundary.
-    document = RuntimeDocument.model_validate_json(content, strict=True)
+    return RuntimeDocument.model_validate_json(content, strict=True)
+
+
+def load_runtime_settings(
+    profile: ProfileName, *, path: str | Path | None = None
+) -> RuntimeSettings:
+    """Select one profile, rejecting unknown names before accessing its file."""
+    profile_name = TypeAdapter[ProfileName](ProfileName).validate_python(
+        profile, strict=True
+    )
+    document = load_runtime_document(path=path)
     match profile_name:
         case "m2_shared":
             selected = document.profiles.m2_shared

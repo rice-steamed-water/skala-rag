@@ -13,6 +13,11 @@ from pathlib import Path
 
 from skala_rag.agents.m2_research import run_research_to_trace
 from skala_rag.contracts import Candidate, RunInput, ToolBudget
+from skala_rag.settings import (
+    RuntimeDocument,
+    load_runtime_document,
+    resolve_environment_credential,
+)
 from skala_rag.tools.company_research import LiveResearchCompany
 from skala_rag.tools.official_homepage import OfficialHomepage
 from skala_rag.tools.opendart import HOST, OpenDartCompany
@@ -24,7 +29,14 @@ class Clock:
         return datetime.now(UTC)
 
 
-def run(*, root: Path, input_path: Path, output_dir: Path, live: bool):
+def run(
+    *,
+    root: Path,
+    input_path: Path,
+    output_dir: Path,
+    live: bool,
+    runtime_document: RuntimeDocument | None = None,
+):
     """Explicit source-only smoke. Missing fact extraction remains unknown."""
     if not live:
         raise ValueError("explicit --live is required")
@@ -37,18 +49,26 @@ def run(*, root: Path, input_path: Path, output_dir: Path, live: bool):
     candidate = Candidate.model_validate(
         config["candidate"], context={"execution_mode": "live"}
     )
+    document = (
+        runtime_document if runtime_document is not None else load_runtime_document()
+    )
+    if runtime_document is not None:
+        RuntimeDocument.model_validate_json(
+            runtime_document.model_dump_json(), strict=True
+        )
+    profile = document.profiles.m2_source
     clock = Clock()
     schema = run_input.schema_version
-    key = os.environ.get("OPENDART_API_KEY")
+    key = resolve_environment_credential("OPENDART_API_KEY")
 
     def fetcher(hosts):
         return SafeFetcher(
             FetchPolicy(
-                allowed_schemes=frozenset({"https"}),
+                allowed_schemes=frozenset(profile.fetch.allowed_schemes),
                 allowed_hosts=hosts,
-                max_bytes=5_000_000,
-                timeout_seconds=30,
-                max_redirects=3,
+                max_bytes=profile.fetch.max_bytes,
+                timeout_seconds=profile.fetch.timeout_seconds,
+                max_redirects=profile.fetch.max_redirects,
             ),
             clock=clock,
         )
@@ -63,8 +83,8 @@ def run(*, root: Path, input_path: Path, output_dir: Path, live: bool):
                 api_key=key,
                 schema_version=schema,
                 clock=clock,
-                max_name_matches=1,
-                max_index_bytes=100_000_000,
+                max_name_matches=profile.max_name_matches,
+                max_index_bytes=profile.max_index_bytes,
             ),
         ],
         run_id=config["run_id"],
@@ -85,10 +105,10 @@ def run(*, root: Path, input_path: Path, output_dir: Path, live: bool):
         research_tool=tool,
         budget=ToolBudget(
             schema_version=schema,
-            max_calls=3,
-            max_retries=0,
-            timeout_seconds=30,
-            deadline=clock.now() + timedelta(minutes=10),
+            max_calls=profile.max_calls,
+            max_retries=profile.max_retries,
+            timeout_seconds=profile.timeout_seconds,
+            deadline=clock.now() + timedelta(seconds=profile.deadline_seconds),
         ),
         root=root,
         output_dir=output_dir,

@@ -14,6 +14,7 @@ from skala_rag.rag.local_bge_validation import MODEL, REVISION, LocalEncoder
 from skala_rag.rag.query_local import LocalQueryEncoder
 from skala_rag.rag.sqlite_index import SQLiteIndexStore
 from skala_rag.rag.sqlite_retrieve import SQLiteDenseSearch
+from skala_rag.settings import RuntimeDocument, load_runtime_document
 from skala_rag.tools.runtime import (
     AdapterRuntime,
     Allowance,
@@ -28,7 +29,13 @@ class LocalRAG:
     """Metadata preflight now; load the existing model only after admission."""
 
     def __init__(
-        self, *, root: Path, model_path: Path, store_path: Path, receipt_path: Path
+        self,
+        *,
+        root: Path,
+        model_path: Path,
+        store_path: Path,
+        receipt_path: Path,
+        runtime_document: RuntimeDocument | None = None,
     ):
         self.model_path = model_path
         receipt = json.loads(receipt_path.read_text())
@@ -70,6 +77,16 @@ class LocalRAG:
             extraction_results=results,
             source_inputs=sources,
         )
+        document = (
+            runtime_document
+            if runtime_document is not None
+            else load_runtime_document()
+        )
+        if runtime_document is not None:
+            RuntimeDocument.model_validate_json(
+                runtime_document.model_dump_json(), strict=True
+            )
+        self.runtime_profile = document.profiles.m2_local_rag
 
     def retrieve(self, *, candidate, run_input, run_id, query, clock, deadline):
         from sentence_transformers import SentenceTransformer
@@ -83,6 +100,7 @@ class LocalRAG:
         if model.max_seq_length != 8192 or model.get_embedding_dimension() != 1024:
             raise ValueError("local model configuration mismatch")
         schema = run_input.schema_version
+        profile = self.runtime_profile
         runtime = AdapterRuntime(
             policy=RuntimePolicy(
                 schema_version=schema,
@@ -94,11 +112,11 @@ class LocalRAG:
             ledger=BudgetLedger(
                 RuntimeLimits(
                     schema_version=schema,
-                    max_calls=1,
-                    tool_max_calls={"local-retrieve": 1},
-                    max_input_tokens=0,
-                    max_output_tokens=0,
-                    max_cost_usd=0,
+                    max_calls=profile.max_calls,
+                    tool_max_calls={"local-retrieve": profile.max_calls},
+                    max_input_tokens=profile.max_input_tokens,
+                    max_output_tokens=profile.max_output_tokens,
+                    max_cost_usd=profile.max_cost_usd,
                 )
             ),
             clock=clock,
@@ -126,9 +144,9 @@ class LocalRAG:
             ),
             budget=ToolBudget(
                 schema_version=schema,
-                max_calls=1,
-                max_retries=0,
-                timeout_seconds=30,
+                max_calls=profile.max_calls,
+                max_retries=profile.max_retries,
+                timeout_seconds=profile.timeout_seconds,
                 deadline=deadline,
             ),
             allowance=Allowance(
@@ -146,7 +164,7 @@ class LocalRAG:
                 corpus_version=run_input.corpus_version,
                 index_version=self.snapshot.index_version,
                 as_of=run_input.as_of,
-                top_k=5,
+                top_k=profile.top_k,
                 allowed_source_ids=list(self.snapshot.bundle.sources),
             )
         )

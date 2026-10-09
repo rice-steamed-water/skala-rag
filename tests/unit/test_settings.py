@@ -18,10 +18,36 @@ from skala_rag.settings import (
     M2SharedSettings,
     M2SourceSettings,
     RecommendedRunSettings,
+    load_runtime_document,
     load_runtime_settings,
 )
 
 RUNTIME_FILE = Path(__file__).resolve().parents[2] / "configs/runtime.json"
+
+
+def test_document_load_reads_once_and_retains_both_profile_snapshots(
+    tmp_path, runtime_document, monkeypatch
+):
+    path = write_document(tmp_path, runtime_document)
+    original_read = Path.read_bytes
+    reads = []
+
+    def read_bytes(selected):
+        reads.append(selected)
+        return original_read(selected)
+
+    monkeypatch.setattr(Path, "read_bytes", read_bytes)
+    snapshot = load_runtime_document(path=path)
+    runtime_document["profiles"]["m2_shared"]["request_output_tokens"] = 100
+    runtime_document["profiles"]["m2_source"]["fetch"]["max_bytes"] = 123
+    write_document(tmp_path, runtime_document)
+
+    assert reads == [path]
+    assert snapshot.profiles.m2_shared.request_output_tokens == 2000
+    assert snapshot.profiles.m2_source.fetch.max_bytes == 5000000
+    later = load_runtime_document(path=path)
+    assert later.profiles.m2_shared.request_output_tokens == 100
+    assert later.profiles.m2_source.fetch.max_bytes == 123
 
 
 @pytest.fixture
