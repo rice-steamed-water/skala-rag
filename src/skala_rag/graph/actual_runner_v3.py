@@ -6,7 +6,7 @@ explicit ``execute=True``. A completed workflow is never publication approval.
 
 import json
 import os
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -22,10 +22,7 @@ from skala_rag.agents.evidence_research import EvidenceResearch
 from skala_rag.agents.founder import evaluate_founder_approved
 from skala_rag.agents.market import evaluate_market_approved
 from skala_rag.agents.moat import evaluate_moat_approved
-from skala_rag.agents.source_fact_verification import (
-    SourceBoundReviewResolver,
-    SourceFactError,
-)
+from skala_rag.agents.source_fact_verification import SourceFactError
 from skala_rag.agents.technology import evaluate_technology_approved
 from skala_rag.contracts import (
     ArtifactMetadata,
@@ -34,18 +31,16 @@ from skala_rag.contracts import (
     ToolBudget,
 )
 from skala_rag.contracts.state import RunOutcome, WorkflowStatus
-from skala_rag.contracts.v3 import BRANCH_DIMENSIONS
+from skala_rag.contracts.v3 import BRANCH_DIMENSIONS, EvaluationBranchResult
 from skala_rag.graph.actual_inputs_v3 import (
     ActualAuthorityV3,
     ActualInputError,
-    EvaluationInputsV3,
     canonical,
     digest,
     file_digest,
     load_inputs,
     open_index,
     prepare_candidates,
-    review_resolver,
     verify_model_files,
     verify_sources,
 )
@@ -56,6 +51,7 @@ from skala_rag.graph.actual_replay_v3 import (
     load_replay,
     role_scope,
 )
+from skala_rag.graph.actual_reviews_v3 import _Reviews as _Reviews
 from skala_rag.graph.candidate_workflow_v3 import run_candidate_report_v3
 from skala_rag.graph.candidates_v3 import CandidateStagesV3
 from skala_rag.graph.research_artifacts_v3 import EvidenceResearchBindingV3
@@ -69,6 +65,7 @@ from skala_rag.scoring.approval_registry import pinned_approval_registry
 from skala_rag.scoring.approved_consumers import ActualAdmissionV3, ApprovedPolicySource
 from skala_rag.scoring.approved_policy import LiveScoringGates, ScoringRuntimeBinding
 from skala_rag.scoring.catalog import load_policy
+from skala_rag.scoring.v3_policy import V3Policy
 from skala_rag.settings import RuntimeDocument, load_runtime_document
 from skala_rag.tools.actual_wire_capture import ActualWireCapture
 from skala_rag.tools.company_archive import _load_archive
@@ -125,117 +122,81 @@ def _legacy_denied(*_args):
     raise ActualInputError("LEGACY_RESEARCH_FORBIDDEN")
 
 
-class _Reviews:
-    """Resolve exact new snapshots once, with no seed approval transplantation."""
-
-    def __init__(self, authority, registry, out, expected=None):
-        self.authority, self.registry, self.out = authority, registry, out
-        self.expected = expected
-        self.audit = {}
-        self._lock = RLock()
-        self._resolvers: dict[tuple[str, str], SourceBoundReviewResolver] = {}
-        self.inputs: dict[str, EvaluationInputsV3] = {}
-        self.requests: dict[str, dict] = {}
-
-    def __call__(
-        self, snapshot: EvaluationSnapshot, rubric: Mapping[str, JsonValue]
-    ) -> SourceBoundReviewResolver:
-        key = digest(canonical(snapshot.model_dump(mode="json")))
-        version = str(rubric["rubric_version"])
-        with self._lock:
-            if key not in self.inputs:
-                try:
-                    supplied = self.authority.evaluation_inputs_for(
-                        snapshot.model_copy(deep=True)
-                    )
-                    if type(supplied) is not EvaluationInputsV3:
-                        raise ActualInputError("EVALUATION_INPUTS_MISSING")
-                    selections = {
-                        v: review_resolver(
-                            snapshot,
-                            self.registry.rubric(v),
-                            self.authority,
-                            self.registry,
-                        )
-                        for v in ("core-0.1.0", "finance-0.1.0")
-                    }
-                    resolvers = {v: selected[0] for v, selected in selections.items()}
-                    for v, resolver in resolvers.items():
-                        resolver.verify_snapshot(snapshot, self.registry.rubric(v))
-                        if any(
-                            resolver.verify_source(sid) is None
-                            for sid in snapshot.sources
-                        ):
-                            raise ActualInputError("SOURCE_AUTHORITY_MISSING")
-                    receipts = (
-                        [
-                            (
-                                "core-0.1.0",
-                                supplied.review_request,
-                                supplied.review_subject,
-                                receipt,
-                            )
-                            for receipt in (
-                                *supplied.founder_anchors.values(),
-                                *supplied.technology_anchors.values(),
-                                *supplied.moat_anchors.values(),
-                            )
-                        ]
-                        + [
-                            ("core-0.1.0", r.request, r.subject, r.receipt)
-                            for r in supplied.market_reviews.values()
-                        ]
-                        + [
-                            (
-                                "finance-0.1.0",
-                                supplied.review_request,
-                                supplied.review_subject,
-                                receipt,
-                            )
-                            for receipt in supplied.financial_facts
-                        ]
-                    )
-                    if not receipts:
-                        raise ActualInputError("RATING_REVIEW_MISSING")
-                    for v, request, subject, receipt in receipts:
-                        resolved = resolvers[v].resolve_review(
-                            request, receipt, subject=subject
-                        )
-                        if resolved is None or resolved.decision != "accepted":
-                            raise ActualInputError("RATING_REVIEW_MISSING")
-                    audit = {
-                        "evaluation_inputs": TypeAdapter(
-                            EvaluationInputsV3
-                        ).dump_python(supplied, mode="json"),
-                        "reviews": {
-                            v: [r.model_dump(mode="json") for r in selected[1]]
-                            for v, selected in selections.items()
-                        },
-                    }
-                    if self.expected is not None and self.expected.get(key) != audit:
-                        raise ActualInputError("REPLAY_REVIEW_MISMATCH")
-                except (ValueError, TypeError, KeyError):
-                    if len(self.requests) < 40:
-                        self.requests[key] = {
-                            "snapshot": snapshot.model_dump(mode="json"),
-                            "rubrics": {
-                                v: digest(canonical(self.registry.rubric(v)))
-                                for v in ("core-0.1.0", "finance-0.1.0")
-                            },
-                            "reason": "independently_authenticated_review_required",
-                        }
-                        _write(self.out, "missing-review-requests.json", self.requests)
-                    raise ActualInputError("SNAPSHOT_REVIEW_MISSING") from None
-                self.inputs[key] = supplied
-                self.audit[key] = audit
-                _write(self.out, "reviews.json", self.audit)
-                for v, resolver in resolvers.items():
-                    self._resolvers[(key, v)] = resolver
-            return self._resolvers[(key, version)]
-
-    def for_snapshot(self, snapshot):
-        self(snapshot, self.registry.rubric("core-0.1.0"))
-        return self.inputs[digest(canonical(snapshot.model_dump(mode="json")))]
+def evaluate_actual_branch_v3(
+    role: Branch,
+    frozen: EvaluationSnapshot,
+    *,
+    reviews: _Reviews,
+    admission: ActualAdmissionV3,
+    llm: Callable[[str, str], RuntimeStructuredLLM],
+    policy: V3Policy,
+    industry_evidence_dimensions: tuple[str, ...],
+) -> EvaluationBranchResult:
+    """Dispatch the existing approved evaluators after exact snapshot review."""
+    supplied = reviews.for_snapshot(frozen)
+    model = llm(role, frozen.candidate_id)
+    options = {
+        "review_request": supplied.review_request,
+        "review_subject": supplied.review_subject,
+    }
+    match role:
+        case "founder":
+            result = evaluate_founder_approved(
+                frozen,
+                actual_admission=admission,
+                llm=model,
+                founder_person_ids=supplied.founder_person_ids,
+                verified_person_by_evidence_id=(
+                    supplied.verified_person_by_evidence_id
+                ),
+                reviewed_anchors=supplied.founder_anchors,
+                **options,
+            )
+        case "technology":
+            result = evaluate_technology_approved(
+                frozen,
+                actual_admission=admission,
+                llm=model,
+                receipts=supplied.technology_anchors,
+                **options,
+            ).result
+        case "market":
+            result = evaluate_market_approved(
+                frozen,
+                actual_admission=admission,
+                llm=model,
+                rubric=admission.registry.rubric("core-0.1.0"),
+                target_market=supplied.market_target,
+                market_links=supplied.market_links,
+                reviewed_observations=supplied.market_reviews,
+            )
+        case "moat":
+            return evaluate_moat_approved(
+                frozen,
+                actual_admission=admission,
+                llm=model,
+                reviewed_anchors=supplied.moat_anchors,
+                **options,
+            )
+        case "business_deal":
+            return evaluate_business_deal_approved(
+                frozen,
+                admission=admission,
+                llm=model,
+                rubric=admission.registry.rubric("finance-0.1.0"),
+                financial_facts=supplied.financial_facts,
+                **options,
+            )
+        case unreachable:
+            assert_never(unreachable)
+    return adapt_baseline_branch_result(
+        result,
+        branch_id=role,
+        snapshot=frozen,
+        criteria=policy.criteria,
+        industry_evidence_dimensions=industry_evidence_dimensions,
+        execution_mode="live",
+    )
 
 
 def run_actual(
@@ -787,69 +748,14 @@ def _run(
 
             def evaluate(role: Branch, frozen):
                 with role_scope(f"{frozen.candidate_id}/{role}"):
-                    supplied = reviews.for_snapshot(frozen)
-                    model = llm(role, frozen.candidate_id)
-                    options = {
-                        "review_request": supplied.review_request,
-                        "review_subject": supplied.review_subject,
-                    }
-                    match role:
-                        case "founder":
-                            result = evaluate_founder_approved(
-                                frozen,
-                                actual_admission=admission,
-                                llm=model,
-                                founder_person_ids=supplied.founder_person_ids,
-                                verified_person_by_evidence_id=(
-                                    supplied.verified_person_by_evidence_id
-                                ),
-                                reviewed_anchors=supplied.founder_anchors,
-                                **options,
-                            )
-                        case "technology":
-                            result = evaluate_technology_approved(
-                                frozen,
-                                actual_admission=admission,
-                                llm=model,
-                                receipts=supplied.technology_anchors,
-                                **options,
-                            ).result
-                        case "market":
-                            result = evaluate_market_approved(
-                                frozen,
-                                actual_admission=admission,
-                                llm=model,
-                                rubric=registry.rubric("core-0.1.0"),
-                                target_market=supplied.market_target,
-                                market_links=supplied.market_links,
-                                reviewed_observations=supplied.market_reviews,
-                            )
-                        case "moat":
-                            return evaluate_moat_approved(
-                                frozen,
-                                actual_admission=admission,
-                                llm=model,
-                                reviewed_anchors=supplied.moat_anchors,
-                                **options,
-                            )
-                        case "business_deal":
-                            return evaluate_business_deal_approved(
-                                frozen,
-                                admission=admission,
-                                llm=model,
-                                rubric=registry.rubric("finance-0.1.0"),
-                                financial_facts=supplied.financial_facts,
-                                **options,
-                            )
-                        case unreachable:
-                            assert_never(unreachable)
-                    return adapt_baseline_branch_result(
-                        result,
-                        branch_id=role,
-                        snapshot=frozen,
-                        criteria=policy.criteria,
+                    return evaluate_actual_branch_v3(
+                        role,
+                        frozen,
+                        reviews=reviews,
+                        admission=admission,
+                        llm=llm,
+                        policy=policy,
                         industry_evidence_dimensions=packet.industry_evidence_dimensions,
-                        execution_mode="live",
                     )
 
             retrieve = IndexedRetriever(

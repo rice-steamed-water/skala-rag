@@ -529,6 +529,7 @@ class LiveResearchCompany:
         schema_version: str,
         as_of: date,
         clock: Clock,
+        retrieval_namespace: str | None = None,
     ) -> None:
         if not providers:
             raise ValueError("at least one provider is required")
@@ -540,6 +541,7 @@ class LiveResearchCompany:
         self._schema_version = schema_version
         self._as_of = as_of
         self._clock = clock
+        self._retrieval_namespace = retrieval_namespace
         self.calls = 0
 
     def __call__(
@@ -551,6 +553,8 @@ class LiveResearchCompany:
             f"retrieval-{TOOL_NAME}-{self._run_id}-"
             f"{candidate.candidate_id}-{self.calls}"
         )
+        if self._retrieval_namespace is not None:
+            prefix += f"-{self._retrieval_namespace}"
         if budget.max_calls < 1:
             return self._failure(
                 candidate,
