@@ -26,19 +26,31 @@ from skala_rag.agents.m2_research_live import Clock
 from skala_rag.agents.m2_trace import M2Trace, TraceInvalid, run_technology_trace
 from skala_rag.contracts import Candidate, RunInput, ToolBudget
 from skala_rag.contracts.ids import evaluation_key
-from skala_rag.prompts.evidence_extraction import (
+from skala_rag.prompt.evidence_extraction import (
     SYSTEM_PROMPT,
     ExtractionOutput,
     build_user_prompt,
 )
 from skala_rag.scoring.catalog import load_policy
+from skala_rag.settings import (
+    RuntimeDocument,
+    load_runtime_document,
+    resolve_environment_credential,
+)
 from skala_rag.tools.company_research import LiveResearchCompany
 from skala_rag.tools.official_homepage import OfficialHomepage
 from skala_rag.tools.opendart import HOST, OpenDartCompany
 from skala_rag.tools.source_fetch import FetchPolicy, SafeFetcher
 
 
-def run(*, root: Path, input_path: Path, output_dir: Path, live: bool = False):
+def run(
+    *,
+    root: Path,
+    input_path: Path,
+    output_dir: Path,
+    live: bool = False,
+    runtime_document: RuntimeDocument | None = None,
+):
     config = json.loads(input_path.read_text())
     expected = {
         "candidate",
@@ -96,8 +108,20 @@ def run(*, root: Path, input_path: Path, output_dir: Path, live: bool = False):
         raise ValueError("local RAG input fields mismatch")
     if not isinstance(local["query"], str) or not local["query"].strip():
         raise ValueError("explicit retrieval query required")
+    document = (
+        runtime_document if runtime_document is not None else load_runtime_document()
+    )
+    if runtime_document is not None:
+        RuntimeDocument.model_validate_json(
+            runtime_document.model_dump_json(), strict=True
+        )
+    research_profile = document.profiles.m2_research
+    # Provider accounting charges once per fetch, not once per redirect hop.
+    if research_profile.fetch.max_redirects != 0:
+        raise ValueError("component source requests require zero redirects")
     rag = LocalRAG(
         root=root,
+        runtime_document=document,
         **{
             name: root / local[name]
             for name in ("model_path", "store_path", "receipt_path")
@@ -109,7 +133,7 @@ def run(*, root: Path, input_path: Path, output_dir: Path, live: bool = False):
         candidate.candidate_id in c.candidate_ids for c in rag.snapshot.bundle.chunks
     ):
         raise ValueError("candidate has no approved local chunks")
-    key = os.environ.get("OPENAI_API_KEY", "").strip()
+    key = resolve_environment_credential("OPENAI_API_KEY")
     preflight = dict(
         run_id=run_id,
         candidate_id=candidate.candidate_id,
@@ -148,7 +172,7 @@ def run(*, root: Path, input_path: Path, output_dir: Path, live: bool = False):
     if rubric.get("status") != "approved":
         raise ValueError("approved core rubric required before any source/API request")
     clock = Clock()
-    deadline = clock.now() + timedelta(minutes=10)
+    deadline = clock.now() + timedelta(seconds=research_profile.deadline_seconds)
     llms = M2LLMs(
         api_key=key,
         run_id=run_id,
@@ -157,24 +181,25 @@ def run(*, root: Path, input_path: Path, output_dir: Path, live: bool = False):
         execution_mode="live",
         clock=clock,
         deadline=deadline,
+        runtime_document=document,
     )
     schema = run_input.schema_version
     extractor = LLMEligibilityExtractor(
         llms.stages["eligibility"],
         as_of=run_input.as_of,
         domain_definition=config["domain_definition"],
-        max_input_chars=1200,
+        max_input_chars=research_profile.eligibility_max_input_chars,
     )
 
     def fetcher(hosts):
         # Redirects are disabled so the public-provider cap bounds physical requests.
         return SafeFetcher(
             FetchPolicy(
-                allowed_schemes=frozenset({"https"}),
+                allowed_schemes=frozenset(research_profile.fetch.allowed_schemes),
                 allowed_hosts=hosts,
-                max_bytes=5_000_000,
-                timeout_seconds=30,
-                max_redirects=0,
+                max_bytes=research_profile.fetch.max_bytes,
+                timeout_seconds=research_profile.fetch.timeout_seconds,
+                max_redirects=research_profile.fetch.max_redirects,
             ),
             clock=clock,
         )
@@ -186,11 +211,11 @@ def run(*, root: Path, input_path: Path, output_dir: Path, live: bool = False):
             ),
             OpenDartCompany(
                 fetcher(frozenset({HOST})),
-                api_key=os.environ.get("OPENDART_API_KEY"),
+                api_key=resolve_environment_credential("OPENDART_API_KEY"),
                 schema_version=schema,
                 clock=clock,
-                max_name_matches=1,
-                max_index_bytes=100_000_000,
+                max_name_matches=research_profile.max_name_matches,
+                max_index_bytes=research_profile.max_index_bytes,
             ),
         ],
         run_id=run_id,
@@ -265,9 +290,9 @@ def run(*, root: Path, input_path: Path, output_dir: Path, live: bool = False):
             research_tool=tool,
             budget=ToolBudget(
                 schema_version=schema,
-                max_calls=3,
-                max_retries=0,
-                timeout_seconds=30,
+                max_calls=research_profile.retrieval_max_calls,
+                max_retries=research_profile.retrieval_max_retries,
+                timeout_seconds=research_profile.retrieval_timeout_seconds,
                 deadline=deadline,
             ),
             root=root,

@@ -18,6 +18,11 @@ from pydantic import BaseModel
 
 from skala_rag.contracts.error_codes import ErrorCode
 from skala_rag.contracts.interfaces import Clock, LLMError
+from skala_rag.settings import (
+    LLMSettings,
+    load_runtime_document,
+    resolve_explicit_credential,
+)
 from skala_rag.tools.runtime import Allowance, AttemptResponse, TransportFailure, Usage
 from skala_rag.tools.structured_llm import (
     APPROVED_MODEL,
@@ -75,11 +80,24 @@ class OpenAIResponsesAttempt:
         clock: Clock,
         http_transport: httpx.BaseTransport | None = None,
         observe_wire: Callable[[bytes, int, bytes], None] | None = None,
+        llm_settings: LLMSettings | None = None,
     ) -> None:
+        api_key = resolve_explicit_credential(api_key)
         if api_key is None and type(http_transport) is not httpx.MockTransport:
             raise ValueError("api_key is required")
         if api_key is not None and not api_key.strip():
             raise ValueError("api_key is required")
+        self.llm_settings = (
+            llm_settings if llm_settings is not None else load_runtime_document().llm
+        )
+        # Injected model_copy/model_construct values are not execution authority.
+        if self.llm_settings.model != APPROVED_MODEL:
+            raise ValueError("unapproved OpenAI model")
+        if self.llm_settings.endpoint != RESPONSES_URL:
+            raise ValueError("unapproved OpenAI endpoint")
+        LLMSettings.model_validate_json(
+            self.llm_settings.model_dump_json(), strict=True
+        )
         self._key = api_key.strip() if api_key is not None else None
         self._prompt_version = prompt_version
         self._schema_version = schema_version
@@ -112,7 +130,7 @@ class OpenAIResponsesAttempt:
                     else {}
                 )
                 response = client.post(
-                    RESPONSES_URL,
+                    self.llm_settings.endpoint,
                     json=payload,
                     headers=headers,
                 )
@@ -129,7 +147,7 @@ class OpenAIResponsesAttempt:
 
             llm = OpenAIStructuredLLM(
                 transport=post,
-                model=APPROVED_MODEL,
+                model=self.llm_settings.model,
                 prompt_version=self._prompt_version,
                 schema_version=self._schema_version,
                 max_output_tokens=output_token_limit,

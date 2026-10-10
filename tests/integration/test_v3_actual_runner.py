@@ -7,6 +7,7 @@ HTTP request leaves the process. Synthetic model files/vectors are not BGE proof
 
 import importlib.util
 import json
+import shutil
 import socket
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
@@ -66,6 +67,7 @@ from skala_rag.graph.actual_inputs_v3 import (
 )
 from skala_rag.graph.actual_replay_v3 import CapturedLocalEncoder
 from skala_rag.graph.actual_runner_v3 import ROOT, run_actual, run_replay
+from skala_rag.prompt.versions import ACTUAL_COMPOSITION_VERSION
 from skala_rag.prompts.evidence_extraction import ClaimDraft
 from skala_rag.rag.corpus import manifest_hash
 from skala_rag.rag.dense import QueryVector
@@ -73,6 +75,7 @@ from skala_rag.rag.index_v3 import build_index_plan, write_index
 from skala_rag.rag.sqlite_index import SQLiteIndexStore
 from skala_rag.scoring.approval_registry import pinned_approval_registry
 from skala_rag.scoring.catalog import load_policy
+from skala_rag.settings import load_runtime_document
 from skala_rag.tools.company_research import FieldObservation, StageObservation
 from skala_rag.tools.source_fetch import content_hash
 
@@ -599,6 +602,154 @@ def test_preflight_defaults_to_no_paid_action(case):
     assert not case["authority"].campaign_marker.exists()
 
 
+def test_actual_composition_loads_once_and_preserves_snapshot_identity(
+    case, monkeypatch
+):
+    # Given
+    document = load_runtime_document()
+    loads, attempts = [], []
+    original_attempt = runner_module.OpenAIResponsesAttempt
+
+    def load():
+        loads.append(document)
+        return document
+
+    def attempt(**kwargs):
+        attempts.append(kwargs)
+        return original_attempt(**kwargs)
+
+    monkeypatch.setattr(runner_module, "load_runtime_document", load)
+    monkeypatch.setattr(runner_module, "OpenAIResponsesAttempt", attempt)
+    transport, seen, _ = wire(case)
+    # When
+    out = invoke(
+        case,
+        execute=True,
+        execution_scope="controlled_response",
+        transport_for=transport,
+    )
+    # Then
+    assert receipt(out)["status"] == "completed", receipt(out)
+    assert loads == [document]
+    assert attempts and seen
+    assert all(a["llm_settings"] is document.llm for a in attempts)
+    assert all(type(a["http_transport"]) is httpx.MockTransport for a in attempts)
+    assert len({id(a["clock"]) for a in attempts}) == 1
+    campaign = json.loads((out / "campaign.json").read_bytes())
+    assert campaign["limits"]["max_calls"] == 40
+    assert campaign["input_usd_per_token"] == "0.0000004"
+    assert campaign["output_usd_per_token"] == "0.0000016"
+    assert campaign["full_token_caps_upper_bound_usd"] == "0.992"
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("max_calls", 41),
+        ("openai_max_calls", 41),
+        ("retrieval_max_calls", 41),
+        ("max_cost_usd", Decimal("2")),
+        ("timeout_seconds", 61.0),
+        ("max_retries", 1),
+    ],
+)
+def test_actual_document_copy_cannot_raise_authority(case, field, value):
+    # Given
+    document = load_runtime_document()
+    supplied = document.model_copy(
+        update={
+            "profiles": document.profiles.model_copy(
+                update={
+                    "actual_v3": document.profiles.actual_v3.model_copy(
+                        update={field: value}
+                    )
+                }
+            )
+        }
+    )
+    transport, seen, _ = wire(case)
+    # When
+    out = invoke(
+        case,
+        execute=True,
+        execution_scope="controlled_response",
+        transport_for=transport,
+        runtime_document=supplied,
+    )
+    # Then
+    assert receipt(out)["status"] == "preflight_blocked", receipt(out)
+    assert receipt(out)["actual_provider_calls"] == 0
+    assert seen == case["encoder_calls"] == []
+    assert not case["authority"].campaign_marker.exists()
+
+
+def test_actual_lower_shared_total_stops_before_second_request(case, monkeypatch):
+    # Given: independently approved lower total, not 40 for each tool.
+    document = load_runtime_document()
+    supplied = document.model_copy(
+        update={
+            "profiles": document.profiles.model_copy(
+                update={
+                    "actual_v3": document.profiles.actual_v3.model_copy(
+                        update={
+                            "max_calls": 1,
+                            "timeout_seconds": 12.0,
+                            "deadline_seconds": 90.0,
+                            "retrieval_top_k": 1,
+                        }
+                    )
+                }
+            )
+        }
+    )
+    case["authority"] = replace(
+        case["authority"],
+        live_gate_verifier=lambda gate, gates: (
+            getattr(gates, f"{gate}_reference") == case["packet"].approval_reference
+            and gates.limits.max_calls == 1
+            and gates.limits.max_cost_usd == 1
+        ),
+    )
+
+    def forbidden():
+        pytest.fail("supplied document must not reload defaults")
+
+    monkeypatch.setattr(runner_module, "load_runtime_document", forbidden)
+    transport, seen, _ = wire(case)
+    # When
+    out = invoke(
+        case,
+        execute=True,
+        execution_scope="controlled_response",
+        transport_for=transport,
+        runtime_document=supplied,
+    )
+    # Then: retrieval spends the shared total; no model request is available.
+    result = receipt(out)
+    assert result["status"] != "completed"
+    assert result["ledger"]["calls"] == 1
+    assert result["ledger"]["tool_calls"] == {"retrieve": 1}
+    assert seen == []
+    assert len(case["encoder_calls"]) == 1
+    campaign = json.loads((out / "campaign.json").read_bytes())
+    assert campaign["limits"]["max_calls"] == 1
+
+
+def test_input_authentication_rejects_before_operator_settings(case, monkeypatch):
+    # Given
+    case["authority"] = replace(case["authority"], authenticate_inputs=lambda _: False)
+
+    def forbidden():
+        pytest.fail("settings accessed before input authentication")
+
+    monkeypatch.setattr(runner_module, "load_runtime_document", forbidden)
+    # When
+    out = invoke(case)
+    # Then
+    assert receipt(out)["reason"] == "INPUT_AUTHORITY_REJECTED"
+    assert case["encoder_calls"] == []
+
+
 @pytest.mark.parametrize(
     "damage", ["source", "authority", "budget", "native_mock", "pin"]
 )
@@ -1091,6 +1242,103 @@ def test_same_runner_actual_origin_replay_and_repeated_report_roles(case, monkey
         json.loads((replay / "context.json").read_bytes())["execution_scope"]
         == "actual"
     )
+    manifest = json.loads((replay / "manifest.json").read_bytes())
+    assert manifest["prompt_versions"]["actual_composition"] == (
+        ACTUAL_COMPOSITION_VERSION
+    )
+    assert ACTUAL_COMPOSITION_VERSION == "actual-v3-1"
+
+
+def test_prompt_resource_commitment_changes_reject_replay_before_authority(
+    case, monkeypatch, tmp_path
+):
+    # Given: a synthetic original capture and every shipped prompt JSON committed.
+    transport, seen, _ = wire(case)
+    intercept_native(monkeypatch, transport)
+    original = invoke(case, execute=True, api_key="SYNTHETIC-NOT-A-CREDENTIAL")
+    assert receipt(original)["status"] == "completed", receipt(original)
+    requests_before = len(seen)
+    expected_resources = {
+        str(path.relative_to(ROOT))
+        for path in (ROOT / "src/skala_rag/prompt/text").glob("*.json")
+    }
+    committed_resources = {
+        name
+        for name in runner_module.implementation_commitments(ROOT)
+        if name.startswith("src/skala_rag/prompt/text/") and name.endswith(".json")
+    }
+    commitment_function = runner_module.implementation_commitments
+    assert expected_resources
+    assert committed_resources == expected_resources
+
+    mirror = tmp_path / "commitment-mirror"
+    for name in [*sorted(expected_resources), "uv.lock"]:
+        destination = mirror / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / name, destination)
+    assert {
+        name: pin
+        for name, pin in commitment_function(mirror).items()
+        if name in expected_resources
+    } == {
+        name: pin
+        for name, pin in commitment_function(ROOT).items()
+        if name in expected_resources
+    }
+
+    def mirrored_commitments(root):
+        assert root == ROOT
+        commitments = commitment_function(root)
+        commitments = {
+            name: pin
+            for name, pin in commitments.items()
+            if name not in expected_resources
+        }
+        mirror_commitments = commitment_function(mirror)
+        commitments.update(
+            {
+                name: pin
+                for name, pin in mirror_commitments.items()
+                if name in expected_resources
+            }
+        )
+        return dict(sorted(commitments.items()))
+
+    callbacks = []
+    authority = replace(
+        case["authority"],
+        authenticate_inputs=lambda _: callbacks.append("input") or True,
+        verify_replay_origin=lambda _: callbacks.append("origin") or True,
+    )
+
+    def replay(reason, suffix):
+        out = run_replay(
+            case["tmp"] / suffix,
+            inputs=case["path"],
+            inputs_sha256=file_digest(case["path"]),
+            authority=authority,
+            original_capture=original / "capture.json",
+            original_capture_sha256=file_digest(original / "capture.json"),
+        )
+        assert receipt(out)["reason"] == reason, receipt(out)
+        assert receipt(out)["actual_provider_calls"] == 0
+        assert callbacks == []
+        assert len(seen) == requests_before
+
+    monkeypatch.setattr(
+        runner_module, "implementation_commitments", mirrored_commitments
+    )
+    resource = mirror / "src/skala_rag/prompt/text/demo_common.json"
+    original_fragments = json.loads(resource.read_bytes())
+    changed_fragments = list(original_fragments)
+    changed_fragments[0] += " task10"
+    resource.write_text(
+        json.dumps(changed_fragments, ensure_ascii=False), encoding="utf-8"
+    )
+    assert mirrored_commitments(ROOT) != commitment_function(ROOT)
+    replay("REPLAY_ORIGIN_MISMATCH", "changed-prompt-replay")
+    resource.unlink()
+    replay("REPLAY_ORIGIN_MISMATCH", "missing-prompt-replay")
 
 
 def test_native_intercepted_stub_judge_cannot_complete_or_authorize_replay(

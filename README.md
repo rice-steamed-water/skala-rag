@@ -97,14 +97,16 @@ flowchart TD
 ```text
 skala-rag/
 ├── data/                   # 문서 metadata·로컬 원문·임베딩 모델
-├── configs/                # 평가 기준·점수 정책·PDF 설정
+├── configs/                # runtime.json·평가 기준·점수 정책·PDF 설정
 ├── docs/                   # 설계·구현·실행 안내, 읽기 전용 원문
 ├── examples/               # 한글 보고서 생성 예제
 ├── src/skala_rag/
 │   ├── agents/             # 기업 탐색·판별·투자 평가
 │   ├── contracts/          # 공통 데이터 모델·인터페이스
 │   ├── graph/              # 후보 처리·병렬 평가·보고서 흐름
-│   ├── prompts/            # 정보 추출·평가 프롬프트
+│   ├── prompt/             # authored 지시문·JSON fragment resource·builder·버전
+│   ├── prompts/            # 기존 여섯 모듈의 import-only 호환 export
+│   ├── settings.py         # 명시 profile·불변 구성 snapshot·credential resolver
 │   ├── rag/                # PDF 추출·임베딩·인덱스·검색
 │   ├── reporting/          # 보고서 생성·평가·HTML/PDF
 │   ├── scoring/            # 근거 충족 검사·점수 계산·후보 선정
@@ -184,7 +186,27 @@ macOS/Linux에서 앱·자료·검색을 로컬로 실행하고, 모델 분석·
 
 ### 설정·자료 관리
 
-평가 기준은 [configs/rubrics/](configs/rubrics/), 가중치·PDF 설정은 [configs/](configs/), 원문과 검토 metadata는 [data/manifests/](data/manifests/)에서 관리한다. 로컬 데모 외의 OpenDART 조회는 `OPENDART_API_KEY`를 별도로 사용한다. 데모의 `.env` 읽기는 해당 실행 함수에서 처리하며, 다른 Python 직접 호출에는 환경변수를 명시적으로 전달한다.
+모델·실행 요청값의 원본은 `configs/runtime.json`, typed loader는
+`skala_rag.settings`다. [설정 소유권·여덟 profile·파일 선택](configs/README.md)을 따른다.
+명시 `path=`는 전체 same-schema 파일을 선택한다. 기본값은 source/editable에서
+module-relative canonical 파일, installed wheel에서 package resource를 읽으며,
+누락·malformed 파일에 checkout fallback은 없다. 주입된 객체와 기존 명시 인자를
+보존하고 생략한 구성값만 파일에서 공급한다. 한 composition의 불변 snapshot과 공유
+ledger·persisted campaign은 이후 설정 편집으로 초기화되지 않는다. 설정 통과는
+모델·정책·비용·live 승인 authority가 아니다.
+
+prompt 수정은 `src/skala_rag/prompt/`에서 한다. `text/*.json`은 literal string
+fragment array이며 공백·개행을 정규화하지 않고 연결한다. 상수는 process import 때
+로드하므로 변경 후 새 프로세스로 실행한다. plural `prompts/`는 동일 object의 호환
+export다. 기존 버전/tag와 manifest shape는 보존되며 actual replay는 JSON text의
+byte hash도 검증한다. historical capture를 새 text로 우회 재생하지 않는다.
+
+평가 기준은 [configs/rubrics/](configs/rubrics/), 가중치·PDF 설정은 [configs/](configs/), 원문과 검토 metadata는 [data/manifests/](data/manifests/)에서 관리한다. OpenDART 조회는 `OPENDART_API_KEY`를 별도로 사용한다. 데모의 `.env` 읽기는 해당 실행 함수에서 처리한다.
+
+키는 설정 JSON·snapshot·State·보고서에 넣지 않는다. M2는 환경 키를 strip하며 demo는
+`env_value or root/.env_value` 후 blank 검사다. actual runner/attempt는 명시 `api_key=`
+만 소비한다. 정확한 우선순위와 keyless MockTransport 경계는
+[adapter runtime](docs/implementation/adapter-runtime.md#중앙-설정과-credentials-231)을 따른다.
 
 ## Contributors
 

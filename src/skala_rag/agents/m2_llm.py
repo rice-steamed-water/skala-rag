@@ -1,15 +1,15 @@
 """#62 shared LLM runtime. Construction/preflight never makes an API request."""
 
 from datetime import datetime
-from decimal import Decimal
 
 import httpx
 
 from skala_rag.contracts import ToolBudget
 from skala_rag.contracts.interfaces import Clock
-from skala_rag.prompts.eligibility_facts import PROMPT_VERSION as ELIGIBILITY_PROMPT
-from skala_rag.prompts.evidence_extraction import PROMPT_VERSION as EVIDENCE_PROMPT
-from skala_rag.prompts.technology_evaluation import PROMPT_VERSION as TECHNOLOGY_PROMPT
+from skala_rag.prompt.eligibility_facts import PROMPT_VERSION as ELIGIBILITY_PROMPT
+from skala_rag.prompt.evidence_extraction import PROMPT_VERSION as EVIDENCE_PROMPT
+from skala_rag.prompt.technology_evaluation import PROMPT_VERSION as TECHNOLOGY_PROMPT
+from skala_rag.settings import RuntimeDocument, load_runtime_document
 from skala_rag.tools.openai_attempt import OpenAIResponsesAttempt, byte_bound_allowance
 from skala_rag.tools.runtime import (
     AdapterRuntime,
@@ -20,13 +20,6 @@ from skala_rag.tools.runtime import (
     RuntimePolicy,
 )
 from skala_rag.tools.runtime_llm import RuntimeStructuredLLM
-
-# Dated public list prices, not observed account billing/credit or actual costs.
-# Official model page fetched 2026-09-30. Keep the previously approved model.
-PRICING_REFERENCE = "https://developers.openai.com/api/docs/models/gpt-4.1-mini"
-PRICING_CHECKED_ON = "2026-09-30"
-INPUT_PRICE = Decimal("0.40") / 1_000_000
-OUTPUT_PRICE = Decimal("1.60") / 1_000_000
 
 
 class M2LLMs:
@@ -43,7 +36,20 @@ class M2LLMs:
         clock: Clock,
         deadline: datetime,
         http_transport: httpx.BaseTransport | None = None,
+        runtime_document: RuntimeDocument | None = None,
     ):
+        if not api_key.strip():
+            raise ValueError("api_key is required")
+        self.runtime_document = (
+            runtime_document
+            if runtime_document is not None
+            else load_runtime_document()
+        )
+        if runtime_document is not None:
+            RuntimeDocument.model_validate_json(
+                runtime_document.model_dump_json(), strict=True
+            )
+        profile = self.runtime_document.profiles.m2_shared
         self.runtime = AdapterRuntime(
             policy=RuntimePolicy(
                 schema_version=schema_version,
@@ -55,11 +61,11 @@ class M2LLMs:
             ledger=BudgetLedger(
                 RuntimeLimits(
                     schema_version=schema_version,
-                    max_calls=8,
-                    tool_max_calls={"m2-openai": 8},
-                    max_input_tokens=64000,
-                    max_output_tokens=16000,
-                    max_cost_usd="1.00",
+                    max_calls=profile.max_calls,
+                    tool_max_calls={"m2-openai": profile.max_calls},
+                    max_input_tokens=profile.max_input_tokens,
+                    max_output_tokens=profile.max_output_tokens,
+                    max_cost_usd=profile.max_cost_usd,
                 )
             ),
             clock=clock,
@@ -83,9 +89,9 @@ class M2LLMs:
                 ),
                 budget=ToolBudget(
                     schema_version=schema_version,
-                    max_calls=8,
-                    max_retries=0,
-                    timeout_seconds=30,
+                    max_calls=profile.max_calls,
+                    max_retries=profile.max_retries,
+                    timeout_seconds=profile.timeout_seconds,
                     deadline=deadline,
                 ),
                 readiness=Readiness(
@@ -105,24 +111,42 @@ class M2LLMs:
                     schema_version=schema_version,
                     clock=clock,
                     http_transport=http_transport,
+                    llm_settings=self.runtime_document.llm,
                 ),
                 allowance_for=lambda system, user, schema: self._allowance(
-                    system, user, schema, schema_version
+                    system,
+                    user,
+                    schema,
+                    schema_version,
+                    runtime_document=self.runtime_document,
                 ),
             )
 
     @staticmethod
-    def _allowance(system, user, schema, schema_version):
+    def _allowance(
+        system,
+        user,
+        schema,
+        schema_version,
+        *,
+        runtime_document: RuntimeDocument | None = None,
+    ):
+        document = (
+            runtime_document
+            if runtime_document is not None
+            else load_runtime_document()
+        )
+        profile = document.profiles.m2_shared
         allowance = byte_bound_allowance(
             system,
             user,
             schema,
             schema_version=schema_version,
-            max_output_tokens=2000,
-            usd_per_input_token=INPUT_PRICE,
-            usd_per_output_token=OUTPUT_PRICE,
+            max_output_tokens=profile.request_output_tokens,
+            usd_per_input_token=document.llm.usd_per_input_token,
+            usd_per_output_token=document.llm.usd_per_output_token,
         )
-        if allowance.input_tokens > 8000:
+        if allowance.input_tokens > profile.request_input_tokens:
             raise ValueError("M2 request exceeds per-request input limit")
         return allowance
 
@@ -131,8 +155,8 @@ class M2LLMs:
             "ledger": self.runtime.ledger.snapshot(),
             "actual_cost_usd": None,
             "account_credit_verified": False,
-            "pricing_reference": PRICING_REFERENCE,
-            "pricing_checked_on": PRICING_CHECKED_ON,
+            "pricing_reference": self.runtime_document.llm.pricing_reference,
+            "pricing_checked_on": self.runtime_document.llm.pricing_checked_on,
             "runtime_error_codes": [
                 e.error_code for e in self.runtime.error_history.values()
             ],

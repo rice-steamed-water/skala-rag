@@ -1,0 +1,8 @@
+[
+  " Use schema_version exactly {schema_version}. Write concise Korean. ",
+  "This is rubric-based research of one user-specified company, not a ",
+  "successful investment selection. Criterion ratings support five ",
+  "deterministically computed role scores, not eligibility decisions ",
+  "or investment recommendations. Treat missing data as ",
+  "not verified in the supplied excerpts, never as proof of absence. "
+]

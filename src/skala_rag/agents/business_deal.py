@@ -29,7 +29,7 @@ from skala_rag.contracts.v3 import (
     EvaluationBranchResult,
     WorkflowError,
 )
-from skala_rag.prompts.business_deal_evaluation import SYSTEM_PROMPT, build_user_prompt
+from skala_rag.prompt.business_deal_evaluation import SYSTEM_PROMPT, build_user_prompt
 from skala_rag.scoring.approved_consumers import ActualAdmissionV3
 from skala_rag.scoring.approved_policy import ApprovedScoringPolicy
 from skala_rag.scoring.catalog import ScoringPolicy

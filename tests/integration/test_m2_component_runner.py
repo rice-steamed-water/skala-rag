@@ -27,6 +27,8 @@ from skala_rag.prompts.eligibility_facts import EligibilityFactsOutput
 from skala_rag.prompts.evidence_extraction import ExtractionOutput
 from skala_rag.rag.adapter import IndexSnapshot
 from skala_rag.scoring.catalog import load_policy
+from skala_rag.settings import RuntimeDocument, load_runtime_document
+from skala_rag.tools.company_research import LiveResearchCompany
 from skala_rag.tools.source_fetch import SafeFetcher
 from skala_rag.tools.structured_llm import APPROVED_MODEL
 
@@ -356,6 +358,48 @@ def test_campaign_cap_is_checked_before_any_request(wired):
     assert seen == {"http": [], "llm": [], "retrieval": []}
 
 
+def test_component_resolves_one_document_for_rag_and_all_llm_stages(wired, monkeypatch):
+    root, path, output, _, seen = wired
+    document = load_runtime_document()
+    loaded = []
+    rag_documents = []
+    original_rag = runner.LocalRAG
+
+    def load():
+        loaded.append(True)
+        return document
+
+    def rag(**kwargs):
+        rag_documents.append(kwargs["runtime_document"])
+        return original_rag(**kwargs)
+
+    monkeypatch.setattr(runner, "load_runtime_document", load)
+    monkeypatch.setattr(runner, "LocalRAG", rag)
+    result = runner.run(root=root, input_path=path, output_dir=output, live=True)
+
+    assert loaded == [True]
+    assert rag_documents == [document]
+    assert result["status"] == "technology_component_trace_verified"
+    assert len(seen["llm"]) == 3
+
+
+@pytest.mark.parametrize("mutation", ["scope", "key", "campaign"])
+def test_early_guards_keep_their_order_before_dependent_requests(
+    wired, monkeypatch, mutation
+):
+    root, path, output, config, seen = wired
+    if mutation == "scope":
+        config["run_input"]["countries"] = ["US"]
+    elif mutation == "campaign":
+        config["campaign_cost_usd_accounted"] = "2.01"
+    else:
+        monkeypatch.delenv("OPENAI_API_KEY")
+    path.write_text(json.dumps(config))
+    with pytest.raises(ValueError):
+        runner.run(root=root, input_path=path, output_dir=output, live=True)
+    assert seen == {"http": [], "llm": [], "retrieval": []}
+
+
 def test_failed_trace_keeps_admission_and_terminal_usage(wired, monkeypatch):
     root, path, output, _, seen = wired
 
@@ -457,3 +501,136 @@ def test_chunk_selection_preserves_text_and_skips_overlarge_returns(
         assert bundle.chunks[1].text == TEXT
     assert llms.runtime.ledger.snapshot()["calls"] == 0
     assert seen["llm"] == []
+
+
+@pytest.fixture
+def redirecting_sources(wired, monkeypatch):
+    _, _, _, _, seen = wired
+    accounting = []
+    original_call = LiveResearchCompany.__call__
+
+    def observed_call(self, candidate, budget):
+        result = original_call(self, candidate, budget)
+        accounting.append(
+            {
+                "budget": budget.max_calls,
+                "requests_used": result.retrieval_records[-1].arguments_without_secrets[
+                    "requests_used"
+                ],
+            }
+        )
+        return result
+
+    def handler(request):
+        seen["http"].append(request)
+        if request.url.host == "robot.example":
+            hop = int(request.url.path.strip("/") or "0")
+            if hop < 4:
+                return httpx.Response(302, headers={"location": f"/{hop + 1}"})
+            return httpx.Response(
+                200,
+                text="<html>" + HOME + "</html>",
+                headers={"content-type": "text/html"},
+            )
+        return httpx.Response(
+            200,
+            json=dict(
+                status="000",
+                message="synthetic",
+                corp_code="01234567",
+                corp_name=NAME,
+                bizr_no="1234567890",
+                jurir_no="",
+                corp_cls="E",
+            ),
+        )
+
+    def deny_native(*args, **kwargs):
+        raise AssertionError("redirect regression attempted native HTTP")
+
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", deny_native)
+    monkeypatch.setattr(LiveResearchCompany, "__call__", observed_call)
+    monkeypatch.setattr(
+        runner,
+        "SafeFetcher",
+        lambda policy, **kwargs: SafeFetcher(
+            policy,
+            **kwargs,
+            transport=httpx.MockTransport(handler),
+            resolve=lambda host: ["93.184.216.34"],
+        ),
+    )
+    return wired, accounting
+
+
+def test_component_redirect_default_stops_after_one_request(
+    redirecting_sources,
+):
+    (root, path, output, _, seen), accounting = redirecting_sources
+
+    receipt = runner.run(root=root, input_path=path, output_dir=output, live=True)
+
+    assert receipt["status"] == "technical_failure"
+    assert [str(request.url) for request in seen["http"]] == ["https://robot.example/"]
+    assert accounting == [{"budget": 3, "requests_used": 1}]
+    assert seen["llm"] == []
+    assert seen["retrieval"] == []
+
+
+@pytest.mark.parametrize(
+    "selection", ["configured", "validated", "model_copy", "model_construct"]
+)
+def test_component_redirect_setting_rejects_before_physical_requests(
+    redirecting_sources, monkeypatch, selection
+):
+    (root, path, output, _, seen), accounting = redirecting_sources
+    snapshot = load_runtime_document()
+    content = snapshot.model_dump(mode="json")
+    content["profiles"]["m2_research"]["fetch"]["max_redirects"] = 4
+    if selection == "configured":
+        settings_path = root / "runtime-override.json"
+        settings_path.write_text(json.dumps(content))
+        monkeypatch.setattr(
+            runner,
+            "load_runtime_document",
+            lambda: load_runtime_document(path=settings_path),
+        )
+        document = None
+    elif selection == "validated":
+        document = RuntimeDocument.model_validate_json(json.dumps(content), strict=True)
+    else:
+        fetch = snapshot.profiles.m2_research.fetch
+        if selection == "model_copy":
+            fetch = fetch.model_copy(update={"max_redirects": 4})
+        else:
+            fetch = type(fetch).model_construct(
+                allowed_schemes=fetch.allowed_schemes,
+                max_bytes=fetch.max_bytes,
+                timeout_seconds=fetch.timeout_seconds,
+                max_redirects=4,
+            )
+        profile = snapshot.profiles.m2_research.model_copy(update={"fetch": fetch})
+        profiles = snapshot.profiles.model_copy(update={"m2_research": profile})
+        if selection == "model_copy":
+            document = snapshot.model_copy(update={"profiles": profiles})
+        else:
+            document = RuntimeDocument.model_construct(
+                schema_version=snapshot.schema_version,
+                llm=snapshot.llm,
+                profiles=profiles,
+            )
+
+    with pytest.raises(
+        ValueError, match="component source requests require zero redirects"
+    ):
+        runner.run(
+            root=root,
+            input_path=path,
+            output_dir=output,
+            live=True,
+            runtime_document=document,
+        )
+
+    assert seen == {"http": [], "llm": [], "retrieval": []}
+    assert accounting == []
+    assert not output.exists()

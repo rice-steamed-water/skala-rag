@@ -195,3 +195,23 @@ def test_unexpected_transport_error_not_logged_as_success():
     assert error.value.error_code == ErrorCode.LLM_FAILED
     assert llm.calls[0].status == "failure"
     assert "private failure" not in str(error.value)
+
+
+@pytest.mark.parametrize(
+    "model,max_output_tokens",
+    [("unapproved-model", 100), (APPROVED_MODEL, 2001)],
+)
+def test_direct_constructor_retains_model_and_output_authority(
+    model, max_output_tokens
+):
+    received = []
+    with pytest.raises(ValueError):
+        OpenAIStructuredLLM(
+            transport=lambda payload: received.append(payload) or httpx.Response(200),
+            model=model,
+            max_output_tokens=max_output_tokens,
+            prompt_version="synthetic",
+            schema_version="test",
+            clock=FakeClock(datetime(2026, 9, 30, tzinfo=timezone.utc)),
+        )
+    assert received == []

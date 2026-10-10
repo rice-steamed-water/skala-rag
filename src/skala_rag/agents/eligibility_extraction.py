@@ -37,7 +37,7 @@ from skala_rag.agents.evidence_extraction import _INSTRUCTION, _name_key
 from skala_rag.contracts.candidates import Candidate
 from skala_rag.contracts.interfaces import StructuredLLM
 from skala_rag.contracts.sources import Source
-from skala_rag.prompts.eligibility_facts import (
+from skala_rag.prompt.eligibility_facts import (
     PROMPT_VERSION,
     SYSTEM_PROMPT,
     EligibilityFactsOutput,

@@ -30,7 +30,7 @@ from skala_rag.agents.technology_verification import ReviewedTechnologyAnchor
 from skala_rag.contracts.evaluation import EvaluationResult, EvaluationSnapshot
 from skala_rag.contracts.evidence import Evidence
 from skala_rag.contracts.interfaces import Clock, StructuredLLM
-from skala_rag.prompts import technology_evaluation as prompt
+from skala_rag.prompt import technology_evaluation as prompt
 from skala_rag.scoring.approved_policy import (
     ApprovalVerifier,
     ApprovedScoringPolicy,

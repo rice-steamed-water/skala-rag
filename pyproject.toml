@@ -25,6 +25,13 @@ dependencies = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/skala_rag"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"configs/runtime.json" = "skala_rag/_config/runtime.json"
+
+[tool.hatch.build.targets.sdist.force-include]
+"configs/runtime.json" = "configs/runtime.json"
+"src/skala_rag/prompt/text" = "src/skala_rag/prompt/text"
+
 [tool.ruff]
 target-version = "py311"
 src = ["src"]

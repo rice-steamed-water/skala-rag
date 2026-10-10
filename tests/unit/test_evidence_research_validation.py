@@ -19,6 +19,8 @@ from tests.fixtures.evidence_research import (
 
 from skala_rag.fakes import FakeClock
 from skala_rag.rag import evidence_research_validation as smoke
+from skala_rag.settings import load_runtime_document
+from skala_rag.tools.openai_attempt import OpenAIResponsesAttempt
 
 CID = smoke.CANDIDATE_ID
 TECH = "Physical Intelligence trains technology.maturity flow models on robots."
@@ -47,7 +49,7 @@ def patched(monkeypatch, tmp_path):
     snapshot = SimpleNamespace(corpus_version="corpus-live", index_version="index-live")
     runtime = retriever._runtime
 
-    def fake_retriever(*args):
+    def fake_retriever(*args, **kwargs):
         return (
             retriever,
             snapshot,
@@ -62,23 +64,22 @@ def patched(monkeypatch, tmp_path):
 
 
 def run(root, **changes):
-    kwargs = dict(
+    return smoke.run(
         root=root,
         model_path=root,
         store_path=root,
         receipt_path=root,
-        output_dir=root / "outputs/issue55",
-        timeout_seconds=60,
-        llm="none",
-        initial_criterion="technology.maturity",
-        initial_query="technology.maturity",
-        gap_criterion="technology.reliability",
-        gap_query="technology.reliability",
-        top_k=2,
-        max_segment_bytes=4000,
+        output_dir=changes.get("output_dir", root / "outputs/issue55"),
+        timeout_seconds=changes.get("timeout_seconds", 60),
+        llm=changes.get("llm", "none"),
+        initial_criterion=changes.get("initial_criterion", "technology.maturity"),
+        initial_query=changes.get("initial_query", "technology.maturity"),
+        gap_criterion=changes.get("gap_criterion", "technology.reliability"),
+        gap_query=changes.get("gap_query", "technology.reliability"),
+        top_k=changes.get("top_k", 2),
+        max_segment_bytes=changes.get("max_segment_bytes", 4000),
+        runtime_document=changes.get("runtime_document"),
     )
-    kwargs.update(changes)
-    return smoke.run(**kwargs)
 
 
 def test_no_llm_mode_traces_retrieval_without_evidence(patched):
@@ -128,3 +129,46 @@ def test_refuses_output_outside_outputs(patched):
     root, _ = patched
     with pytest.raises(ValueError):
         run(root, output_dir=root / "elsewhere")
+
+
+def test_validation_composition_loads_once_for_retrieval_and_no_claims(
+    patched, monkeypatch
+):
+    root, _ = patched
+    document = load_runtime_document()
+    loads = []
+
+    def load():
+        loads.append(True)
+        return document
+
+    monkeypatch.setattr(smoke, "load_runtime_document", load)
+    result = run(root)
+    assert result["evidence"] == 0
+    assert loads == [True]
+
+
+def test_openai_validation_uses_snapshot_limits_and_common_pricing():
+    document = load_runtime_document()
+    profile = document.profiles.m2_evidence_validation.model_copy(
+        update={"request_output_tokens": 100, "max_calls": 2, "timeout_seconds": 10.0}
+    )
+    document = document.model_copy(
+        update={
+            "profiles": document.profiles.model_copy(
+                update={"m2_evidence_validation": profile}
+            )
+        }
+    )
+    clock = FakeClock(utc(2026, 9, 30))
+    llm = smoke._openai_llm("synthetic-key", clock, runtime_document=document)
+    bound = llm.allowance_for("s", "u", smoke.ExtractionOutput)
+
+    assert bound.output_tokens == 100
+    assert bound.max_cost_usd == (
+        bound.input_tokens * document.llm.usd_per_input_token
+        + 100 * document.llm.usd_per_output_token
+    )
+    assert llm.budget.timeout_seconds == 10
+    assert isinstance(llm.transport, OpenAIResponsesAttempt)
+    assert llm.transport.llm_settings is document.llm

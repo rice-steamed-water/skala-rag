@@ -118,6 +118,20 @@ def test_v3_handoff_to_generator_judge_preserves_fixed_context(rating):
     assert "not_applicable_weight" in result.draft.markdown
 
 
+def test_ordinary_report_requests_omit_source_review_fields():
+    ctx = context()
+    generator_llm = Stub()
+    draft = ReportGeneratorV3(generator_llm)(ctx, [])
+
+    judge_llm = Stub()
+    SemanticJudgeV3(judge_llm)(draft, ctx)
+
+    for _, request in (generator_llm.calls[0], judge_llm.calls[0]):
+        assert "source_review" not in request
+        assert "required_output_schema_version" not in request
+        assert "required_citation_tokens" not in request
+
+
 def test_shared_revision_exhaustion_warning_keeps_last_artifact():
     ctx = context()
     generator, judge = Stub(), Stub("revise")

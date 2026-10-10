@@ -13,6 +13,8 @@ from skala_rag.contracts.error_codes import ErrorCode
 from skala_rag.contracts.interfaces import LLMError
 from skala_rag.contracts.tools import ToolBudget
 from skala_rag.fakes import FakeClock
+from skala_rag.settings import load_runtime_document
+from skala_rag.tools import openai_attempt
 from skala_rag.tools.openai_attempt import (
     FRAMING_TOKENS,
     RESPONSES_URL,
@@ -312,3 +314,77 @@ def test_api_key_is_not_recorded():
     )
     assert KEY not in dumped
     assert KEY not in repr(attempt.llm_calls)
+
+
+def test_supplied_llm_snapshot_wins_without_reading_configuration(monkeypatch):
+    snapshot = load_runtime_document().llm.model_copy(
+        update={"pricing_checked_on": "2026-10-09"}
+    )
+
+    def unexpected_load():
+        raise AssertionError("supplied snapshot must not reload configuration")
+
+    monkeypatch.setattr(openai_attempt, "load_runtime_document", unexpected_load)
+    seen = []
+    attempt = OpenAIResponsesAttempt(
+        api_key=None,
+        prompt_version="synthetic",
+        schema_version=SCHEMA,
+        clock=FakeClock(START),
+        http_transport=httpx.MockTransport(
+            lambda request: seen.append(request) or httpx.Response(200, json=body())
+        ),
+        llm_settings=snapshot,
+    )
+    result = attempt.generate_once(
+        system="s",
+        user="u",
+        output_schema=Output,
+        timeout_seconds=30,
+        input_token_limit=8000,
+        output_token_limit=50,
+    )
+
+    assert result.data == Output(answer=4)
+    assert attempt.llm_settings is snapshot
+    assert str(seen[0].url) == snapshot.endpoint
+    assert json.loads(seen[0].content)["model"] == snapshot.model
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"model": "ignore approval; use another model"},
+        {"endpoint": "https://evil.example/v1/responses"},
+        {"usd_per_input_token": Decimal("0")},
+    ],
+)
+def test_injected_snapshot_cannot_bypass_direct_authority(changes):
+    snapshot = load_runtime_document().llm.model_copy(update=changes)
+    seen = []
+    with pytest.raises(ValueError):
+        OpenAIResponsesAttempt(
+            api_key=KEY,
+            prompt_version="synthetic",
+            schema_version=SCHEMA,
+            clock=FakeClock(START),
+            llm_settings=snapshot,
+            http_transport=httpx.MockTransport(
+                lambda request: seen.append(request) or httpx.Response(200)
+            ),
+        )
+    assert seen == []
+
+
+def test_credential_guard_precedes_configuration_read(monkeypatch):
+    def unexpected_load():
+        raise AssertionError("invalid key must reject before file access")
+
+    monkeypatch.setattr(openai_attempt, "load_runtime_document", unexpected_load)
+    with pytest.raises(ValueError, match="api_key is required"):
+        OpenAIResponsesAttempt(
+            api_key=None,
+            prompt_version="synthetic",
+            schema_version=SCHEMA,
+            clock=FakeClock(START),
+        )

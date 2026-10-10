@@ -29,7 +29,7 @@ from skala_rag.contracts.interfaces import Clock, StructuredLLM
 from skala_rag.contracts.state import InvestmentState
 from skala_rag.graph.reducers import merge_evidence
 from skala_rag.graph.snapshot import freeze_snapshot
-from skala_rag.prompts.evidence_extraction import PROMPT_VERSION
+from skala_rag.prompt.evidence_extraction import PROMPT_VERSION
 from skala_rag.scoring.catalog import ScoringPolicy
 from skala_rag.tools.openai_attempt import OpenAIResponsesAttempt
 from skala_rag.tools.runtime_llm import RuntimeStructuredLLM

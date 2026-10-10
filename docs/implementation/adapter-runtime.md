@@ -5,6 +5,42 @@
 그대로 사용한다. 공통 DTO/State/config/의존성 변경 없이 별도 모듈로 제공한다.
 실제 Web/LLM 응답 파싱·키 조회·모델 다운로드·Graph/live runner 연결은 포함하지 않는다.
 
+## 중앙 설정과 credentials (#231)
+
+위 #45 공통 runtime 자체는 주입된 객체만 소비한다. 후속 M2/actual/demo composition의
+요청 기본값은 [configs/runtime.json](../../configs/runtime.json)과
+[`skala_rag.settings`](../../src/skala_rag/settings.py)가 소유한다.
+[여덟 profile과 선택 계약](../../configs/README.md#실행-설정-231)을 따른다.
+`load_runtime_document(path=...)`는 부분 patch가 아닌 전체 strict/frozen 문서를 읽는다.
+기본 source/editable은 정확한 module-relative `configs/runtime.json`, installed는
+`skala_rag/_config/runtime.json`을 선택한다. 선택 실패에 fallback은 없다.
+
+기존 주입 identity와 명시 인자가 파일보다 우선한다. multi-profile composition은
+기존 guard 뒤에서 한 document를 읽어 dependent constructor에 전달한다.
+기존 runtime/ledger/clock/verifier/allowance를 설정으로 교체하지 않으며 import에서
+operator config/environment나 provider를 만들지 않는다. 다음 composition의 reload는
+가능하지만 기존 불변 snapshot·공유 예산·persisted campaign을 reset하지 않는다.
+
+설정은 requested settings이지 실행 authority가 아니다. 모델 allowlist·정확한 Responses
+endpoint·승인된 Decimal rates·상한·실제 승인·receipt·artifact 검증은 독립이다.
+M2의 세 stage는 8회 ledger 하나, actual OpenAI/retrieve는 40회 ledger 하나를 공유한다.
+component `m2_research.fetch.max_redirects != 0`은 source/LLM 요청 전에 거절하고,
+별도 source-only `m2_source`의 redirect 3은 유지한다. usage 미상은 실측 0이 아니다.
+
+| 경로 | key 선택 / 거절 |
+| --- | --- |
+| `OpenAIResponsesAttempt`, actual runner | 명시 `api_key=`만 소비; 환경·dotenv 조회 없음. attempt는 키가 `None`일 때 정확한 `type(http_transport) is httpx.MockTransport`만 허용; blank 명시 키는 거절 |
+| M2 component·evidence validation | `resolve_environment_credential("OPENAI_API_KEY")`: 환경만 읽고 strip; openai 실행에 missing/blank 키 거절 |
+| M2 source/component OpenDART | 같은 resolver로 `OPENDART_API_KEY`를 strip; optional 미설정 상태는 승인과 별개 |
+| local demo | `resolve_demo_credential(root)`: truthy env 값 우선, missing/empty env는 정확한 `root/.env` fallback, whitespace env는 우선 후 blank 검사에서 거절 |
+
+resolver는 환경을 수정하거나 dotenv를 다른 디렉터리에서 찾지 않는다.
+credentials는 serializable settings/repr·State·report 밖에 두며 readiness에는
+presence boolean만 전달한다. 실제 `.env`는 커밋하지 않는다.
+prompt는 singular `prompt/`의 process-loaded 상수·명시 builder에서 소비하고 plural
+`prompts/`는 호환 export만 제공한다. 버전/tag·strict schema·수정 순서·반환 shape를
+바꾸지 않으며 JSON text의 sorted byte commitments도 strict actual replay에 포함한다.
+
 ## 연결 API
 
 | 이름 | 공급하거나 소비할 값 |
