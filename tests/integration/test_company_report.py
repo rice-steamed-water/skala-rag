@@ -8,6 +8,7 @@ import json
 import socket
 from dataclasses import replace
 from datetime import timedelta
+from decimal import Decimal
 from pathlib import Path
 from threading import Event, Lock
 
@@ -44,8 +45,10 @@ from skala_rag.contracts.company_report import (
 )
 from skala_rag.graph.actual_inputs_v3 import (
     CompanyReportAuthorityV3,
+    CompanyReportReadmissionV3,
     IdentityResearchAdmissionV3,
     canonical,
+    digest,
     review_resolver,
 )
 from skala_rag.prompt.company_report_freshness import GapQuery
@@ -62,6 +65,8 @@ from skala_rag.scoring.approved_consumers import ActualAdmissionV3, ApprovedPoli
 from skala_rag.settings import load_runtime_document
 from skala_rag.tools.company_research import assemble_bundle
 from skala_rag.tools.openai_attempt import OpenAIResponsesAttempt
+from skala_rag.tools.runtime import Allowance, BudgetLedger
+from skala_rag.tools.runtime_llm import RuntimeStructuredLLM
 from skala_rag.tools.source_fetch import FetchPolicy
 
 
@@ -217,6 +222,8 @@ class Harness:
         self.hostile_gap = False
         self.judge_verdict = "pass"
         self.api_failure = False
+        self.report_evidence_id = "seed-evidence"
+        self.report_claim = "Controlled original."
         self.identity_status = "000"
         self.same_name_wrong_number = False
         self.eval_wire, _, _ = wire(self.base)
@@ -450,7 +457,9 @@ class Harness:
                 output = {
                     "schema_version": SCHEMA,
                     "summary": "SYNTHETIC test only.",
-                    "company_team": "Controlled original. [@evidence:seed-evidence]",
+                    "company_team": (
+                        f"{self.report_claim} [@evidence:{self.report_evidence_id}]"
+                    ),
                     "technology": "Technology is unknown.",
                     "market": "Market is unknown.",
                     "assessment_risks": "Not actual investment evidence.",
@@ -637,6 +646,134 @@ class Harness:
 def receipt(path):
     return CompanyReportReceipt.model_validate_json(
         (path / "run-result.json").read_bytes()
+    )
+
+
+def extracting_research(case):
+    """Controlled extraction of a fact absent from the initial retained corpus."""
+    original = case.authority.company_report.research_for
+    text = "SYNTHETIC newly observed target builds warehouse robots."
+
+    def source(request):
+        assert request.method == "GET"
+        assert str(request.url) == case.candidate.homepage_url
+        case.events.append({"kind": "collection", "url": str(request.url)})
+        return httpx.Response(
+            200, content=text.encode(), headers={"content-type": "text/plain"}
+        )
+
+    def extraction(request):
+        assert request.method == "POST"
+        assert str(request.url) == case.document.llm.endpoint
+        assert "Authorization" not in request.headers
+        case.events.append({"kind": "analysis", "role": "eligibility_extraction"})
+        return httpx.Response(
+            200,
+            json=body(
+                json.dumps(
+                    {
+                        "facts": [
+                            {
+                                "field": "business",
+                                "value": None,
+                                "stage_label": None,
+                                "event_date": None,
+                                "subject": case.candidate.canonical_name,
+                                "claim": text,
+                                "excerpt": text,
+                                "confidence": "unknown",
+                            }
+                        ]
+                    }
+                ),
+                usage={"input_tokens": 10, "output_tokens": 10},
+            ),
+        )
+
+    def factory(candidate, actual):
+        binding = actual.runtime_binding
+        llm = RuntimeStructuredLLM(
+            runtime=binding.runtime,
+            call=binding.call.model_copy(update={"node": "eligibility_extraction"}),
+            budget=binding.budget,
+            readiness=binding.readiness,
+            transport=OpenAIResponsesAttempt(
+                api_key=None,
+                prompt_version="synthetic-readmission-extraction",
+                schema_version=SCHEMA,
+                clock=binding.runtime.clock,
+                llm_settings=case.document.llm,
+                http_transport=httpx.MockTransport(extraction),
+            ),
+            allowance_for=lambda *_: Allowance(
+                schema_version=SCHEMA,
+                input_tokens=20000,
+                output_tokens=1000,
+                max_cost_usd=Decimal("0.1"),
+            ),
+        )
+        return replace(
+            original(candidate, actual),
+            llm=llm,
+            domain_definition="Robotics",
+            max_input_chars=10000,
+            http_transport=httpx.MockTransport(source),
+        )
+
+    case.stale = True
+    case.authority = replace(
+        case.authority,
+        company_report=replace(case.authority.company_report, research_for=factory),
+    )
+
+
+def reviewed_readmission(case, retained, snapshot):
+    """Synthetic exact final-source reviewers; never a production approver."""
+    manifest = retained.manifest
+    extracted_root = retained.root / "synthetic-final-reviewed-text"
+    extracted_root.mkdir(exist_ok=True)
+    originals = {}
+    for sid, src in snapshot.sources.items():
+        assert src.local_path is not None
+        path = retained.root / src.local_path
+        extracted = extracted_root / f"{sid}.txt"
+        extracted.write_bytes(path.read_bytes())
+        originals[sid] = TrustedCapture(
+            path=path,
+            allowed_root=retained.root,
+            extracted_path=extracted,
+            format="text",
+            charset="utf-8",
+            source=src,
+            corpus_version=manifest.version,
+            extracted_text=path.read_text(),
+            extracted_sha256=src.content_hash,
+            approved_chunks=tuple(
+                c for c in manifest.chunks.values() if c.source_id == sid
+            ),
+        )
+    return CompanyReportReadmissionV3(
+        retained_sha256=digest(retained.payload),
+        snapshot_sha256=frozen_snapshot_digest(snapshot),
+        sources=originals,
+        reviews_for=case.authority.reviews_for,
+        evaluation_inputs_for=case.authority.evaluation_inputs_for,
+    )
+
+
+def enable_readmission(case, callback=None):
+    """Install only an explicit synthetic Python callback, never future pins."""
+    case.authority = replace(
+        case.authority,
+        company_report=replace(
+            case.authority.company_report,
+            readmit_after_research=callback
+            or (
+                lambda retained, snapshot: reviewed_readmission(
+                    case, retained, snapshot
+                )
+            ),
+        ),
     )
 
 
@@ -1027,6 +1164,188 @@ def test_research_from_starting_admission_retains_but_cannot_report(case):
     )
     with pytest.raises(ValueError, match="snapshot run/corpus/cutoff/index mismatch"):
         actual.verify_snapshot(frozen, actual.registry.rubric("core-0.1.0"))
+
+
+def test_new_facts_readmission_reports_and_reuses_without_future_pins(
+    tmp_path, monkeypatch
+):
+    # Given: only the starting corpus is admitted; no preview collection.
+    case = Harness(tmp_path, monkeypatch, competitor=True)
+    extracting_research(case)
+    original = case.actual
+    original_input = original.run_input.model_dump(mode="json")
+    binding = original.runtime_binding
+    ledger = binding.runtime.ledger
+    phases = []
+    evaluate = public.evaluate_actual_branch_v3
+
+    def capture(role, snapshot, **kwargs):
+        phases.append(kwargs["admission"])
+        return evaluate(role, snapshot, **kwargs)
+
+    monkeypatch.setattr(public, "evaluate_actual_branch_v3", capture)
+
+    def approve(retained, snapshot):
+        new_ids = set(snapshot.evidence) - set(case.before.manifest.evidence)
+        assert len(new_ids) == 1
+        case.report_evidence_id = next(iter(new_ids))
+        case.report_claim = snapshot.evidence[case.report_evidence_id].claim
+        return reviewed_readmission(case, retained, snapshot)
+
+    enable_readmission(case, approve)
+    # When: the actual public call collects/extracts and freezes before approval.
+    out = case.run(research=True)
+    # Then: real report validation/intake and the same cumulative budget.
+    assert receipt(out).outcome == "completed", (out / "run-result.json").read_text()
+    assert receipt(out).report_validation == "passed"
+    assert receipt(out).ingestion_status == "succeeded"
+    assert len(phases) == 5 and all(p is phases[0] for p in phases)
+    phase = phases[0]
+    assert phase is not original and case.actual is original
+    assert phase.runtime_binding is binding
+    assert phase.runtime_binding.runtime.ledger is ledger
+    assert phase.source is original.source and phase.registry is original.registry
+    assert original.run_input.model_dump(mode="json") == original_input
+    assert original.index_version == case.before.manifest.index_metadata.index_version
+    assert (
+        phase.run_input.model_copy(
+            update={"corpus_version": original.run_input.corpus_version}
+        )
+        == original.run_input
+    )
+    assert ledger.snapshot()["calls"] == len(case.events)
+    frozen = EvaluationSnapshot.model_validate_json(
+        (out / "snapshot.json").read_bytes()
+    )
+    assert case.report_evidence_id in frozen.evidence
+    assert case.report_evidence_id not in case.before.manifest.evidence
+    with pytest.raises(ValueError, match="snapshot run/corpus/cutoff/index mismatch"):
+        original.verify_snapshot(frozen, original.registry.rubric("core-0.1.0"))
+    audit = json.loads((out / "readmission.json").read_bytes())
+    assert audit["ledger_before_review"]["calls"] == 3
+    assert audit["ledger_before_review"] == audit["ledger_after_review"]
+    assert audit["shared_runtime_binding"] and audit["shared_ledger"]
+    context = json.loads((out / "context.json").read_bytes())
+    assert context["company_context"]["competitor_index_version"] == (
+        case.before.manifest.version
+    )
+    assert context["company_context"]["competitors"][0]["evidence_ids"] == ["ev-b"]
+    reopened = case.store.open()
+    assert reopened is not None
+    stored_report = next(iter(reopened.manifest.reports.values()))
+    assert case.report_evidence_id in stored_report.original_evidence_hashes
+    assert PdfReader(
+        json.loads((out / "render.json").read_bytes())["artifact_path"]
+    ).pages
+    # A later invocation has its own operator admission, never a mid-run reset.
+    case.bind(run_id="synthetic-new-fact-reuse")
+    case.events.clear()
+    reused = case.run("reuse", research=False)
+    assert receipt(reused).outcome == "completed"
+    assert all(e["kind"] == "analysis" for e in case.events)
+    second = json.loads((reused / "context.json").read_bytes())
+    assert case.report_evidence_id in second["snapshots"]["co-a"]["evidence"]
+    assert second["company_context"]["prior_interpretations"]
+
+
+@pytest.mark.parametrize(
+    ("bad", "reason"),
+    [
+        ("denied", "READMISSION_DENIED"),
+        ("json", "READMISSION_DENIED"),
+        ("snapshot", "READMISSION_SNAPSHOT_MISMATCH"),
+        ("retained", "READMISSION_SNAPSHOT_MISMATCH"),
+        ("stale_reviews", "SNAPSHOT_REVIEW_MISSING"),
+        ("stale_sources", "SOURCE_AUTHORITY_MISMATCH"),
+        ("reset_ledger", "READMISSION_RUNTIME_CHANGED"),
+        ("reset_usage", "READMISSION_RUNTIME_CHANGED"),
+        ("raise_limits", "READMISSION_RUNTIME_CHANGED"),
+        ("extend_deadline", "READMISSION_RUNTIME_CHANGED"),
+    ],
+)
+def test_new_fact_readmission_refusals_never_dispatch(case, bad, reason):
+    # Given: genuine new extraction with a hostile operator response or mutation.
+    extracting_research(case)
+    original = case.actual
+    old = public._snapshot(
+        case.before, case.candidate, tuple(case.before.manifest.chunks), original
+    )
+    old_reviews = case.authority.reviews_for
+    binding = original.runtime_binding
+
+    def reject(retained, snapshot):
+        supplied = reviewed_readmission(case, retained, snapshot)
+        match bad:
+            case "denied":
+                return None
+            case "json":
+                return {"snapshot_sha256": supplied.snapshot_sha256}
+            case "snapshot":
+                return replace(supplied, snapshot_sha256="0" * 64)
+            case "retained":
+                return replace(supplied, retained_sha256="0" * 64)
+            case "stale_reviews":
+                return replace(supplied, reviews_for=lambda _s, r: old_reviews(old, r))
+            case "stale_sources":
+                return replace(supplied, sources=case.authority.sources)
+            case "reset_ledger":
+                binding.runtime.ledger = BudgetLedger(binding.runtime.ledger.limits)
+            case "reset_usage":
+                binding.runtime.ledger._calls = 0
+            case "raise_limits":
+                binding.runtime.ledger.limits = (
+                    binding.runtime.ledger.limits.model_copy(update={"max_calls": 400})
+                )
+            case "extend_deadline":
+                binding.budget.deadline += timedelta(seconds=60)
+        return supplied
+
+    enable_readmission(case, reject)
+    # When
+    out = case.run(research=True)
+    # Then: intake remains, but neither evaluator nor report is dispatched.
+    assert receipt(out).outcome == "research_blocked"
+    assert receipt(out).reason_codes == (reason,), (out / "run-result.json").read_text()
+    assert all(e.get("role") not in public.BRANCH_DIMENSIONS for e in case.events)
+    reopened = case.store.open()
+    assert reopened is not None
+    assert (
+        len(set(reopened.manifest.evidence) - set(case.before.manifest.evidence)) == 1
+    )
+    assert not reopened.manifest.reports
+
+
+def test_unknown_identity_readmission_continues_without_future_pins(
+    tmp_path, monkeypatch
+):
+    # Given: no stored target identity and no anticipated corpus.
+    case = Harness(tmp_path, monkeypatch, known=False, kr=True)
+    original = case.actual
+    enable_readmission(case)
+    # When
+    out = case.run(research=True)
+    # Then
+    assert receipt(out).outcome == "completed", (out / "run-result.json").read_text()
+    assert case.actual is original
+    assert original.run_input.corpus_version == case.before.manifest.version
+    assert [e["kind"] for e in case.events if e["kind"] != "analysis"] == ["identity"]
+    reopened = case.store.open()
+    assert reopened is not None and reopened.manifest.reports
+    assert original.runtime_binding.runtime.ledger.snapshot()["calls"] == len(
+        case.events
+    )
+
+
+def test_default_mode_never_invokes_readmission_callback(case):
+    # Given: explicit callback cannot override stored-only mode.
+    enable_readmission(case, lambda *_: pytest.fail("Stored-only must not re-admit"))
+    case.stale = True
+    # When
+    out = case.run(research=False)
+    # Then
+    assert receipt(out).outcome == "completed"
+    assert all(e["kind"] == "analysis" for e in case.events)
+    assert not (out / "readmission.json").exists()
 
 
 def test_researched_snapshot_rejects_old_reviews(tmp_path, monkeypatch):

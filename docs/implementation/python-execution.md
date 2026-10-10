@@ -91,7 +91,7 @@ PY
 
 ## 임의 기업 보고서 직접 호출 (#233)
 
-`skala_rag.company_report.run_company_report(company_name, *, config_path, output_dir, research=None, ..., actual_admission=None, authority=None)`가 공개 진입점이다. 기본은 저장 자료와 로컬 BGE-M3만 쓰고, 대상 기업 조사는 `research=True`와 한도가 있을 때만 한다. 설정 우선순위, 거절 영수증, 실제 실행 authority와 미해결 task 9는 [기업 보고서 실행](company-report.md)에 있다. 실제 API·보고서 실행 증거는 아직 없다.
+`skala_rag.company_report.run_company_report(company_name, *, config_path, output_dir, research=None, ..., actual_admission=None, authority=None)`가 공개 진입점이다. 기본은 저장 자료와 로컬 BGE-M3만 쓰고, 대상 기업 조사는 `research=True`와 한도가 있을 때만 한다. 설정 우선순위, 거절 영수증, 실제 실행 authority와 승인된 조사 후 재승인은 [기업 보고서 실행](company-report.md)에 있다. 운영자 소유 `readmit_after_research` callback이 정확한 최종 자료와 새 review를 인증해야 하며, 원래 admission과 누적 예산은 유지한다. 실제 API·보고서 실행 증거는 아직 없다.
 
 ## 유지하는 검증·안전 gate
 

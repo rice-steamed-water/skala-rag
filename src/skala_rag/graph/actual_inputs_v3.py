@@ -306,6 +306,24 @@ class IdentityResearchAdmissionV3:
 
 
 @dataclass(frozen=True, kw_only=True)
+class CompanyReportReadmissionV3:
+    """Operator approval of exact retained bytes and the final evaluation view.
+
+    No runtime, policy, budget or target can be supplied here. Sources and rating
+    reviews must be independently authenticated for this snapshot, not relabeled
+    from the original admission. Hashes commit to inputs; they are not reviews.
+    """
+
+    retained_sha256: str
+    snapshot_sha256: str
+    sources: Mapping[str, TrustedSource | TrustedCapture]
+    reviews_for: Callable[
+        [EvaluationSnapshot, Mapping[str, JsonValue]], tuple[SourceBoundReview, ...]
+    ]
+    evaluation_inputs_for: Callable[[EvaluationSnapshot], EvaluationInputsV3]
+
+
+@dataclass(frozen=True, kw_only=True)
 class CompanyReportAuthorityV3:
     """Optional operator-owned company inputs; never deserialized or inferred.
 
@@ -328,6 +346,13 @@ class CompanyReportAuthorityV3:
     ) = None
     identity_review: (
         Callable[[Candidate, Sequence[CompanyResearchBundle]], "CompanyIdentity | None"]
+        | None
+    ) = None
+    readmit_after_research: (
+        Callable[
+            ["StoreSnapshot", EvaluationSnapshot],
+            CompanyReportReadmissionV3 | None,
+        ]
         | None
     ) = None
 

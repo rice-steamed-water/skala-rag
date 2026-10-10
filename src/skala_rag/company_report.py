@@ -48,6 +48,7 @@ from skala_rag.graph.actual_inputs_v3 import (
     ActualAuthorityV3,
     ActualInputError,
     CompanyReportAuthorityV3,
+    CompanyReportReadmissionV3,
     IdentityResearchAdmissionV3,
     canonical,
     digest,
@@ -326,6 +327,7 @@ def run_company_report(
                 authority.company_report.research_for,
                 authority.company_report.identity_research,
                 authority.company_report.identity_review,
+                authority.company_report.readmit_after_research,
             )
         ):
             raise CompanyReportConfigError("AUTHORITY_CALLBACK_REQUIRED")
@@ -473,6 +475,7 @@ def _run_prepared_company_report(
         return finish("research_blocked", ("COMPANY_INPUTS_REQUIRED",))
     binding = actual.runtime_binding
     runtime = binding.runtime
+    ledger = runtime.ledger
     initial_ledger = runtime.ledger.snapshot()
     started = runtime.clock.now()
     try:
@@ -978,12 +981,11 @@ def _run_prepared_company_report(
             profile = CompanyProfile.model_validate(
                 options.profile_for(candidate, retained, cutoff)
             )
-        # Pin the final stored generation. Never forge a replacement admission
-        # after research changed corpus/index identity.
-        if (
+        changed_corpus = (
             retained.manifest.version != actual.run_input.corpus_version
             or retained.manifest.index_metadata.index_version != actual.index_version
-        ):
+        )
+        if changed_corpus and (not enabled or options.readmit_after_research is None):
             raise ActualInputError("CORPUS_ADMISSION_MISMATCH")
         hits = store.search_local(
             candidate.canonical_name,
@@ -1010,10 +1012,74 @@ def _run_prepared_company_report(
                 else "eligibility_unknown",
                 eligibility.reason_codes,
             )
-        verify_sources(frozen.sources, authority, frozen.corpus_version)
         write("snapshot.json", frozen.model_dump(mode="json"))
+        if changed_corpus:
+            # The operator may replace review inputs, never the execution budget.
+            # Retained payload owns serialized bytes; the callback receives a
+            # detached evaluation view so it cannot edit the evaluated snapshot.
+            consumed = runtime.ledger.snapshot()
+            commitment = digest(canonical(frozen.model_dump(mode="json")))
+            readmit = options.readmit_after_research
+            assert readmit is not None
+            supplied = readmit(retained, frozen.model_copy(deep=True))
+            if type(supplied) is not CompanyReportReadmissionV3:
+                raise ActualInputError("READMISSION_DENIED")
+            if (
+                supplied.retained_sha256 != digest(retained.payload)
+                or supplied.snapshot_sha256 != commitment
+            ):
+                raise ActualInputError("READMISSION_SNAPSHOT_MISMATCH")
+            if not callable(supplied.reviews_for) or not callable(
+                supplied.evaluation_inputs_for
+            ):
+                raise ActualInputError("READMISSION_REVIEWS_REQUIRED")
+            authority = replace(
+                authority,
+                sources=supplied.sources,
+                reviews_for=supplied.reviews_for,
+                evaluation_inputs_for=supplied.evaluation_inputs_for,
+            )
+        verify_sources(frozen.sources, authority, frozen.corpus_version)
         reviews = _Reviews(authority, actual.registry, out)
         reviews.for_snapshot(frozen)
+        if changed_corpus:
+            try:
+                actual.load_policy(require_capacity=True)
+                if runtime.ledger.snapshot() != consumed:
+                    raise ValueError("readmission changed cumulative usage")
+            except ValueError:
+                raise ActualInputError("READMISSION_RUNTIME_CHANGED") from None
+            original = actual
+            actual = replace(
+                original,
+                run_input=original.run_input.model_copy(
+                    update={"corpus_version": frozen.corpus_version}
+                ),
+                index_version=frozen.index_version,
+                review_resolvers={},
+                review_resolver_for=reviews,
+            )
+            write(
+                "readmission.json",
+                {
+                    "retained_sha256": digest(retained.payload),
+                    "snapshot_sha256": commitment,
+                    "original_corpus_version": original.run_input.corpus_version,
+                    "original_index_version": original.index_version,
+                    "corpus_version": actual.run_input.corpus_version,
+                    "index_version": actual.index_version,
+                    "run_id": run_id,
+                    "candidate_id": candidate.candidate_id,
+                    "as_of": cutoff.isoformat(),
+                    "policy_version": actual.run_input.policy_version,
+                    "shared_runtime_binding": actual.runtime_binding is binding,
+                    "shared_ledger": actual.runtime_binding.runtime.ledger is ledger,
+                    "ledger_before_review": consumed,
+                    "ledger_after_review": runtime.ledger.snapshot(),
+                    "budget": binding.budget.model_dump(mode="json"),
+                    "limits": runtime.ledger.limits.model_dump(mode="json"),
+                },
+            )
         # Both authorities must authenticate the identical payload, before fanout.
         for version in ("core-0.1.0", "finance-0.1.0"):
             actual.verify_snapshot(frozen, actual.registry.rubric(version))

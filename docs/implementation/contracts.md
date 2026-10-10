@@ -504,6 +504,15 @@ failed 후보는 failure_ids만 인계하고 무효 적격성·점수/판정 참
 
 `skala_rag.contracts.company_report`의 `CompanyReportReceipt`가 `run-result.json` 계약이다. outcome은 `identity_unknown`, `identity_ambiguous`, `ineligible`, `eligibility_unknown`, `research_blocked`, `failed`, `warning`, `completed`이고, 보고서 성공과 ingestion 성공은 별도 필드다. `authority`·`actual_admission` 같은 신뢰 객체는 직렬화 설정이나 영수증에 들어가지 않는다. 호출 방법은 [기업 보고서 실행](company-report.md)에 있다.
 
+승인된 조사 후 재승인은 `CompanyReportAuthorityV3.readmit_after_research`의
+운영자 Python callback으로만 받는다. `CompanyReportReadmissionV3`는 정확한
+보존 payload/평가 snapshot hash와 새 원본·rubric review 입력을 전달하며
+runtime·예산 교체 필드가 없다. 원래 admission을 변경하지 않고 같은 누적
+ledger·상한·deadline·대상·cutoff·policy를 쓰는 평가 단계 binding을 만든다.
+기존 source/snapshot/rubric exact-match 검증은 그대로 적용한다.
+거절·오래된 review는 평가 dispatch 없이 종료하고, 성공한 전환은
+`readmission.json`에 원래/최종 버전과 review 전후 누적 사용량을 기록한다.
+
 ## 6. InvestmentState 계약과 단독 writer
 
 현재 baseline State는 sources/chunks/evaluation_results/evaluation_rounds/evidence_revisions/snapshots/candidate_outcomes/report_input/report_context/report_draft/pdf_validation과 실행 metadata를 제공한다. 아래 표는 이를 v3 branch-key·selection_result·run_result에 연결할 목표다. 독립 v3 DTO 병합이 State 전환을 구현하지는 않았다. 성공 평가와 실패 envelope를 분리하므로 evaluations의 writer는 controller로 한정한다.
