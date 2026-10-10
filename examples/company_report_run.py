@@ -5,10 +5,13 @@ Both scenarios select the retained company bound by that admission, never a
 fixture company or a guessed identity. The external company_report_qa_authority
 module is a prerequisite for the plan's QA invocation, not supplied here.
 
-Read run-result.json even when Python returns normally. New researched facts
-change the corpus; the current fixed admission then blocks evaluation (task9).
-Source-only intake is not successful fact supplementation followed by a report.
-QA wrappers require actual scope; controlled responses are auxiliary proof only.
+Read run-result.json even when Python returns normally. When explicit research
+changes the corpus, the operator may opt in to
+authority.company_report.readmit_after_research(retained, snapshot). A successful
+readmission requires fresh authenticated reviews bound to the exact new snapshot
+and preserves the same runtime and cumulative budget. Retained source-only
+intake is not successful fact supplementation or a report. QA wrappers remain
+actual-only; controlled responses are auxiliary proof only.
 """
 
 import json
@@ -210,7 +213,7 @@ def qa_research(
     authority: ActualAuthorityV3,
     actual_admission: ActualAdmissionV3,
 ) -> Path:
-    """Actual-only research QA; task9's changed-corpus gap remains a failure."""
+    """Actual-only research QA; changed corpora require operator readmission."""
     if actual_admission.execution_scope != "actual":
         raise CompanyReportConfigError("ACTUAL_QA_SCOPE_REQUIRED")
     out = scenario_research_target_report(
