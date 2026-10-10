@@ -68,13 +68,10 @@ class LocalEncoder:
         )
 
 
-def run(root, model_path, output_dir, query, device):
-    import sentence_transformers
-    import torch
-    import transformers
-    from sentence_transformers import SentenceTransformer
-
-    started = time.monotonic()
+def load_local_encoder(
+    model_path: Path, *, device: str, receipt_path: Path | None = None
+) -> LocalEncoder:
+    """Load pinned local assets without downloads; preserve #145 receipt checks."""
     for name in (
         "pytorch_model.bin",
         "config.json",
@@ -86,14 +83,51 @@ def run(root, model_path, output_dir, query, device):
         receipt = model_path / ".cache/huggingface/download" / (name + ".metadata")
         if not receipt.exists() or receipt.read_text().splitlines()[0] != REVISION:
             raise ValueError("model file lacks fixed-revision download receipt")
-    manifest, sources, results, chunks = prepare_corpus(
-        root, model_id=MODEL, model_revision=REVISION
-    )
+    if receipt_path is not None:
+        receipt = json.loads(receipt_path.read_bytes())
+        if receipt["model_id"] != MODEL or receipt["model_revision"] != REVISION:
+            raise ValueError("local model receipt identity mismatch")
+        hashes = receipt["model_file_hashes"]
+        required = {
+            "pytorch_model.bin",
+            "config.json",
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "modules.json",
+            "1_Pooling/config.json",
+        }
+        if not required <= set(hashes):
+            raise ValueError("local model receipt lacks required files")
+        for name, digest in hashes.items():
+            path = (model_path / name).resolve()
+            if not path.is_relative_to(model_path.resolve()):
+                raise ValueError("model receipt path escapes model directory")
+            h = hashlib.sha256()
+            with path.open("rb") as stream:
+                for block in iter(lambda: stream.read(1024 * 1024), b""):
+                    h.update(block)
+            if h.hexdigest() != digest:
+                raise ValueError("local model file differs from approved receipt")
+    from sentence_transformers import SentenceTransformer
+
     model = SentenceTransformer(
         str(model_path), device=device, local_files_only=True, trust_remote_code=False
     )
     if model.max_seq_length != 8192 or model.get_embedding_dimension() != 1024:
         raise ValueError("local BGE-M3 configuration mismatch")
+    return LocalEncoder(model)
+
+
+def run(root, model_path, output_dir, query, device):
+    import sentence_transformers
+    import torch
+    import transformers
+
+    started = time.monotonic()
+    encoder = load_local_encoder(model_path, device=device)
+    manifest, sources, results, chunks = prepare_corpus(
+        root, model_id=MODEL, model_revision=REVISION
+    )
     settings = IndexSettings(
         model_id=MODEL,
         model_revision=REVISION,
@@ -124,7 +158,6 @@ def run(root, model_path, output_dir, query, device):
     if not target.is_relative_to((root / "outputs").resolve()):
         raise ValueError("artifacts must remain inside outputs")
     target.mkdir(parents=True, exist_ok=False)
-    encoder = LocalEncoder(model)
     write_index(
         plan,
         embedder=encoder,
