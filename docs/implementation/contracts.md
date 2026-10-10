@@ -500,6 +500,10 @@ failed 후보는 failure_ids만 인계하고 무효 적격성·점수/판정 참
 
 `workflow_status`는 `running/completed/failed`를 유지한다. 구조·의미 수정 소진은 completed + Warning, context/upstream 파손은 failed다. 기존 CLI exit=2는 호환 매핑이며 Python 호출의 프로세스 종료 코드를 강제하지 않는다. 목표 acceptance payload/manifest 연결과 현재 fixture receipt는 구별한다. 이 문서가 `completed_with_warning` 같은 enum을 추가 승인하지 않는다. `report_revision_count=0`으로 최초 생성, 각 재작성 직전에 +1, 구조·의미 합산 2회, 두 번째 수정도 실패하면 세 번째 수정 없이 Warning을 반환하는 승인 규칙을 테스트한다. 실제 renderer 실패·깨진 context는 별도 fatal로 다루며 그 구체적 경계도 D08·D09에 기록한다.
 
+### 임의 기업 보고서 영수증 (#233)
+
+`skala_rag.contracts.company_report`의 `CompanyReportReceipt`가 `run-result.json` 계약이다. outcome은 `identity_unknown`, `identity_ambiguous`, `ineligible`, `eligibility_unknown`, `research_blocked`, `failed`, `warning`, `completed`이고, 보고서 성공과 ingestion 성공은 별도 필드다. `authority`·`actual_admission` 같은 신뢰 객체는 직렬화 설정이나 영수증에 들어가지 않는다. 호출 방법은 [기업 보고서 실행](company-report.md)에 있다.
+
 ## 6. InvestmentState 계약과 단독 writer
 
 현재 baseline State는 sources/chunks/evaluation_results/evaluation_rounds/evidence_revisions/snapshots/candidate_outcomes/report_input/report_context/report_draft/pdf_validation과 실행 metadata를 제공한다. 아래 표는 이를 v3 branch-key·selection_result·run_result에 연결할 목표다. 독립 v3 DTO 병합이 State 전환을 구현하지는 않았다. 성공 평가와 실패 envelope를 분리하므로 evaluations의 writer는 controller로 한정한다.

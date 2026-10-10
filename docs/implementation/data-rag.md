@@ -143,6 +143,10 @@ Hit Rate@1 / Hit Rate@3 / Hit Rate@5 / MRR(검색 depth·cutoff 포함): [실측
 최종 선택 / 제외 이유 / 승인자:
 ```
 
+### 임의 기업 보고서의 저장소 재사용 (#233)
+
+`run_company_report`는 설정의 `store_dir`에 보존된 corpus와 `model_path`·`model_receipt_path`의 로컬 BGE-M3 자산으로 검색한다. 다운로드나 hosted embedding 대체는 없다. 조사로 생긴 문서와 생성 보고서는 각각 한 번의 index 재생성으로 새 버전에 들어가며, 생성 보고서 chunk는 원본 evidence lineage만 평가 근거로 쓴다. 상세는 [기업 보고서 실행](company-report.md)을 따른다.
+
 ## 6. 데이터 품질과 보안 게이트
 
 - `RetrievalRequest.as_of` 이후 발행·공개된 source snapshot은 평가 근거에서 제외한다. 날짜 미상 자료는 해당 시점 이전에 확보한 불변 snapshot 등 이용 가능성을 확인할 수 없으면 historical 검색에서 제외한다. 최신 편집본을 과거 발행일만 보고 통과시키지 않는다. 기준일 이전 공개된 전망은 미래 기간을 예측한다는 사실을 명시하고, 기준일 이후의 실제 사건·성과를 과거에 완료된 사실로 사용하지 않는다. live Web/API Evidence에도 같은 기준일 정책을 적용한다.

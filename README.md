@@ -143,6 +143,8 @@ API 없는 합성 데모는 준비된 의존성 캐시에서 `uv sync --frozen -
 
 가상 후보 전체 실행은 [Python 실행 예제](docs/implementation/python-execution.md), API 호출 없는 한글 보고서 예제는 `uv run python examples/korean_report_fixture.py`를 사용한다. Docker·Compose·GitHub Actions·배포 설정은 현재 저장소에 추가되어 있지 않다.
 
+임의 기업명 하나로 보고서를 만드는 `run_company_report`(기본은 저장 자료만 사용, 조사는 명시 opt-in과 한도 필요)는 [기업 보고서 실행](docs/implementation/company-report.md)과 `examples/company_report_run.py`를 참조한다. 조사로 새 사실이 생긴 뒤 같은 승인으로 보고서를 완료하는 경로는 아직 미해결이다.
+
 ### 로컬 라이브 데모 재현 (#180)
 
 macOS/Linux에서 앱·자료·검색을 로컬로 실행하고, 모델 분석·Generator·Judge는 OpenAI API를 사용한다. 최초 원문·BGE-M3 다운로드는 시연 전에 준비한다.
