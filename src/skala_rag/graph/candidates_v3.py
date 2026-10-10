@@ -11,7 +11,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from time import perf_counter
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from skala_rag import run_settings
 from skala_rag.contracts.candidates import Candidate, EligibilityResult
@@ -55,6 +55,9 @@ from skala_rag.scoring.coverage_v3 import (
 from skala_rag.scoring.decision_v3 import decide_v3
 from skala_rag.scoring.selector_v3 import SelectionResultV3, select_best_v3
 from skala_rag.scoring.v3_policy import V3Policy
+
+if TYPE_CHECKING:
+    from skala_rag.rag.company_store import StoreSnapshot
 
 T = TypeVar("T")
 
@@ -115,6 +118,8 @@ class CandidateStagesV3:
         Callable[[dict, CoverageResult], Sequence[ResearchGap | dict]] | None
     ) = None
     evidence_research: EvidenceResearchBindingV3 | None = None
+    # Retained originals are re-evaluated, never recollected or relabeled.
+    retained_store: "StoreSnapshot | None" = None
 
 
 @dataclass(frozen=True)

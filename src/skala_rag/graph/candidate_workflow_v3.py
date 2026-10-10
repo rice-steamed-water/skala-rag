@@ -277,8 +277,11 @@ def _build_candidate_workflow_v3(
             or run_id != actual_admission.runtime_binding.gates.run_id
             or schema_version != actual_admission.run_input.schema_version
             or stages is None
-            or stages.evidence_research is None
-            or stages.evidence_research.actual_admission is not actual_admission
+            or (stages.evidence_research is None and stages.retained_store is None)
+            or (
+                stages.evidence_research is not None
+                and stages.evidence_research.actual_admission is not actual_admission
+            )
         ):
             raise ValueError("actual controller run/source/research mismatch")
         approved = actual_admission.load_policy(require_capacity=True)
@@ -345,6 +348,17 @@ def _build_candidate_workflow_v3(
         )
     elif stages is None:
         raise ValueError("fixture stages required")
+    retained = stages.retained_store if stages is not None else None
+    if retained is not None and (
+        actual_admission is None
+        or stages is None
+        or stages.evidence_research is not None
+        or stages.additional_research is not None
+        or retained.manifest.version != actual_admission.run_input.corpus_version
+        or retained.manifest.index_metadata.index_version
+        != actual_admission.index_version
+    ):
+        raise ValueError("retained evaluation requires exact admitted store identity")
     execution_mode = "live" if source_only or actual_admission else "fixture"
     if (
         stages is not None
@@ -823,6 +837,12 @@ def _build_candidate_workflow_v3(
 
     def research_gate(data, timed, error, finish):
         data["stage"] = "research_gate"
+        if retained is not None:
+            # Explicit collection, if any, finished before this immutable snapshot.
+            # Missing coverage remains missing; it never implies new fetch consent.
+            data["stop_reasons"][data["cid"]] = "retained_evidence_only"
+            data["route"] = "freeze"
+            return
         if data["coverage"].research_ready:
             data["stop_reasons"][data["cid"]] = "ready"
             timed("research_ready", data["cid"], lambda: None)
@@ -1015,6 +1035,10 @@ def _build_candidate_workflow_v3(
             coverage=data["coverage"],
         )
         data["stage"] = "freeze_admission"
+        if retained is not None:
+            from skala_rag.reporting.company_context import validate_company_snapshot
+
+            validate_company_snapshot(data["snapshot"], retained)
         validate_snapshot_admission_v3(
             data["snapshot"],
             run_id=run_id,
@@ -1027,6 +1051,20 @@ def _build_candidate_workflow_v3(
                 actual_admission.verify_snapshot(
                     data["snapshot"], actual_admission.registry.rubric(version)
                 )
+        if retained is not None and actual_admission is not None:
+            data["research_artifacts"][data["cid"]] = {
+                "state": {
+                    "run_input": actual_admission.run_input.model_dump(mode="json"),
+                    "current_candidate_id": data["cid"],
+                    "snapshots": {
+                        data["snapshot"].snapshot_id: data["snapshot"].model_dump(
+                            mode="json"
+                        )
+                    },
+                    "score_summaries": {},
+                    "investment_decisions": {},
+                }
+            }
         data["route"] = "evaluation_join"
 
     def evaluation_join(data, timed, error, finish):
@@ -1071,7 +1109,7 @@ def _build_candidate_workflow_v3(
             data["terminal_status"] = "failed"
             data["route"] = "archive"
             return
-        if binding and actual_admission is not None:
+        if (binding or retained is not None) and actual_admission is not None:
             # Persist the original atomic promotion, not rebuilt evaluations.
             owned_state = data["research_artifacts"][data["cid"]]["state"]
             owned_state["evaluations_v3"] = deepcopy(
@@ -1144,7 +1182,7 @@ def _build_candidate_workflow_v3(
         )
         data["scores"][data["cid"]] = data["summary"]
         data["decisions"][data["cid"]] = data["decision"]
-        if binding and actual_admission is not None:
+        if (binding or retained is not None) and actual_admission is not None:
             owned_state = data["research_artifacts"][data["cid"]]["state"]
             owned_state["score_summaries"][data["cid"]] = data["summary"].model_dump(
                 mode="json"

@@ -80,6 +80,10 @@ composition tag는 `prompt/versions.py`에 그대로 보존된다. generic evalu
 Python/config/font/lock과 prompt JSON byte hash를 비교하며 text 변경/삭제를 authority
 callback 전에 거절한다. historical capture는 해당 historical code를 요구하며 bypass는 없다.
 
+## 기업 보고서 설정 (#233)
+
+[company-report.example.json](company-report.example.json)은 `run_company_report`용 비밀 없는 예시다. 상대 경로는 이 파일 위치 기준이고, `research_enabled: false`이며 `research_limits`가 없다. 호출 인자 `research`가 파일 값보다 우선하고, 조사 한도는 `runtime.json`의 `actual_v3` 상한과 authority 허용치를 넘을 수 없다. 상세는 [기업 보고서 실행](../docs/implementation/company-report.md)을 따른다.
+
 ## Draft 점수 정책
 
 `scoring.draft.json`은 현재 main의 `docs/implementation/scoring.md` §2–6과

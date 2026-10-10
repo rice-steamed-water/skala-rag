@@ -7,6 +7,7 @@ from typing import Final
 _PROMPT_NAMES: Final = frozenset(
     {
         "eligibility_facts.json",
+        "company_report_freshness.json",
         "evidence_extraction.json",
         "technology_evaluation.json",
         "moat_evaluation.json",

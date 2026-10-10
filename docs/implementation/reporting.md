@@ -167,6 +167,10 @@ REFERENCE 바깥 본문에서 추출한 인용 ID 집합을 C라 한다. ReportD
 - context 실패: Evidence Source 없음, 다른 후보·세대 점수, 없는 decision ID.
 - 재검증: Markdown 변경 후 이전 artifact_hash의 통과 결과 거절.
 
+### 임의 기업 보고서 (#233)
+
+[기업 보고서 실행](company-report.md)의 결과 디렉터리는 위 목차·인용 계약을 그대로 따르고, `run-result.json`에 보고서 검증과 게시 상태를 따로 남긴다. `completed`도 게시 승인이 아니다. 조사 후 새 사실이 생기면 고정 admission이 새 snapshot을 인증하지 못해 보고서가 막히는 task 9 문제가 남아 있다.
+
 ## 6. PDF와 승인 경계
 
 구조 검증 → 같은 context의 Semantic Judge → PDF 렌더링 → 페이지/레이아웃 측정 → 사람 시각 검토 순서를 따른다. 수정하면 해당 draft의 구조·의미·PDF 검증을 다시 수행한다(D08의 공유 수정 예산).

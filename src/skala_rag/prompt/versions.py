@@ -3,6 +3,7 @@
 from typing import Final
 
 ELIGIBILITY_FACTS_VERSION: Final = "eligibility-facts-v1"
+COMPANY_REPORT_FRESHNESS_VERSION: Final = "company-report-freshness-v1"
 EVIDENCE_EXTRACTION_VERSION: Final = "evidence-extraction-v1"
 TECHNOLOGY_EVALUATION_VERSION: Final = "technology-evaluation-v1"
 MOAT_EVALUATION_VERSION: Final = "moat-evaluation-v2"
@@ -16,6 +17,7 @@ ACTUAL_COMPOSITION_VERSION: Final = "actual-v3-1"
 
 __all__ = [
     "ELIGIBILITY_FACTS_VERSION",
+    "COMPANY_REPORT_FRESHNESS_VERSION",
     "EVIDENCE_EXTRACTION_VERSION",
     "TECHNOLOGY_EVALUATION_VERSION",
     "MOAT_EVALUATION_VERSION",

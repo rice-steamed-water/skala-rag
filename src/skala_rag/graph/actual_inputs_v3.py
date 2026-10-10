@@ -7,10 +7,10 @@ review flags, model metadata and receipt booleans are not authentication.
 import hashlib
 import json
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter
 
@@ -36,6 +36,7 @@ from skala_rag.agents.technology_verification import ReviewedTechnologyAnchor
 from skala_rag.contracts import (
     Candidate,
     Chunk,
+    CompanyProfile,
     CompanyResearchBundle,
     DiscoveryBundle,
     EligibilityResult,
@@ -64,6 +65,12 @@ from skala_rag.scoring.coverage import SupportCheck
 from skala_rag.scoring.coverage_v3 import ApplicabilityCheck
 from skala_rag.tools.company_archive import compose_archive_company_research
 from skala_rag.tools.company_research import FieldObservation, assemble_bundle
+
+if TYPE_CHECKING:
+    from skala_rag.agents.company_report_research import ResearchAdmission
+    from skala_rag.contracts.company_report import CompanyReportRequest
+    from skala_rag.rag.company_store import CompanyIdentity, StoreSnapshot
+    from skala_rag.scoring.approved_consumers import ActualAdmissionV3
 
 
 class ActualInputError(ValueError):
@@ -291,6 +298,66 @@ class EvaluationInputsV3:
 
 
 @dataclass(frozen=True, kw_only=True)
+class IdentityResearchAdmissionV3:
+    """Separate OpenDART permission; URLs/identifiers alone grant no consent."""
+
+    collection: "ResearchAdmission"
+    api_key: str = field(repr=False)
+
+
+@dataclass(frozen=True, kw_only=True)
+class CompanyReportReadmissionV3:
+    """Operator approval of exact retained bytes and the final evaluation view.
+
+    No runtime, policy, budget or target can be supplied here. Sources and rating
+    reviews must be independently authenticated for this snapshot, not relabeled
+    from the original admission. Hashes commit to inputs; they are not reviews.
+    """
+
+    retained_sha256: str
+    snapshot_sha256: str
+    sources: Mapping[str, TrustedSource | TrustedCapture]
+    reviews_for: Callable[
+        [EvaluationSnapshot, Mapping[str, JsonValue]], tuple[SourceBoundReview, ...]
+    ]
+    evaluation_inputs_for: Callable[[EvaluationSnapshot], EvaluationInputsV3]
+
+
+@dataclass(frozen=True, kw_only=True)
+class CompanyReportAuthorityV3:
+    """Optional operator-owned company inputs; never deserialized or inferred.
+
+    profile_for authenticates retained eligibility field assignments against the
+    supplied originals. identity_review authenticates every identity field after
+    separately admitted identity collection. Model proposals are not reviewers.
+    Research factories return the existing admission, with the same actual object.
+    """
+
+    profile_for: Callable[[Candidate, "StoreSnapshot", date], CompanyProfile]
+    research_for: (
+        Callable[[Candidate, "ActualAdmissionV3"], "ResearchAdmission | None"] | None
+    ) = None
+    identity_research: (
+        Callable[
+            ["CompanyReportRequest", "ActualAdmissionV3"],
+            tuple[IdentityResearchAdmissionV3, ...],
+        ]
+        | None
+    ) = None
+    identity_review: (
+        Callable[[Candidate, Sequence[CompanyResearchBundle]], "CompanyIdentity | None"]
+        | None
+    ) = None
+    readmit_after_research: (
+        Callable[
+            ["StoreSnapshot", EvaluationSnapshot],
+            CompanyReportReadmissionV3 | None,
+        ]
+        | None
+    ) = None
+
+
+@dataclass(frozen=True, kw_only=True)
 class ActualAuthorityV3:
     """Operator Python configuration, never loaded from the input packet.
 
@@ -322,6 +389,7 @@ class ActualAuthorityV3:
     applicability_check: ApplicabilityCheck
     applicability_verifier: ApplicabilityVerifier | None
     verify_replay_origin: Callable[[Mapping[str, JsonValue]], bool]
+    company_report: CompanyReportAuthorityV3 | None = None
 
     @property
     def campaign_marker(self) -> Path:
