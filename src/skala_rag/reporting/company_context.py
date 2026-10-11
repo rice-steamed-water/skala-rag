@@ -1,30 +1,52 @@
 """Original-only company context; retained reports are retrieval, not authority."""
 
 import hashlib
-from collections.abc import Sequence
+import json
+import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
+from graphlib import CycleError, TopologicalSorter
+from pathlib import Path
+from types import MappingProxyType
+from typing import Final
+from urllib.parse import quote
 
-from skala_rag.agents.eligibility import check_eligibility
-from skala_rag.contracts import CompanyProfile, EligibilityResult, Evidence
+from pydantic import JsonValue
+
+from skala_rag.contracts import Evidence
 from skala_rag.contracts.common import JSONMap
+from skala_rag.contracts.company_report import (
+    EvidenceView,
+    InformationResult,
+    NarrativeQuestion,
+    NarrativeTarget,
+    ReviewedIssuerReceipt,
+    WriterContext,
+    _reject_nonfinite,
+    _unique_object,
+)
 from skala_rag.contracts.evaluation import EvaluationSnapshot
-from skala_rag.graph.candidates_v3 import CandidateRunV3
 from skala_rag.rag.company_store import (
     CompanyStoreError,
+    StoreManifest,
     StoreSnapshot,
     _evidence_closure,
     _has_ancestor,
     evidence_fingerprint,
 )
 from skala_rag.rag.retrieval import source_date
-from skala_rag.reporting.v3_context import (
-    ReportContextV3,
-    build_report_context_v3,
-    canonical,
-)
 from skala_rag.reporting.validator import TOKEN
-from skala_rag.scoring.approved_consumers import ActualAdmissionV3
+
+
+def canonical(value):
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
 
 
 class CompanyContextError(ValueError):
@@ -37,6 +59,451 @@ class CompanyContextError(ValueError):
 class CompanyEvidence:
     evidence: tuple[Evidence, ...]
     prior_interpretations: tuple[JSONMap, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class IssuerAssociation:
+    """Controller-reviewed issuer mapping, not legal identity or eligibility.
+
+    Fingerprints must come from reviewed originals, never model output or a name
+    match. This permits narrowly reviewed issuer excerpts without a CompanyProfile.
+    """
+
+    subject_id: str
+    name: str
+    evidence_hashes: Mapping[str, str]
+    receipt_hash: str | None = None
+
+
+def load_issuer_association(
+    receipt_path: Path | None,
+    *,
+    retained: StoreSnapshot,
+    company_name: str,
+    as_of: date,
+) -> IssuerAssociation | None:
+    """Load trusted local review input and verify every original before dispatch.
+
+    Pass the effective config's resolved issuer_receipt_path. Absence preserves
+    stored identity resolution; configured invalid input fails closed. The caller
+    owns review trust: a well-formed file is not authentication or authorization.
+    """
+    if receipt_path is None:
+        return None
+    content = receipt_path.read_bytes()
+    json.loads(
+        content, object_pairs_hook=_unique_object, parse_constant=_reject_nonfinite
+    )
+    receipt = ReviewedIssuerReceipt.model_validate_json(content)
+    if receipt.name != company_name:
+        raise CompanyContextError("ISSUER_ASSOCIATION_MISMATCH")
+    association = IssuerAssociation(
+        subject_id=receipt.subject_id,
+        name=receipt.name,
+        evidence_hashes=MappingProxyType(dict(receipt.evidence_hashes)),
+        receipt_hash="sha256:" + hashlib.sha256(content).hexdigest(),
+    )
+    manifest = retained.manifest
+    for eid, fingerprint in association.evidence_hashes.items():
+        item = manifest.evidence.get(eid)
+        if item is None or item.evidence_id != eid:
+            raise CompanyContextError("UNRESOLVED_ORIGINAL_LINEAGE")
+        if item.scope != "company" or item.candidate_id != association.subject_id:
+            raise CompanyContextError("FOREIGN_ISSUER_EVIDENCE")
+        citation = _original_citation(retained, manifest, item, as_of)
+        if (
+            item.evidence_kind != "reported"
+            or citation["evidence_fingerprint"] != fingerprint
+        ):
+            raise CompanyContextError("ISSUER_ASSOCIATION_MISMATCH")
+    return association
+
+
+@dataclass(frozen=True, slots=True)
+class CompanyWriterContext:
+    """Detached writer bytes and private citation bytes; send only writer_context."""
+
+    writer_payload: str
+    citation_payload: str
+
+    @property
+    def writer_context(self) -> WriterContext:
+        return WriterContext.model_validate_json(self.writer_payload)
+
+    @property
+    def citation_registry(self) -> JSONMap:
+        return json.loads(self.citation_payload)
+
+    @property
+    def context_id(self) -> str:
+        return self.writer_context.context_id
+
+    def verify_binding(self) -> None:
+        """Reject changed projections or citation receipts before downstream use."""
+        data = self.writer_context.model_dump(mode="json")
+        expected = data.pop("context_id")
+        if expected != _context_digest(data, self.citation_payload):
+            raise CompanyContextError("WRITER_CONTEXT_BINDING_MISMATCH")
+
+
+def _context_digest(projection: JSONMap, registry: str) -> str:
+    return (
+        "sha256:"
+        + hashlib.sha256(
+            canonical(
+                {
+                    "writer": projection,
+                    "citation_registry_hash": "sha256:"
+                    + hashlib.sha256(registry.encode()).hexdigest(),
+                }
+            ).encode()
+        ).hexdigest()
+    )
+
+
+_PRIVATE_TEXT: Final = re.compile(
+    r"(?:[a-z][a-z0-9+.-]*://|www\.|(?:^|\s)/(?:\w|Users/)|"
+    r"\b(?:data/local|outputs/|source_id|chunk_id|retrieval_id|local_path|"
+    r"corpus_version|index_version|page_start|page_end)\b"
+    r'|\b(?:provider|publisher|author|page|url|path)\b["\s]*[:=]'
+    r"|\bpage\s+\d+)",
+    re.IGNORECASE,
+)
+
+
+def _check_neutral_text(value: JsonValue, private_tokens: set[str]) -> None:
+    """Check every nested text leaf, including JSON encoded inside feedback."""
+    match value:
+        case str():
+            folded = value.casefold()
+            if _PRIVATE_TEXT.search(value) or any(
+                token.casefold() in folded for token in private_tokens
+            ):
+                raise CompanyContextError("SOURCE_METADATA_IN_WRITER_TEXT")
+            if value.lstrip().startswith(("{", "[", '"')):
+                try:
+                    nested = json.loads(value)
+                except json.JSONDecodeError:
+                    return
+                _check_neutral_text(nested, private_tokens)
+        case list():
+            for item in value:
+                _check_neutral_text(item, private_tokens)
+        case dict():
+            for key, item in value.items():
+                _check_neutral_text(key + ":", private_tokens)
+                _check_neutral_text(item, private_tokens)
+        case None | bool() | int() | float():
+            return
+
+
+def _original_citation(
+    retained: StoreSnapshot, manifest: StoreManifest, item: Evidence, as_of: date
+) -> JSONMap:
+    """Close exact original bytes, subject, locator and every retrieval proof."""
+    source = manifest.sources.get(item.source_id)
+    doc = manifest.documents.get(item.source_id)
+    if (
+        source is None
+        or doc is None
+        or source.source_id != item.source_id
+        or doc.source_id != item.source_id
+        or source.bibliographic_metadata.get("generated_report")
+        or any(item.source_id in r.source_ids for r in manifest.reports.values())
+        or not doc.approved
+        or doc.extraction_status not in ("ok", "partial")
+        or (doc.extraction_status == "partial" and doc.text_index_review is None)
+        or source.content_hash != doc.content_hash
+        or source.local_path != doc.local_path
+        or doc.scope != item.scope
+        or (item.scope == "company" and set(doc.candidate_ids) != {item.candidate_id})
+        or (item.scope == "industry" and (doc.candidate_ids or item.candidate_id))
+    ):
+        raise CompanyContextError("ORIGINAL_SOURCE_MISMATCH")
+    if (
+        source_date(source) > as_of
+        or source.retrieved_at.date() > as_of
+        or (doc.publication_date is not None and doc.publication_date > as_of)
+        or any(d is not None and d > as_of for d in (item.event_date, item.value_as_of))
+    ):
+        raise CompanyContextError("EVIDENCE_AFTER_CUTOFF")
+    path = (retained.root / doc.local_path).resolve()
+    if not path.is_relative_to((retained.root / "data/local").resolve()):
+        raise CompanyContextError("ORIGINAL_PATH_ESCAPE")
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        raise CompanyContextError("ORIGINAL_BYTES_UNAVAILABLE") from exc
+    if "sha256:" + hashlib.sha256(raw).hexdigest() != source.content_hash:
+        raise CompanyContextError("ORIGINAL_BYTES_MISMATCH")
+    if not item.provenance:
+        raise CompanyContextError("EXACT_LOCATOR_LINEAGE_REQUIRED")
+    chunks = {}
+    records = {}
+    for provenance in item.provenance:
+        record = manifest.retrieval_records.get(provenance.retrieval_id)
+        chunk = manifest.chunks.get(provenance.chunk_id)
+        if (
+            record is None
+            or record.retrieval_id != provenance.retrieval_id
+            or record.status != "ok"
+            or record.candidate_id not in (None, item.candidate_id)
+            or item.source_id not in record.source_ids
+            or item.evidence_id not in record.evidence_ids
+            or record.finished_at.date() > as_of
+        ):
+            raise CompanyContextError("EXACT_LOCATOR_LINEAGE_REQUIRED")
+        if provenance.method == "web" and provenance.chunk_id is None:
+            try:
+                text = raw.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise CompanyContextError("ORIGINAL_TEXT_MISMATCH") from exc
+            if (
+                source.url is None
+                or doc.origin_url != source.url
+                or item.locator != f"{source.url}#:~:text={quote(item.excerpt[:200])}"
+                or item.excerpt not in text
+            ):
+                raise CompanyContextError("EXACT_LOCATOR_LINEAGE_REQUIRED")
+            records[record.retrieval_id] = record.model_dump(mode="json")
+            continue
+        if (
+            chunk is None
+            or chunk.chunk_id != provenance.chunk_id
+            or chunk.chunk_id not in record.chunk_ids
+            or chunk.source_id != item.source_id
+            or chunk.locator != item.locator
+            or chunk.scope != item.scope
+            or set(chunk.candidate_ids) != set(doc.candidate_ids)
+            or chunk.corpus_version != manifest.version
+            or item.excerpt not in chunk.text
+        ):
+            raise CompanyContextError("EXACT_LOCATOR_LINEAGE_REQUIRED")
+        if path.suffix.lower() != ".pdf":
+            try:
+                text = raw.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise CompanyContextError("ORIGINAL_TEXT_MISMATCH") from exc
+            if chunk.text not in text:
+                raise CompanyContextError("ORIGINAL_TEXT_MISMATCH")
+        chunks[chunk.chunk_id] = chunk.model_dump(mode="json")
+        records[record.retrieval_id] = record.model_dump(mode="json")
+    return {
+        "original_evidence": item.model_dump(mode="json"),
+        "evidence_fingerprint": evidence_fingerprint(item, source),
+        "source": source.model_dump(mode="json"),
+        "document": doc.model_dump(mode="json"),
+        "locator": item.locator,
+        "chunks": chunks,
+        "retrieval_records": records,
+    }
+
+
+def build_writer_context(
+    retained: StoreSnapshot,
+    *,
+    company_name: str,
+    as_of: date,
+    questions: Sequence[NarrativeQuestion],
+    evidence_ids: Sequence[str],
+    issuer_association: IssuerAssociation | None = None,
+    may_request_information: bool = True,
+    information_results: Sequence[InformationResult] = (),
+) -> CompanyWriterContext:
+    """Project admitted originals only; no eligibility, collection or name joins.
+
+    A stored identity can resolve a unique canonical name/alias. Otherwise callers
+    supply a reviewed fingerprint-bound issuer association. Explicitly selected
+    foreign evidence, including foreign support/conflict/supersession, fails closed.
+    Legacy scored assembly below remains solely for unmigrated v1 consumers.
+    """
+    manifest = retained.manifest
+    matches = [
+        identity
+        for identity in manifest.companies.values()
+        if company_name.casefold()
+        in {
+            name.casefold()
+            for name in (identity.candidate.canonical_name, *identity.candidate.aliases)
+        }
+    ]
+    if len(matches) > 1:
+        raise CompanyContextError("AMBIGUOUS_ISSUER_SUBJECT")
+    association = issuer_association
+    if matches:
+        identity = matches[0]
+        cid = identity.candidate.candidate_id
+        name = identity.candidate.canonical_name
+        field = (
+            "canonical_name"
+            if company_name.casefold() == name.casefold()
+            else next(
+                "alias:" + alias
+                for alias in identity.candidate.aliases
+                if company_name.casefold() == alias.casefold()
+            )
+        )
+        identity_ids = identity.field_evidence_ids.get(field, [])
+        if not identity_ids:
+            raise CompanyContextError("ISSUER_ASSOCIATION_REQUIRED")
+        if association is not None and (
+            association.subject_id != cid or association.name != name
+        ):
+            raise CompanyContextError("AMBIGUOUS_ISSUER_SUBJECT")
+    else:
+        if association is None or association.name != company_name:
+            raise CompanyContextError("ISSUER_ASSOCIATION_REQUIRED")
+        cid, name = association.subject_id, association.name
+        identity_ids = list(association.evidence_hashes)
+        if not identity_ids:
+            raise CompanyContextError("ISSUER_ASSOCIATION_REQUIRED")
+    if association is not None:
+        identity_ids = sorted(set(identity_ids) | set(association.evidence_hashes))
+    selected = set(evidence_ids) | set(identity_ids)
+    # Conflicts can legitimately be symmetric; only support edges must be acyclic.
+    pending = list(selected)
+    while pending:
+        eid = pending.pop()
+        item = manifest.evidence.get(eid)
+        if item is None or item.evidence_id != eid:
+            raise CompanyContextError("UNRESOLVED_ORIGINAL_LINEAGE")
+        if (
+            (item.scope == "company" and item.candidate_id != cid)
+            or (item.scope == "industry" and item.candidate_id is not None)
+            or (eid in identity_ids and item.scope != "company")
+        ):
+            raise CompanyContextError("FOREIGN_ISSUER_EVIDENCE")
+        refs = (
+            item.supporting_evidence_ids
+            + item.conflicts_with
+            + ([item.supersedes] if item.supersedes is not None else [])
+        )
+        if eid in refs:
+            raise CompanyContextError("CIRCULAR_EVIDENCE_LINEAGE")
+        for ref in refs:
+            if ref not in selected:
+                selected.add(ref)
+                pending.append(ref)
+    try:
+        _evidence_closure(selected, manifest.evidence, manifest.sources)
+        tuple(
+            TopologicalSorter(
+                {
+                    eid: (
+                        [manifest.evidence[eid].supersedes]
+                        if manifest.evidence[eid].supersedes is not None
+                        else []
+                    )
+                    for eid in selected
+                }
+            ).static_order()
+        )
+    except CompanyStoreError as exc:
+        raise CompanyContextError(exc.code) from exc
+    except CycleError as exc:
+        raise CompanyContextError("CIRCULAR_SUPERSESSION_LINEAGE") from exc
+    citations = {
+        eid: _original_citation(retained, manifest, manifest.evidence[eid], as_of)
+        for eid in sorted(selected)
+    }
+    for eid in identity_ids:
+        item = manifest.evidence[eid]
+        if item.evidence_kind != "reported" or (
+            association is not None
+            and association.evidence_hashes.get(eid)
+            != citations[eid]["evidence_fingerprint"]
+        ):
+            raise CompanyContextError("ISSUER_ASSOCIATION_MISMATCH")
+    views = {
+        eid: EvidenceView.model_validate(
+            {
+                "schema_version": "narrative-report-1",
+                **{
+                    key: value
+                    for key, value in manifest.evidence[eid]
+                    .model_dump(mode="json")
+                    .items()
+                    if key in EvidenceView.model_fields and key != "schema_version"
+                },
+            }
+        )
+        for eid in sorted(selected)
+    }
+    writer = WriterContext(
+        schema_version="narrative-report-1",
+        context_id="pending-controller-hash",
+        target=NarrativeTarget(
+            schema_version="narrative-report-1", subject_id=cid, name=name
+        ),
+        as_of=as_of,
+        questions=list(questions),
+        evidence=views,
+        may_request_information=may_request_information,
+        information_results=list(information_results),
+    )
+    private_tokens = {manifest.version, manifest.index_metadata.index_version}
+    private_tokens.update(manifest.chunks)
+    private_tokens.update(manifest.retrieval_records)
+    for source in manifest.sources.values():
+        private_tokens.update(
+            token
+            for token in (
+                source.url,
+                source.local_path,
+                source.content_hash,
+                source.title,
+                source.publisher,
+                source.author,
+            )
+            if token and token.casefold() not in name.casefold()
+        )
+        # Original evidence IDs can contain source IDs; IDs are deliberately public.
+        private_tokens.add(source.source_id)
+        for key in ("capture", "capture_path", "provider", "channel", "index_version"):
+            match source.bibliographic_metadata.get(key):
+                case str() as token:
+                    if token:
+                        private_tokens.add(token)
+    for record in manifest.retrieval_records.values():
+        private_tokens.update((record.tool_name, record.run_id))
+    for chunk in manifest.chunks.values():
+        private_tokens.update((chunk.embedding_model, chunk.embedding_revision))
+    data = writer.model_dump(mode="json")
+    # Check prose, not public evidence/subject IDs or factual reference edges.
+    _check_neutral_text(name, private_tokens)
+    for question in writer.questions:
+        _check_neutral_text(question.question, private_tokens)
+    for view in views.values():
+        _check_neutral_text(
+            view.model_dump(
+                mode="json",
+                exclude={"supporting_evidence_ids", "conflicts_with", "supersedes"},
+            ),
+            private_tokens,
+        )
+    for result in writer.information_results:
+        _check_neutral_text(result.detail, private_tokens)
+    registry = canonical(
+        {
+            "target": writer.target.model_dump(mode="json"),
+            "as_of": as_of.isoformat(),
+            "issuer_evidence_ids": sorted(identity_ids),
+            "issuer_association": (
+                {
+                    "subject_id": association.subject_id,
+                    "name": association.name,
+                    "evidence_hashes": dict(association.evidence_hashes),
+                    "receipt_hash": association.receipt_hash,
+                }
+                if association is not None
+                else None
+            ),
+            "citations": citations,
+        }
+    )
+    data.pop("context_id")
+    data["context_id"] = _context_digest(data, registry)
+    return CompanyWriterContext(canonical(data), registry)
 
 
 def validate_company_snapshot(
@@ -200,140 +667,4 @@ def resolve_company_evidence(
         evidence.update((e.evidence_id, e) for e in items)
     return CompanyEvidence(
         tuple(evidence[eid] for eid in sorted(evidence)), tuple(interpretations)
-    )
-
-
-def build_company_report_context(
-    result: CandidateRunV3,
-    snapshot: EvaluationSnapshot,
-    *,
-    profile: CompanyProfile,
-    eligibility: EligibilityResult,
-    retained: StoreSnapshot,
-    pre_research: StoreSnapshot | None,
-    current_report_id: str,
-    target_chunk_ids: Sequence[str] = (),
-    competitor_chunk_ids: Sequence[str] = (),
-    actual_admission: ActualAdmissionV3 | None = None,
-) -> ReportContextV3:
-    """Check supplied eligibility and preserve the exact evaluated generation.
-
-    Separate retained/pre-research inputs are intentional: target research may
-    advance storage, but never the competitor corpus. No collection occurs here.
-    Trusted profile/admission construction remains the caller's responsibility.
-    """
-    cid = snapshot.candidate_id
-    validate_company_snapshot(snapshot, retained)
-    checked = check_eligibility(
-        profile,
-        snapshot.evidence,
-        {"policy_version": snapshot.policy_version},
-        run_id=snapshot.run_id,
-        evidence_revision=snapshot.evidence_revision,
-    )
-    if checked.status != "eligible" or eligibility.status != "eligible":
-        raise CompanyContextError("ELIGIBILITY_NOT_CONFIRMED")
-    if (
-        checked != eligibility
-        or profile.candidate_id != cid
-        or profile.as_of != snapshot.as_of
-        or profile.schema_version != snapshot.schema_version
-        or set(result.outcomes) != {cid}
-        or result.outcomes[cid].eligibility_result_id
-        != eligibility.eligibility_result_id
-    ):
-        raise CompanyContextError("ELIGIBILITY_PROOF_MISMATCH")
-    context = build_report_context_v3(
-        result,
-        {cid: snapshot},
-        as_of=snapshot.as_of,
-        corpus_version=snapshot.corpus_version,
-        execution_mode=result.execution_mode,
-        actual_admission=actual_admission,
-    )
-    data = context.snapshot()
-    target = resolve_company_evidence(
-        retained,
-        target_chunk_ids,
-        candidate_id=cid,
-        as_of=snapshot.as_of,
-        current_report_id=current_report_id,
-    )
-    interpretations = [
-        item
-        for item in target.prior_interpretations
-        if set(item["original_evidence_ids"]) <= set(snapshot.evidence)
-    ]
-    frozen = pre_research.manifest if pre_research is not None else None
-    competitors = []
-    for competitor_id, identity in sorted(
-        frozen.companies.items() if frozen is not None else ()
-    ):
-        assert frozen is not None and pre_research is not None
-        if competitor_id == cid:
-            continue
-        resolved = resolve_company_evidence(
-            pre_research,
-            competitor_chunk_ids,
-            candidate_id=competitor_id,
-            as_of=snapshot.as_of,
-            current_report_id=current_report_id,
-        )
-        items = [e for e in resolved.evidence if e.candidate_id == competitor_id]
-        if not items:
-            continue
-        # Never add unevaluated industry facts through competitor retrieval.
-        ids = {e.evidence_id for e in items}
-        if not set(identity.field_evidence_ids["canonical_name"]) <= ids or any(
-            not set(e.supporting_evidence_ids) <= ids for e in items
-        ):
-            continue
-        for item in items:
-            raw = item.model_dump(mode="json")
-            source = frozen.sources[item.source_id].model_dump(mode="json")
-            if (
-                item.evidence_id in data["evidence"]
-                and data["evidence"][item.evidence_id] != raw
-            ) or (
-                item.source_id in data["sources"]
-                and data["sources"][item.source_id] != source
-            ):
-                raise CompanyContextError("FROZEN_EVIDENCE_CONFLICT")
-            data["evidence"][item.evidence_id] = raw
-            data["sources"][item.source_id] = source
-        competitors.append(
-            {
-                "candidate_id": competitor_id,
-                "canonical_name": identity.candidate.canonical_name,
-                "evidence_ids": sorted(ids),
-            }
-        )
-        interpretations.extend(
-            item
-            for item in resolved.prior_interpretations
-            if set(item["original_evidence_ids"]) <= ids
-        )
-    data["company_context"] = {
-        "eligibility": eligibility.model_dump(mode="json"),
-        "company_evidence_ids": sorted(
-            e.evidence_id for e in snapshot.evidence.values() if e.scope == "company"
-        ),
-        "industry_evidence_ids": sorted(
-            e.evidence_id for e in snapshot.evidence.values() if e.scope == "industry"
-        ),
-        "competitor_index_version": frozen.version if frozen is not None else None,
-        "competitors": competitors,
-        "comparison_section": "MARKET",
-        "comparison_gap": None if competitors else "NO_STORED_COMPETITOR_EVIDENCE",
-        "prior_interpretations": interpretations,
-        "usage_policy": {
-            "industry_is_company_performance": False,
-            "prior_interpretation_is_fact_or_score": False,
-            "missing_data": "Preserve evaluated missing values; never infer ratings.",
-            "comparison": "Stored facts only in MARKET/Moat narrative; no new section.",
-        },
-    }
-    payload = canonical(data)
-    return ReportContextV3(
-        "sha256:" + hashlib.sha256(payload.encode()).hexdigest(), payload
     )

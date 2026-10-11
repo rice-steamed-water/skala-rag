@@ -33,6 +33,7 @@ from skala_rag.contracts import (
     ValidationResult,
 )
 from skala_rag.contracts.common import Contract, ISODate, Text
+from skala_rag.contracts.reports import NarrativeReportResult
 from skala_rag.rag.corpus import CorpusManifest, ManifestDocument, manifest_hash
 from skala_rag.rag.extraction import PageChunkSettings, extract_pdf
 from skala_rag.rag.index_v3 import (
@@ -47,7 +48,6 @@ from skala_rag.rag.local_bge_validation import load_local_encoder
 from skala_rag.rag.query_local import LocalQueryEncoder
 from skala_rag.rag.reviewed_extraction import verify_text_review
 from skala_rag.rag.sqlite_index import SQLiteIndexStore
-from skala_rag.reporting.v3_pipeline import ReportRunV3
 from skala_rag.reporting.validator import TOKEN, artifact_hash
 
 SCHEMA = "company-store-1"
@@ -121,7 +121,7 @@ class ValidatedReport:
     generation_revision: str
     reviewer: str
     permission_note: str
-    result: ReportRunV3
+    result: NarrativeReportResult
     evidence_hashes: Mapping[str, str]
     parent_report_ids: tuple[str, ...] = ()
 
@@ -572,8 +572,7 @@ class CompanyStore:
         """Retain validated prose as retrieval only; never mint report Evidence."""
         result = report.result
         if (
-            result.status != "completed"
-            or result.warning
+            result.outcome not in ("completed", "partial")
             or result.error_code is not None
             or result.draft is None
             or result.validation is None

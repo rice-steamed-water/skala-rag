@@ -17,15 +17,12 @@ from typing import Protocol, TypeVar, runtime_checkable
 
 from pydantic import BaseModel
 
-from skala_rag.scoring.catalog import ScoringPolicy
-
 from .bundles import DiscoveryBundle, RetrievalBundle
 from .candidates import Candidate, CompanyProfile, EligibilityResult
 from .common import JSONMap
-from .coverage import CoverageResult, ResearchGap
-from .decisions import ScoreSummary
+from .coverage import ResearchGap
 from .error_codes import ErrorCode, is_retryable
-from .evaluation import Dimension, Evaluation, EvaluationResult, EvaluationSnapshot
+from .evaluation import Dimension, EvaluationResult, EvaluationSnapshot
 from .evidence import Evidence
 from .inputs import RunInput
 from .reports import (
@@ -39,7 +36,6 @@ from .retrieval import RetrievalRequest
 from .state import InvestmentState
 from .tools import (
     CompanyResearchBundle,
-    DecisionPolicyResult,
     EvidenceBundle,
     RenderResult,
     ToolBudget,
@@ -112,16 +108,6 @@ class CheckEligibility(Protocol):
 
 
 @runtime_checkable
-class CheckCoverage(Protocol):
-    def __call__(
-        self,
-        candidate_id: str,
-        evidence: Mapping[str, Evidence],
-        catalog: ScoringPolicy,
-    ) -> CoverageResult: ...
-
-
-@runtime_checkable
 class FreezeSnapshot(Protocol):
     def __call__(
         self, candidate_id: str, state: InvestmentState, run_input: RunInput
@@ -133,23 +119,6 @@ class EvaluateDimension(Protocol):
     def __call__(
         self, dimension: Dimension, snapshot: EvaluationSnapshot, rubric: JSONMap
     ) -> EvaluationResult: ...
-
-
-@runtime_checkable
-class AggregateScores(Protocol):
-    def __call__(
-        self, evaluations: Mapping[str, Evaluation], policy: ScoringPolicy
-    ) -> ScoreSummary: ...
-
-
-@runtime_checkable
-class Decide(Protocol):
-    def __call__(
-        self,
-        score_summary: ScoreSummary,
-        eligibility: EligibilityResult,
-        policy: ScoringPolicy,
-    ) -> DecisionPolicyResult: ...
 
 
 @runtime_checkable

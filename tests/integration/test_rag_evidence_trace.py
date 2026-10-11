@@ -6,7 +6,9 @@
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
+from tests.fixtures.catalog import load_policy
 from tests.fixtures.loader import load_common_fixtures
+from tests.fixtures.retrieval import TOOL_NAME, fixture_search
 
 from skala_rag.agents.evidence_collector import (
     EvidenceCollector,
@@ -20,8 +22,6 @@ from skala_rag.contracts.interfaces import CollectEvidence, Retrieve
 from skala_rag.contracts.tools import ToolBudget
 from skala_rag.fakes import FakeClock
 from skala_rag.rag.retrieval import GuardedRetriever, retrieval_cache_key
-from skala_rag.scoring.catalog import load_policy
-from skala_rag.tools.fixture_retrieve import TOOL_NAME, fixture_search
 
 SCHEMA = "synthetic-common-1"
 CORPUS = "corpus-fixture-v1"
@@ -32,7 +32,9 @@ AS_OF = date(2026, 9, 30)
 
 @pytest.fixture
 def fx():
-    policy = load_policy("configs/scoring.draft.json", execution_mode="fixture")
+    policy = load_policy(
+        "tests/fixtures/historical-catalog.json", execution_mode="fixture"
+    )
     data = load_common_fixtures(policy)
     base = data.sources["src-fixture-eligible"]
     chunk = data.chunks["chunk-fixture-eligible"]

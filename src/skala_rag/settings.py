@@ -126,7 +126,7 @@ class ActualV3Settings(FrozenSettings):
     max_output_tokens: Annotated[int, Field(gt=0, le=120000)]
     max_cost_usd: Annotated[Decimal, Field(gt=0, le=1)]
     request_input_tokens: Annotated[int, Field(gt=0, le=1)]
-    request_output_tokens: Annotated[int, Field(gt=0, le=2000)]
+    request_output_tokens: Annotated[int, Field(gt=0, le=8000)]
     timeout_seconds: Annotated[float, Field(gt=0, le=60)]
     deadline_seconds: Annotated[float, Field(gt=0, le=3600)]
     max_retries: Annotated[int, Field(ge=0, le=0)]

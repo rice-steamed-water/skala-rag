@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from tests.fixtures.catalog import load_policy
 from tests.fixtures.loader import load_common_fixtures
 
 from skala_rag.contracts.ids import eligibility_result_id, snapshot_id
-from skala_rag.scoring.catalog import load_policy
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE = ROOT / "tests/fixtures/common.json"
@@ -17,7 +17,9 @@ FIXTURE = ROOT / "tests/fixtures/common.json"
 
 @pytest.fixture
 def catalog():
-    return load_policy(ROOT / "configs/scoring.draft.json", execution_mode="fixture")
+    return load_policy(
+        ROOT / "tests/fixtures/historical-catalog.json", execution_mode="fixture"
+    )
 
 
 def test_four_cases_and_same_name_are_distinct(catalog):

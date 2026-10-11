@@ -1,0 +1,8 @@
+{
+  "schema_version": "company-report-2",
+  "runtime_path": "runtime.json",
+  "store_dir": "../data/local/company-store",
+  "model_path": "../data/local/models/bge-m3",
+  "model_receipt_path": "../data/local/models/bge-m3-receipt.json",
+  "research_enabled": false
+}

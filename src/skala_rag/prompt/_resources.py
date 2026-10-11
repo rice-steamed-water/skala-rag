@@ -8,6 +8,9 @@ _PROMPT_NAMES: Final = frozenset(
     {
         "eligibility_facts.json",
         "company_report_freshness.json",
+        "company_analysis.v1.json",
+        "narrative_composition.v1.json",
+        "narrative_judge.v1.json",
         "evidence_extraction.json",
         "technology_evaluation.json",
         "moat_evaluation.json",
@@ -26,7 +29,17 @@ _PROMPT_NAMES: Final = frozenset(
     }
 )
 
-__all__ = ["read_prompt"]
+__all__ = ["read_prompt", "read_questions"]
+
+
+def read_questions() -> str:
+    """Return the fixed versioned narrative question resource for DTO parsing."""
+    return (
+        files("skala_rag.prompt")
+        .joinpath("text", "company_analysis_questions.v1.json")
+        .read_bytes()
+        .decode("utf-8")
+    )
 
 
 def read_prompt(name: str) -> str:

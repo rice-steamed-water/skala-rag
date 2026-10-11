@@ -44,7 +44,7 @@ def no_network(monkeypatch):
 
 
 def test_all_contract_boundaries_are_protocols():
-    assert len(BOUNDARIES) == 15
+    assert len(BOUNDARIES) == 12
 
 
 @pytest.mark.parametrize("name", BOUNDARIES)

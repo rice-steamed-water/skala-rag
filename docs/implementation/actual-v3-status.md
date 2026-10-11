@@ -1,3 +1,31 @@
+# 현재 보고서 구현과 실제 검증 범위 (#235)
+
+## 실제 저장 자료 Dexory proof
+
+현재 실제 positive 근거는 `.omo/evidence/report-focused-consolidation/task-12-resumed.json`의 PASS다. 과거 task-12-done/recovery FAIL receipt는 역사 실패로 남으며 현재 성공 receipt로 바꾸지 않았다. cutoff 2026-10-10, reviewed 저장 원본 4개·genuine local BGE-M3와 real analysis/composition/Judge를 사용했고 수집·download·store mutation은 0이다.
+
+실제 PDF: `outputs/report-focused-consolidation/dexory-resumed-150/report.pdf`; SHA256 `581f5f58782480dc0c72e5c854c41d515f58bbb376bfd24b2c4a7cd02c0591ff`. 본문 2장+REFERENCE 1장, all 3 PNG 당시 inspected. 18답변은 answered 2/partial 2/unknown 14, 확인과제 16개, 실제 cited originals 3개다. 네 번째 보유 원본을 unused reference로 넣지 않았다. unknown은 부정 사실이 아니다.
+
+initial USD1 실행·실패를 포함한 같은 ledger에 총 USD1.50 continuation이 승인됐다. accounted upper bound USD1.1616 < USD1.50이며 billed actual cost는 null/unknown이라 실측 청구액으로 표시하지 않는다. actual semantic negative는 combined Judge 한 요청의 wrong-metric unsupported claim과 investment recommendation 두 명시 issue이며 2회 별도 요청으로 주장하지 않는다. 재개 때 negative 추가 호출은 0이다.
+
+이 proof는 당시 hash-bound 실행 산출물이다. 후속 task13/14 retirement/migration 및 task15 문서/예제를 거친 final source snapshot의 actual paid replay는 수행하지 않았다. 현재 코드의 controlled 실행/필수 검사와 역사 actual proof를 구분한다. sparse issuer excerpt는 독립 성능·매출·유료고객·moat·팀 역량·투자적합성 또는 모든 질문을 채운 full real-company proof가 아니다.
+
+## 퇴역·회귀·패키지 증거
+
+읽은 task-13-done.json/retirement-inventory.json은 84개 old runtime 경로 퇴역, retained import·persistent original/report reader·controlled no-research proof를 담는다. task-14-done.json/test-migration-inventory.json은 97개 retired test files/1135 named requirements와 retained replacement를 구별하고 baseline example 4 cases/N1 valid positive baseline 보존을 기록한다. baseline failure를 삭제해 green으로 만든 것이 아니다.
+
+Task14 suite는 2804 passed/6 pre-existing gated skips였다. final task15 snapshot의 명령·exit/rawlogs/source hashes는 final-checks.json에서 확인한다. installed wheel의 controlled partial PDF와 canonical resource 동일성은 task-14-wheel.json이다. 기존 설치 dependency bytes를 사용했고 cold locked dependency resolution은 cache miss로 입증하지 못했다.
+
+## Controlled와 미실증 범위
+
+Controlled transport는 production API/graph·source-neutral context·bounds·partial/full/empty/ambiguous/오류·인용/PDF를 검사한다. 합성 모델 응답/encoder는 real model quality나 실측 cost가 아니다. task-15-example.json은 직접 실행한 public 예제, task-15-migration.json은 v1 precise refusal/no PDF, task-15-done.json은 작업 완료 receipts다.
+
+일반 임의 신규 웹 수집, 실제 live research, 새로운 원문/model download, full real-company report는 증명하지 않았다. 현재 authorized acquisition은 reviewed exact targets/hash official-homepage뿐이다. local assets/credentials는 clone에 포함되지 않으며 미상 원문·신원·paid success를 조작하지 않는다.
+
+## Historical / 보존 이력 (현재 실행 안내 아님)
+
+아래 전체는 통합 이전의 요구·승인·구현 snapshot이다. 아래의 "현재", CLI/scored/demo 명령과 링크는 당시 기준이며 퇴역한 파일의 실행을 안내하지 않는다. 현재 사용은 위 v2 안내를 따른다. 역사적 과제 요구나 승인 자체를 삭제·완료 처리하지 않는다.
+
 # 현재 actual-v3 구현과 검증 상태 (#224)
 
 [문서 홈](../README.md) · [루트 README](../../README.md) · [Python 직접 실행](python-execution.md) · [Source-only 계약](source-only-v3.md)

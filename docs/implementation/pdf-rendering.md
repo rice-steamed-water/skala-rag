@@ -1,3 +1,15 @@
+# PDF 출력 - narrative ReportLab
+
+현재 생산 renderer는 reporting/pdf.py와 pdf_presentation.py 및 configs/pdf.layout.v1.json/패키지 Korean fonts를 사용한다. narrative section·정확한 참조·한글 표를 출력하며 점수표/radar를 만들지 않는다. 수치 chart는 admitted metric 관측이 있을 때만 허용하고 quote 숫자에서 데이터를 만들지 않는다. timeline/사업 도식도 원문 근거가 있어야 한다.
+
+분량 검증은 본문 ≤6장과 별도 reference 경계다. 4-6장 목표를 맞추기 위해 글자를 줄이거나 자료를 만들지 않는다. SUMMARY 높이·glyph/폰트·overflow·저장 PDF tamper·Judge/context/registry 결합을 검증한다. semantic/layout 수정은 graph의 shared 2회에서 차감하며 renderer의 별도 retry는 없다.
+
+실제 task12-resumed PDF는 본문 2장+REFERENCE 1장이다. 당시 모든 3개 PNG를 열어 한글·clip/overlap·reference wrapping을 검사했다. controlled table/diagram/overflow/tamper 회귀는 실제 기업 chart 품질 증거가 아니다. 최종 wheel의 canonical font/config/prompt hash 동일성은 task-14-wheel.json에 있고 cold dependency install은 입증하지 않았다.
+
+## Historical / 보존 이력 (현재 실행 안내 아님)
+
+아래 전체는 통합 이전의 요구·승인·구현 snapshot이다. 아래의 "현재", CLI/scored/demo 명령과 링크는 당시 기준이며 퇴역한 파일의 실행을 안내하지 않는다. 현재 사용은 위 v2 안내를 따른다. 역사적 과제 요구나 승인 자체를 삭제·완료 처리하지 않는다.
+
 # 실제 PDF renderer와 layout 검증 — #95 / D09 승인
 
 2026-09-30 사용자 확인 UI 「제안한 설정·의존성·오류 처리 승인」에 따라

@@ -5,20 +5,15 @@ import socket
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, localcontext
-from pathlib import Path
 
 import httpx
 import pytest
-import yaml
 from pydantic import BaseModel, ValidationError
-from tests.fixtures.loader import load_common_fixtures
 
-from skala_rag.agents.evaluation import make_evaluate_dimension, output_from_evaluation
 from skala_rag.contracts.error_codes import ErrorCode
 from skala_rag.contracts.interfaces import LLMError, StructuredLLM
 from skala_rag.contracts.tools import ToolBudget
 from skala_rag.fakes import FakeClock
-from skala_rag.scoring.catalog import load_policy
 from skala_rag.tools.runtime import (
     AdapterRuntime,
     Allowance,
@@ -625,51 +620,6 @@ def test_live_without_deadline_or_verified_cost_is_refused():
         == "failed"
     )
     assert runtime.ledger.snapshot()["calls"] == 0
-
-
-@pytest.mark.parametrize("calls", [1, 2])
-def test_existing_evaluation_wrapper_schema_repair_obeys_runtime_ledger(calls):
-    root = Path(__file__).resolve().parents[2]
-    policy = load_policy(root / "configs/scoring.draft.json", execution_mode="fixture")
-    fx = load_common_fixtures(policy)
-    snapshot = next(iter(fx.snapshots.values()))
-    key = f"{snapshot.candidate_id}:{snapshot.evaluation_round}:founder"
-    good = output_from_evaluation(fx.evaluations[key])
-    bad = good.model_dump()
-    bad["criteria"][0]["points"] = 999  # forbidden derived output, schema repair
-    runtime, call, kwargs, clock, _ = setup(retries=1, calls=calls)
-    provider = ScriptedLLM([reply(data=bad), reply(data=good)])
-    llm = make_llm(runtime, call, kwargs, provider)
-    evaluate = make_evaluate_dimension(
-        llm=llm, policy=policy, clock=clock, schema_version=SCHEMA
-    )
-    rubric = yaml.safe_load((root / "configs/rubrics/core.yaml").read_text())
-    result = evaluate("founder", snapshot, rubric)
-    assert result.status == ("success" if calls == 2 else "failure")
-    assert len(provider.calls) == runtime.ledger.snapshot()["calls"] == calls
-    if calls == 1:
-        assert result.errors[0].error_code == "LLM_FAILED"
-    else:
-        assert "계약을 어겼다" in provider.calls[1]["user"]
-
-
-def test_existing_wrapper_does_not_retry_exhausted_transport_timeout():
-    root = Path(__file__).resolve().parents[2]
-    policy = load_policy(root / "configs/scoring.draft.json", execution_mode="fixture")
-    fx = load_common_fixtures(policy)
-    snapshot = next(iter(fx.snapshots.values()))
-    runtime, call, kwargs, clock, _ = setup(retries=1)
-    provider = ScriptedLLM([TimeoutError("synthetic"), TimeoutError("synthetic")])
-    evaluate = make_evaluate_dimension(
-        llm=make_llm(runtime, call, kwargs, provider),
-        policy=policy,
-        clock=clock,
-        schema_version=SCHEMA,
-    )
-    rubric = yaml.safe_load((root / "configs/rubrics/core.yaml").read_text())
-    result = evaluate("founder", snapshot, rubric)
-    assert result.status == "failure" and result.errors[0].error_code == "LLM_TIMEOUT"
-    assert len(provider.calls) == 2
 
 
 def test_cost_admission_uses_exact_decimal_boundary_even_beyond_context_precision():

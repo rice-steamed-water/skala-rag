@@ -1,3 +1,17 @@
+# 아키텍처 - 단일 기업 narrative graph
+
+현재 생산 경로: public run_company_report → CompanyStore의 대상+18질문 로컬 검색 → private registry/WriterContext → company_analysis → 선택적 need 보강 → 최종 분석 → narrative composition/Judge → 원본 REFERENCE → ReportLab PDF/layout validation → run-result.
+
+source acquisition과 글 작성을 분리한다. data/controller가 원본·대상·fingerprint·검색 proof를 검증하고 registry를 소유한다. model은 source-neutral 근거만 보고 6영역의 18질문 답변과 사실/해석/장점/위험을 작성한다. 법적 identity·scoring·selector를 모델이나 fallback이 생성하지 않는다.
+
+보강 1회/최대 6 needs, shared composition/semantic/layout repairs 2회, 하나의 runtime ledger와 absolute deadline이다. need 없으면 첫 분석을 재사용한다. optional acquisition failure는 기존 유효 근거를 지키며 required corruption은 failed다. empty는 전체 허용 검색 기회 후 근거 없음이지 provider 실패가 아니다.
+
+모든 report 실행은 graph/company_report.py로 모인다. task-13 retirement-inventory.json의 84개 퇴역 경로와 task-14 test-migration-inventory.json의 회귀 이전을 따르며 CompanyStore의 persistent 원본/report provenance schema는 유지한다. [API](company-report.md)와 [현재 증거](actual-v3-status.md)를 참조한다.
+
+## Historical / 보존 이력 (현재 실행 안내 아님)
+
+아래 전체는 통합 이전의 요구·승인·구현 snapshot이다. 아래의 "현재", CLI/scored/demo 명령과 링크는 당시 기준이며 퇴역한 파일의 실행을 안내하지 않는다. 현재 사용은 위 v2 안내를 따른다. 역사적 과제 요구나 승인 자체를 삭제·완료 처리하지 않는다.
+
 # 아키텍처와 실행 흐름
 
 [문서 홈](../README.md) · [공통 계약](contracts.md) · [결정 목록](decisions.md)

@@ -19,6 +19,7 @@ from skala_rag.contracts import (
     Source,
     ValidationResult,
 )
+from skala_rag.contracts.reports import NarrativeReportResult
 from skala_rag.rag import company_store
 from skala_rag.rag.company_store import (
     CompanyIdentity,
@@ -31,7 +32,6 @@ from skala_rag.rag.company_store import (
 from skala_rag.rag.corpus import ManifestDocument
 from skala_rag.rag.index_v3 import EmbeddingVector, IndexSettings
 from skala_rag.rag.sqlite_index import SQLiteIndexStore
-from skala_rag.reporting.v3_pipeline import ReportRunV3
 from skala_rag.reporting.validator import artifact_hash
 
 SCHEMA = "synthetic-company-store-test-1"
@@ -218,9 +218,8 @@ def accepted_report(
         revision_instructions=[],
         judged_artifact_hash=digest,
     )
-    result = ReportRunV3(
+    result = NarrativeReportResult(
         "completed",
-        False,
         draft,
         validation,
         judgement,
@@ -262,9 +261,11 @@ def query():
     )
 
 
-def test_accepted_report_reopens_with_original_lineage(tmp_path):
+@pytest.mark.parametrize("outcome", ["completed", "partial"])
+def test_accepted_report_reopens_with_original_lineage(tmp_path, outcome):
     store, _, old = populated(tmp_path)
     accepted = accepted_report()
+    accepted = replace(accepted, result=replace(accepted.result, outcome=outcome))
     store.ingest_report(accepted)
 
     reopened = CompanyStore(store.root, settings=settings(), encoder=SyntheticEncoder())
@@ -383,12 +384,12 @@ def test_missing_model_leaves_previous_index(tmp_path, receipt_present):
     assert store.open().payload == previous.payload
 
 
-def test_warning_report_not_ingested(tmp_path):
+def test_failed_report_not_ingested(tmp_path):
     store, _, previous = populated(tmp_path)
     report = accepted_report()
     with pytest.raises(CompanyStoreError, match="REPORT_NOT_ACCEPTED"):
         store.ingest_report(
-            replace(report, result=replace(report.result, warning=True))
+            replace(report, result=replace(report.result, outcome="failed"))
         )
     assert store.open().payload == previous.payload
 

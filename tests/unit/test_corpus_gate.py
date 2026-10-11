@@ -4,6 +4,7 @@ from datetime import date
 
 import pytest
 from pydantic import ValidationError
+from tests.fixtures.retrieval import fixture_search
 
 from skala_rag.contracts.retrieval import RetrievalRequest
 from skala_rag.contracts.sources import Chunk, Source
@@ -20,7 +21,6 @@ from skala_rag.rag.corpus import (
     next_corpus_version,
     require_indexable,
 )
-from skala_rag.tools.fixture_retrieve import fixture_search
 
 SCHEMA = "synthetic-1"
 

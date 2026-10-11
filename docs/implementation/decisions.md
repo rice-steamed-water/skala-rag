@@ -1,3 +1,17 @@
+# 결정 목록 - 현재 보고서 통합 (#235)
+
+2026-10-11 현재 승인 방향은 한 기업의 narrative v2 Python API, 6영역/18질문, 점수·투자 추천 없음, 근거 있는 partial 허용, body 최대6장/reference 별도(4장 최소 아님)이다. 원문 부족을 적격성/법적 identity/성공으로 만들지 않는다. 유한 보강 1회/최대6 needs와 작성·의미·layout 공유수정 2회, 누적 ledger/deadline을 유지한다.
+
+private issuer receipt는 reviewed original fingerprint/target association이며 authenticated legal entity가 아니다. research opt-in과 homepage hint는 승인과 다르다. 현재 acquisition 권한은 reviewed exact targets/hash official-homepage로 한정하며 일반 arbitrary-new-web 수집을 승인하지 않는다.
+
+실제 task12는 처음 USD1 누적 한도와 보존 실패 이력을 유지한 채 사용자 continue 승인으로 총 USD1.50에 재개됐다. 최종 conservative accounted upper bound USD1.1616이며 actual billed cost는 unknown이다. real negative는 두 요청이 아니라 combined Judge 한 요청의 unsupported metric/recommendation 두 explicit issue다. 현 작업에는 추가 유료 호출·수집·다운로드 승인이 없다.
+
+속도/token 우선 override는 변경별 focused checks와 최종 한 번의 stable 필수 검사/통합 독립 gate를 적용한다. 이 문서는 그 독립 gate를 직접 수행했거나 PR/commit/push가 승인됐다고 주장하지 않는다. 과거 OPEN 평가 정책은 역사 요구로 보존하며 새 API 기본값으로 결정하지 않는다.
+
+## Historical / 보존 이력 (현재 실행 안내 아님)
+
+아래 전체는 통합 이전의 요구·승인·구현 snapshot이다. 아래의 "현재", CLI/scored/demo 명령과 링크는 당시 기준이며 퇴역한 파일의 실행을 안내하지 않는다. 현재 사용은 위 v2 안내를 따른다. 역사적 과제 요구나 승인 자체를 삭제·완료 처리하지 않는다.
+
 # 결정 목록 — v3 방향·운영 승인과 남은 세부 정책
 
 <a id="execution-python-direct"></a>

@@ -326,12 +326,9 @@ def test_missing_font_glyph_remains_fatal_without_artifact(tmp_path):
 
 
 def test_pdf_parser_accepts_only_approved_six_section_order():
-    from tests.unit.test_v3_report_pipeline import Stub, context
-
     from skala_rag.reporting.pdf import _blocks
-    from skala_rag.reporting.v3_pipeline import ReportGeneratorV3
 
-    draft = ReportGeneratorV3(Stub())(context(), [])
+    draft = make_draft()
     headings = [
         section for section, kind, _ in _blocks(draft.markdown) if kind == "heading"
     ]
@@ -346,14 +343,186 @@ def test_pdf_parser_accepts_only_approved_six_section_order():
 
 
 def test_pdf_parser_rejects_combined_heading_even_with_all_six_sections():
-    from tests.unit.test_v3_report_pipeline import Stub, context
-
     from skala_rag.reporting.pdf import _blocks
-    from skala_rag.reporting.v3_pipeline import ReportGeneratorV3
 
-    draft = ReportGeneratorV3(Stub())(context(), [])
+    draft = make_draft()
+    assert sum(kind == "heading" for _, kind, _ in _blocks(draft.markdown)) == 6
     marked = draft.markdown.replace(
-        "## TECHNOLOGY", "## TECHNOLOGY & MARKET\n\nCombined body\n\n## TECHNOLOGY"
+        "# TECHNOLOGY\n",
+        "# TECHNOLOGY & MARKET\n\nCombined body\n\n# TECHNOLOGY\n",
     )
+    assert marked != draft.markdown
     with pytest.raises(ValueError):
         _blocks(marked)
+
+
+def narrative_fixture(tmp_path, *, dated=True, body=None):
+    """Controlled originals and Judge proof, real store/projection/finalization."""
+    from datetime import date
+
+    from tests.unit.test_company_report_context import narrative_questions
+    from tests.unit.test_company_store import (
+        SyntheticEncoder,
+        identity,
+        material,
+        settings,
+    )
+
+    from skala_rag.contracts.company_report import CompositionReply
+    from skala_rag.rag.company_store import CompanyStore
+    from skala_rag.reporting.company_context import build_writer_context
+    from skala_rag.reporting.narrative import (
+        NARRATIVE_HEADINGS,
+        NarrativeCompositionResult,
+        SemanticJudgeReply,
+        composition_hash,
+    )
+
+    originals = (
+        material(text="가상 기업은 창고 재고 확인용 로봇의 현장 시험을 시작했다."),
+        material("b", text="가상 기업은 후속 현장 시험을 진행했다."),
+    )
+    if dated:
+        originals[0].evidence[0].event_date = date(2025, 1, 10)
+        originals[1].evidence[0].event_date = date(2026, 1, 10)
+    store = CompanyStore(
+        tmp_path / "store", settings=settings(), encoder=SyntheticEncoder()
+    )
+    stored = store.ingest_sources(originals, companies=(identity(),))
+    context = build_writer_context(
+        stored,
+        company_name="Synthetic a Robotics",
+        as_of=date(2026, 10, 10),
+        questions=narrative_questions(),
+        evidence_ids=list(stored.manifest.evidence),
+        may_request_information=False,
+    )
+    paragraphs = [
+        "가상 자료로 작성한 부분 분석이다. 현장 시험의 이력은 확인되지만 "
+        "상용 운영 성과와 재무 상태는 확인할 수 없다. [@evidence:ev-a]",
+        "창고 재고 확인 작업을 위한 현장 시험이 관측되었다. "
+        "운영 신뢰성, 생산 및 통합 제약은 추가 확인이 필요하다. [@evidence:ev-a]",
+        "구매자, 유료 고객 및 반복 사용 여부는 자료 부족으로 판단을 유보한다. "
+        "유료 도입과 고객 집중도를 확인해야 한다.",
+        "수익 방식과 고객 경제성은 확인되지 않았다. "
+        "계약 구조와 유지보수 비용을 추가 확인해야 한다.",
+        "기술 및 데이터의 방어력은 판단을 유보한다. "
+        "대체 제품과의 비교 및 지식재산권 근거를 확인해야 한다.",
+        "후속 현장 시험 이력은 관측되었다. 영업 및 운영 인력의 "
+        "실행 역량은 확인되지 않았다. [@evidence:ev-b]",
+        "투자유치 금액, 재무 상태 및 현재 거래조건은 미상이다. "
+        "투자 계약과 재무 자료를 확인해야 한다.",
+        "현장 시험 이력은 추가 실사를 위한 단서다. 자료의 한계는 "
+        "사업 실패의 근거가 아니다. 고객 계약, 운영 성과 및 자금 필요를 확인해야 한다.",
+    ]
+    if body is not None:
+        paragraphs[1] = body + " [@evidence:ev-a]"
+    markdown = "\n\n".join(
+        f"## {heading}\n\n{text}"
+        for heading, text in zip(NARRATIVE_HEADINGS, paragraphs, strict=True)
+    )
+    composition = CompositionReply.model_validate(
+        {
+            "schema_version": "narrative-report-1",
+            "context_id": context.context_id,
+            "markdown_without_reference": markdown,
+            "cited_evidence_ids": ["ev-a", "ev-b"],
+            "strengths": [],
+            "weaknesses": [],
+            "verification_tasks": [],
+        },
+        context={"writer_context": context.writer_context},
+    )
+    digest = composition_hash(composition)
+    judgment = SemanticJudgeReply.model_validate(
+        {
+            "schema_version": "narrative-report-1",
+            "context_id": context.context_id,
+            "artifact_hash": digest,
+            "verdict": "pass",
+            "issues": [],
+        },
+        context={"writer_context": context.writer_context},
+    )
+    return NarrativeCompositionResult(composition, judgment, digest), context
+
+
+def test_narrative_partial_saved_pdf_has_separate_references(tmp_path):
+    from skala_rag.reporting.pdf import PDFLayoutValidator
+
+    # Given admitted controlled originals and contextual semantic proof.
+    result, context = narrative_fixture(tmp_path)
+    before = context.citation_payload
+    # When the production narrative boundary renders and checks the saved PDF.
+    rendered = renderer(tmp_path / "pdf").render_narrative(
+        result, context, "pdf-layout-v1"
+    )
+    verified = PDFLayoutValidator().validate_narrative(result, context, rendered)
+    # Then body and references are distinct, with no four-page minimum.
+    assert rendered.errors == [] and verified.valid
+    assert rendered.layout_measurements["body_page_count"] < 4
+    assert rendered.page_count == rendered.layout_measurements["body_page_count"] + 1
+    pages = PdfReader(rendered.artifact_path).pages
+    assert "REFERENCE" in pages[-1].extract_text()
+    assert all("REFERENCE" not in page.extract_text() for page in pages[:-1])
+    body_text = "".join(page.extract_text() for page in pages[:-1])
+    reference_text = "".join(pages[-1].extract_text().split())
+    for number, eid in enumerate(sorted(result.composition.cited_evidence_ids), 1):
+        assert f"[{number}]" in body_text
+        assert eid not in body_text
+        assert f"[@evidence:{eid}]" in reference_text
+    assert context.citation_payload == before
+    assert rendered.layout_measurements["visualizations"]["timeline_events"] == 2
+    assert not rendered.layout_measurements["final_allowed"]
+
+
+def test_narrative_body_over_six_pages_is_revise(tmp_path):
+    # Given a supported structure with excessive prose and unchanged type size.
+    result, context = narrative_fixture(
+        tmp_path, body=("가상 자료의 한계와 추가 확인 과제. " * 15 + "\n") * 180
+    )
+    # When production renders without shrinking its typography.
+    rendered = renderer(tmp_path / "pdf").render_narrative(
+        result, context, "pdf-layout-v1"
+    )
+    # Then the physical body bound rejects the report, not its reference count.
+    assert rendered.layout_measurements["body_page_count"] > 6
+    assert "PDF_PAGE_COUNT" in [error.code for error in rendered.errors]
+    assert rendered.layout_measurements["action"] == "revise"
+
+
+def test_narrative_stale_judge_and_registry_rejected_before_render(tmp_path):
+    from dataclasses import replace
+
+    from skala_rag.reporting.company_context import CompanyContextError
+    from skala_rag.reporting.pdf import PDFArtifactError
+
+    # Given a valid result with a forged semantic digest or registry.
+    result, context = narrative_fixture(tmp_path)
+    render = renderer(tmp_path / "pdf")
+    # When those values cross the production boundary.
+    with pytest.raises(PDFArtifactError, match="UPSTREAM"):
+        render.render_narrative(
+            replace(result, artifact_hash="0" * 64), context, "pdf-layout-v1"
+        )
+    with pytest.raises(CompanyContextError, match="BINDING"):
+        render.render_narrative(
+            result, replace(context, citation_payload="{}"), "pdf-layout-v1"
+        )
+    # Then no PDF is created.
+    assert not (tmp_path / "pdf").exists()
+
+
+def test_narrative_saved_pdf_tamper_is_fatal(tmp_path):
+    from skala_rag.reporting.pdf import PDFArtifactError, PDFLayoutValidator
+
+    # Given a saved PDF whose bytes subsequently change.
+    result, context = narrative_fixture(tmp_path)
+    rendered = renderer(tmp_path / "pdf").render_narrative(
+        result, context, "pdf-layout-v1"
+    )
+    path = Path(rendered.artifact_path)
+    path.write_bytes(path.read_bytes() + b"tampered")
+    # When it is validated against the original receipt.
+    with pytest.raises(PDFArtifactError, match="hash"):
+        PDFLayoutValidator().validate_narrative(result, context, rendered)

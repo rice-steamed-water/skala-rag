@@ -9,6 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from skala_rag.contracts.company_report import (
+    CompanyReportConfig,
     CompanyReportConfigError,
     CompanyReportReceipt,
     CompanyReportRequest,
@@ -21,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.fixture
 def config_data():
-    data = json.loads((ROOT / "configs/company-report.example.json").read_bytes())
+    data = json.loads((ROOT / "configs/company-report.v2.json").read_bytes())
     data["runtime_path"] = str(ROOT / "configs/runtime.json")
     return data
 
@@ -84,11 +85,17 @@ def test_python_boolean_rejected_before_file_access(tmp_path, bad):
         ("research_enabled", "true"),
         ("research_enabled", 1),
         ("research_enabled", None),
-        ("schema_version", "company-report-2"),
+        ("schema_version", "company-report-3"),
         ("runtime_path", ""),
         ("store_dir", " "),
         ("model_path", True),
         ("model_receipt_path", None),
+        ("issuer_receipt_path", " "),
+        ("issuer_receipt_path", True),
+        ("issuer_receipt_path", []),
+        ("acquisition_receipt_path", " "),
+        ("acquisition_receipt_path", True),
+        ("acquisition_receipt_path", []),
         ("policy_path", "\x00"),
         ("catalog_path", []),
         ("api_key", "synthetic-secret"),
@@ -135,8 +142,8 @@ def test_all_paths_resolve_against_config_directory(tmp_path, config_data, monke
         "store_dir",
         "model_path",
         "model_receipt_path",
-        "policy_path",
-        "catalog_path",
+        "issuer_receipt_path",
+        "acquisition_receipt_path",
     )
     for field in fields:
         config_data[field] = f"../assets/{field}"
@@ -151,6 +158,38 @@ def test_all_paths_resolve_against_config_directory(tmp_path, config_data, monke
         expected = (path.parent / config_data[field]).resolve()
         assert getattr(effective, field) == expected
     assert not effective.store_dir.exists()
+
+
+@pytest.mark.parametrize("configured", [False, True])
+@pytest.mark.parametrize("field", ["issuer_receipt_path", "acquisition_receipt_path"])
+def test_private_receipt_path_is_optional(tmp_path, config_data, configured, field):
+    # Given
+    if configured:
+        config_data[field] = None
+    else:
+        config_data.pop(field, None)
+    path = write_config(tmp_path, config_data)
+    # When
+    effective = load_company_report_config(path)
+    # Then
+    assert getattr(effective, field) is None
+
+
+@pytest.mark.parametrize("field", ["issuer_receipt_path", "acquisition_receipt_path"])
+def test_private_receipt_path_binds_config_without_loading_receipt(
+    tmp_path, config_data, field
+):
+    # Given
+    original = load_company_report_config(write_config(tmp_path, config_data))
+    config_data[field] = str(tmp_path / "missing-private-receipt.json")
+    # When
+    effective = load_company_report_config(write_config(tmp_path, config_data))
+    # Then
+    receipt_path = getattr(effective, field)
+    assert receipt_path == tmp_path / "missing-private-receipt.json"
+    assert effective.config_hash != original.config_hash
+    assert receipt_path is not None
+    assert not receipt_path.exists()
 
 
 def test_runtime_override_wins_without_reading_missing_file(tmp_path, config_data):
@@ -423,3 +462,42 @@ def test_receipt_rejects_misleading_success_or_authority(receipt_data, override)
     # Given / When / Then
     with pytest.raises(ValidationError):
         CompanyReportReceipt.model_validate(receipt_data | override)
+
+
+def test_valid_v2_configuration_has_no_scored_policy(tmp_path, config_data):
+    # Given
+    path = write_config(tmp_path, config_data)
+    # When
+    effective = load_company_report_config(path)
+    # Then
+    assert effective.schema_version == "company-report-2"
+    assert "policy_path" not in effective.model_dump(mode="json")
+    assert "catalog_path" not in effective.model_dump(mode="json")
+
+
+@pytest.mark.parametrize("via_loader", [False, True])
+def test_legacy_config_requires_explicit_migration(tmp_path, via_loader):
+    # Given
+    data = json.loads((ROOT / "tests/fixtures/company-report.v1.json").read_bytes())
+    data["runtime_path"] = "must-not-read-runtime.json"
+    path = write_config(tmp_path, data)
+    # When / Then
+    with pytest.raises(ValidationError) as error:
+        if via_loader:
+            load_company_report_config(path)
+        else:
+            CompanyReportConfig.model_validate_json(json.dumps(data))
+    assert (
+        error.value.errors()[0]["ctx"]["error"].code
+        == "COMPANY_REPORT_V1_MIGRATION_REQUIRED"
+    )
+
+
+@pytest.mark.parametrize("field", ["policy_path", "catalog_path"])
+def test_invalid_v2_scored_paths_are_not_ignored(tmp_path, config_data, field):
+    # Given
+    config_data[field] = "scoring.json"
+    path = write_config(tmp_path, config_data)
+    # When / Then
+    with pytest.raises(ValidationError):
+        load_company_report_config(path)

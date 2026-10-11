@@ -1,3 +1,39 @@
+# 기업 분석 보고서 - LangGraph Multi-Agent RAG
+
+## 현재 지원 흐름 (#235)
+
+지정 기업 하나의 원문 근거를 검색해 여섯 영역과 18개 질문을 분석하고 한글 Markdown/PDF를 만든다. 현재 실행 진입점은 Python의 `skala_rag.company_report.run_company_report` 하나다. 점수·후보 선정·투자 추천·CLI·웹 데모는 현재 지원 흐름이 아니다.
+
+`technology_product`, `market_customer`, `business_model`, `competition_moat`, `team_execution`, `finance_funding_deal`을 다룬다. 자료가 부족하면 검증된 `partial` 보고서에 한계와 확인 과제를 남기며, 원문이 없으면 `empty`이고 본문 PDF를 만들지 않는다. 법적 신원이나 적격성을 만들어 통과시키지 않는다.
+
+### 실행
+
+`configs/company-report.v2.json`을 로컬 자산 경로에 맞게 복사한다. 저장소·진짜 로컬 임베딩 모델·검증 receipt는 별도 준비 자산이며 clone만으로 생기지 않는다. 모델 자산을 다운로드하는 실행은 아니다. API credential은 runtime이 환경변수/로컬 환경에서 읽으며 JSON에 넣지 않는다.
+
+```python
+from pathlib import Path
+from skala_rag.company_report import run_company_report
+
+out = run_company_report(
+    "Dexory",
+    config_path=Path("data/local/company-report-v2.json"),
+    output_dir=Path("outputs/company-report-new"),
+    research=False,
+)
+```
+
+반환 디렉터리의 `run-result.json`에서 outcome/completeness/validation을 확인한다. 정상 Python 종료만으로 성공을 판단하지 않는다. [호출·설정·controlled 예제](docs/implementation/company-report.md), [현재 실제 증거와 한계](docs/implementation/actual-v3-status.md), [문서 홈](docs/README.md)을 따른다.
+
+### 검증과 실제 범위
+
+`uv run ruff check .`, `uv run ruff format --check .`, `uv run pytest`가 최종 필수 검사다. 합성 transport는 생산 graph·인용·PDF 연결을 검사할 뿐 실제 모델 품질 증거가 아니다. task 12의 저장 자료 기반 실제 Dexory 결과는 18답변 중 answered 2/partial 2/unknown 14, 확인 과제 16개, 실제 인용 원본 3개다. PDF는 본문 2장과 참고문헌 1장이며 4장은 최소 조건이 아니다. 실제 신규 수집·전체 질문 완전 답변·임의 기업 live research는 입증하지 않았다.
+
+research opt-in만으로 수집을 승인하지 않는다. 현재 승인 경로는 private reviewed receipt의 정확한 대상·hash에 묶인 official-homepage이며 일반 arbitrary-new-web 권한이 아니다. 보강 1회/최대 6개 need, 작성·의미·layout 공유 수정 2회와 누적 호출·비용·deadline을 유지한다.
+
+## Historical / 보존 이력 (현재 실행 안내 아님)
+
+아래 전체는 통합 이전의 요구·승인·구현 snapshot이다. 아래의 "현재", CLI/scored/demo 명령과 링크는 당시 기준이며 퇴역한 파일의 실행을 안내하지 않는다. 현재 사용은 위 v2 안내를 따른다. 역사적 과제 요구나 승인 자체를 삭제·완료 처리하지 않는다.
+
 # AI Startup Investment Evaluation Agent
 
 Physical AI / Robotics 스타트업의 투자 가능성을 조사·평가하는 **LangGraph Multi-Agent RAG** 실습 프로젝트다. 기업 정보와 기술 문서에서 근거를 수집하고, 평가 항목별 분석과 출처를 포함한 투자 검토 보고서를 생성한다.

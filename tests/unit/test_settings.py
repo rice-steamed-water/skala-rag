@@ -373,6 +373,23 @@ def test_unknown_profile_rejected_before_file_access(tmp_path, profile):
         load_runtime_settings(profile, path=tmp_path / "does-not-exist.json")
 
 
+def test_narrative_output_allowance_preserves_cumulative_cap(
+    tmp_path, runtime_document
+):
+    # Given: the full narrative response needs more than the old 2000-token cap.
+    runtime_document["profiles"]["actual_v3"]["request_output_tokens"] = 8000
+    path = write_document(tmp_path, runtime_document)
+
+    # When: the real runtime profile is loaded.
+    profile = load_runtime_settings("actual_v3", path=path).profile
+
+    # Then: only the per-response limit changes, not cumulative cost or retries.
+    assert isinstance(profile, ActualV3Settings)
+    assert profile.request_output_tokens == 8000
+    assert profile.max_cost_usd == Decimal("1")
+    assert profile.max_retries == 0
+
+
 @pytest.mark.parametrize(
     "profile,field,value",
     [
@@ -392,6 +409,7 @@ def test_unknown_profile_rejected_before_file_access(tmp_path, profile):
         ("actual_v3", "max_calls", 41),
         ("actual_v3", "max_input_tokens", 2000001),
         ("actual_v3", "max_output_tokens", 120001),
+        ("actual_v3", "request_output_tokens", 8001),
         ("actual_v3", "max_cost_usd", "1.01"),
         ("actual_v3", "deadline_seconds", 3601),
         ("actual_v3", "timeout_seconds", 61),

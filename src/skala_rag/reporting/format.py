@@ -5,84 +5,24 @@ REFERENCE 문자열을 만든다. 표 형식은 reporting.md의 "평가 결과 �
 표"를 기계 검사할 수 있게 고정한 구현 규약이다.
 """
 
+import re
+from dataclasses import dataclass
 from datetime import date, datetime
-from decimal import ROUND_HALF_UP, Decimal
-from typing import Literal
+from typing import TYPE_CHECKING
 
 from skala_rag.contracts import (
-    CandidateOutcome,
-    InvestmentDecision,
-    ScoreSummary,
+    Chunk,
+    Evidence,
     Source,
 )
+from skala_rag.contracts.company_report import CompositionReply
 
-Mode = Literal["single_candidate", "no_recommendation"]
-
-HEADINGS: dict[Mode, tuple[str, ...]] = {
-    "single_candidate": (
-        "SUMMARY",
-        "1. 기업과 제품 / 핵심 컨셉",
-        "2. 시장성과 성장 가능성",
-        "3. 창업자·팀, 기술력과 경쟁 우위",
-        "4. 실적·투자조건과 평가 결과",
-        "5. 주요 리스크, 한계와 추가 확인 사항",
-        "REFERENCE",
-    ),
-    "no_recommendation": (
-        "SUMMARY",
-        "1. 조사 주제와 후보 탐색 범위",
-        "2. 후보별 결과와 제외·보류 사유",
-        "3. 시장·기술 관찰과 근거 범위",
-        "4. 평가 결과와 정보 공백",
-        "5. 공통 리스크, 한계와 추가 확인 사항",
-        "REFERENCE",
-    ),
-}
-SCORE_SECTION = 4
-OUTCOME_SECTION = 2  # no_recommendation만
-DIMENSIONS = ("founder", "market", "technology", "moat", "traction", "deal_terms")
-EMPTY_REFERENCE_PREFIX = "인용 자료 없음:"
-FIXTURE_MARK = "가상 데이터"
+if TYPE_CHECKING:
+    from skala_rag.reporting.company_context import CompanyWriterContext
 
 
 def evidence_token(evidence_id: str) -> str:
     return f"[@evidence:{evidence_id}]"
-
-
-def fmt_number(value: Decimal) -> str:
-    """scoring 표시 규칙: 소수 둘째 자리 반올림(비교는 반올림 전 값)."""
-    return str(Decimal(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
-
-
-def score_rows(summary: ScoreSummary, decision: InvestmentDecision) -> dict[str, str]:
-    """평가 결과 표의 항목 → 값."""
-    rows = {
-        "후보": summary.candidate_id,
-        "관측 근거 기반 점수": f"{fmt_number(summary.observed_score)}/100",
-        "결측 비중": f"{fmt_number(summary.missing_weight)}%",
-        "coverage": f"{fmt_number(summary.coverage_pct)}%",
-    }
-    for dim in DIMENSIONS:
-        rating = summary.dimension_ratings.get(dim)
-        rows[f"rating.{dim}"] = "미상" if rating is None else fmt_number(rating)
-    rows["label"] = decision.label
-    rows["report_grade"] = decision.report_grade
-    rows["hold_reasons"] = ", ".join(summary.hold_reasons) or "없음"
-    return rows
-
-
-def render_score_table(summary: ScoreSummary, decision: InvestmentDecision) -> str:
-    lines = ["| 항목 | 값 |", "| --- | --- |"]
-    lines += [f"| {k} | {v} |" for k, v in score_rows(summary, decision).items()]
-    return "\n".join(lines)
-
-
-def render_outcome_table(outcomes: list[CandidateOutcome]) -> str:
-    lines = ["| 후보 | 상태 | 사유 |", "| --- | --- | --- |"]
-    lines += [
-        f"| {o.candidate_id} | {o.status} | {o.summary_reason} |" for o in outcomes
-    ]
-    return "\n".join(lines)
 
 
 def _year(value: date | datetime | None) -> str | None:
@@ -128,3 +68,120 @@ def bibliography(source: Source) -> str:
 
 def reference_line(source: Source) -> str:
     return f"- [@source:{source.source_id}] {bibliography(source)}"
+
+
+class NarrativeCitationError(ValueError):
+    def __init__(self, code: str):
+        self.code = code
+        super().__init__(code)
+
+
+@dataclass(frozen=True, slots=True)
+class NarrativeReference:
+    """Exact private-registry locator, for renderer use only."""
+
+    evidence_id: str
+    source_id: str
+    chunk_id: str
+    locator: str
+    page_start: int | None
+    page_end: int | None
+    url: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class FinalizedNarrative:
+    """Deterministic renderer/controller input; never send references to a model."""
+
+    context_id: str
+    markdown: str
+    cited_evidence_ids: tuple[str, ...]
+    reference_source_ids: tuple[str, ...]
+    references: tuple[NarrativeReference, ...]
+
+
+def finalize_narrative(
+    composition: CompositionReply, context: "CompanyWriterContext"
+) -> FinalizedNarrative:
+    """Resolve only task 3 admitted originals; do not acquire or invent support.
+
+    Supporting evidence must be explicitly cited in the body and metadata too.
+    Composition validation is contextual, including previously parsed instances.
+    This checks citation integrity, not semantic support or PDF acceptance.
+    """
+    # Local imports avoid the legacy validator -> format -> context import cycle.
+    from skala_rag.reporting.validator import TOKEN
+
+    context.verify_binding()
+    writer = context.writer_context
+    reply = CompositionReply.model_validate(
+        composition, context={"writer_context": writer}
+    )
+    body = reply.markdown_without_reference
+    if re.search(r"(?im)^\s*#{1,6}\s+REFERENCE\b", body) or "[@source:" in body:
+        raise NarrativeCitationError("MODEL_REFERENCE_FORBIDDEN")
+    if "[@evidence:" in TOKEN.sub("", body):
+        raise NarrativeCitationError("MALFORMED_CITATION")
+    cited = set(TOKEN.findall(body))
+    if cited != set(reply.cited_evidence_ids):
+        raise NarrativeCitationError("BODY_CITATION_MISMATCH")
+    if any(
+        not set(writer.evidence[eid].supporting_evidence_ids) <= cited for eid in cited
+    ):
+        raise NarrativeCitationError("UNCITED_SUPPORT_EVIDENCE")
+
+    registry = context.citation_registry["citations"]
+    sources: dict[str, Source] = {}
+    references: list[NarrativeReference] = []
+    for eid in sorted(cited):
+        receipt = registry[eid]
+        original = Evidence.model_validate(receipt["original_evidence"])
+        source = Source.model_validate(receipt["source"])
+        if source.bibliographic_metadata.get("generated_report"):
+            raise NarrativeCitationError("GENERATED_SOURCE_FORBIDDEN")
+        sources[source.source_id] = source
+        for chunk_id in sorted(receipt["chunks"]):
+            chunk = Chunk.model_validate(receipt["chunks"][chunk_id])
+            if (
+                original.evidence_id != eid
+                or original.source_id != source.source_id
+                or chunk.source_id != source.source_id
+                or chunk.locator != original.locator
+                or receipt["locator"] != original.locator
+            ):
+                raise NarrativeCitationError("ORIGINAL_LOCATOR_MISMATCH")
+            references.append(
+                NarrativeReference(
+                    eid,
+                    source.source_id,
+                    chunk.chunk_id,
+                    chunk.locator,
+                    chunk.page_start,
+                    chunk.page_end,
+                    source.url,
+                )
+            )
+    lines = []
+    for sid, source in sorted(sources.items()):
+        # The legacy paper bibliography omits URLs; narrative references never do.
+        lines.append(f"{reference_line(source)} | 원문 URL: {source.url or '미상'}")
+        for ref in references:
+            if ref.source_id != sid:
+                continue
+            pages = (
+                "페이지 미상"
+                if ref.page_start is None and ref.page_end is None
+                else f"pages {ref.page_start if ref.page_start is not None else '?'}"
+                f"-{ref.page_end if ref.page_end is not None else '?'}"
+            )
+            lines.append(
+                f"  - evidence={ref.evidence_id}; chunk={ref.chunk_id}; "
+                f"locator={ref.locator}; {pages}"
+            )
+    return FinalizedNarrative(
+        writer.context_id,
+        body.rstrip() + "\n\n## REFERENCE\n\n" + "\n".join(lines) + "\n",
+        tuple(sorted(cited)),
+        tuple(sorted(sources)),
+        tuple(references),
+    )

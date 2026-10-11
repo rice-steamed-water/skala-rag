@@ -1,7 +1,8 @@
 """T04 live Company Research 조립·실패 계약 (#51). 네트워크 없이 실행.
 
 모든 HTTP 응답은 ``httpx.MockTransport``, 이름 확인은 가짜 resolver다. 회사명·번호·
-URL은 가상이며 실제 기업 자료가 아니다. 적격성은 #18의 ``check_eligibility``로 본다.
+URL은 가상이며 실제 기업 자료가 아니다.
+판정 대신 원문 관측의 귀속과 unknown 보존을 검증한다.
 """
 
 import io
@@ -19,7 +20,6 @@ from skala_rag.agents.eligibility import (
     FIELD_IDENTITY,
     FIELD_LISTING,
     FIELD_STAGE,
-    check_eligibility,
 )
 from skala_rag.contracts.candidates import Candidate
 from skala_rag.contracts.error_codes import ErrorCode
@@ -39,7 +39,6 @@ SCHEMA = "synthetic-research-1"
 RUN = "run-t04-live"
 NOW = datetime(2026, 9, 30, 9, 0, tzinfo=UTC)
 AS_OF = date(2026, 9, 30)
-POLICY = {"policy_version": "synthetic-policy"}
 KEY = "SECRET-DART-KEY-123"
 HOME = "https://robot.example/"
 DART = "https://opendart.fss.or.kr/api"
@@ -206,12 +205,6 @@ def research(routes, *, specs=None, key=KEY, dart=True, as_of=AS_OF, **dart_kw):
     return tool, site
 
 
-def judge(bundle):
-    return check_eligibility(
-        bundle.profile, bundle.evidence, POLICY, run_id=RUN, evidence_revision=1
-    )
-
-
 def summary(result):
     return result.retrieval_records[-1].arguments_without_secrets
 
@@ -237,8 +230,7 @@ def test_every_profile_fact_traces_to_source_and_evidence():
             record_ids = {r.retrieval_id for r in result.retrieval_records}
             assert {p.retrieval_id for p in ev.provenance} <= record_ids
             assert ev.provenance[0].method == "web"
-    outcome = judge(bundle)
-    assert outcome.status == "eligible"
+    assert bundle.profile.domain_match is True
     assert bundle.profile.stage.normalized_round == "series_a"
 
 
@@ -257,8 +249,7 @@ def test_dart_identifier_match_adds_identity_and_listing():
     ]
     assert listing[0].provenance[0].method == "api"
     assert "코스닥" in listing[0].claim
-    assert judge(bundle).checks["listing"]["reason_code"] == "LISTED"
-    assert judge(bundle).status == "ineligible"
+    assert bundle.profile.is_listed is True
 
 
 def test_dart_unlisted_class_keeps_scope_limitations():
@@ -296,9 +287,7 @@ def test_no_data_is_empty_and_never_eligible():
     providers = summary(result)["providers"]
     assert providers["official-homepage"]["skipped"] == "NO_HOMEPAGE"
     assert providers["opendart-company"]["skipped"] == "NO_LEGAL_IDENTIFIER"
-    outcome = judge(result.data)
-    assert outcome.status == "unknown"
-    assert outcome.checks["listing"]["reason_code"] == "LISTING_UNKNOWN"
+    assert result.data.profile.is_listed is None
 
 
 def test_dart_no_data_is_not_unlisted():
@@ -322,7 +311,7 @@ def test_homepage_without_extractor_keeps_source_but_no_facts():
     assert len(result.data.sources) == 1 and result.data.evidence == {}
     notes = summary(result)["providers"]["official-homepage"]["notes"]
     assert notes == ["EXTRACTOR_NOT_CONFIGURED"]
-    assert judge(result.data).status == "unknown"
+    assert result.data.profile.domain_match is None
 
 
 # ---------------------------------------------------------------- 동명 기업·식별
@@ -423,7 +412,7 @@ def test_conflicting_sources_without_event_dates_stay_unknown():
     assert len(ids) == 2
     a, b = (bundle.evidence[i] for i in ids)
     assert a.conflicts_with == [b.evidence_id] and b.conflicts_with == [a.evidence_id]
-    assert judge(bundle).checks["listing"]["status"] == "unknown"
+    assert bundle.profile.is_listed is None
 
 
 def test_dart_and_homepage_listing_conflict_is_unknown():
@@ -435,7 +424,7 @@ def test_dart_and_homepage_listing_conflict_is_unknown():
     tool, _ = research(routes, specs=specs)
     result = tool(candidate(legal_identifiers={"dart": "00000006"}), budget())
     assert result.data.profile.is_listed is None
-    assert judge(result.data).checks["listing"]["status"] == "unknown"
+    assert result.data.profile.is_listed is None
 
 
 def test_old_round_article_is_superseded_by_later_event():
@@ -470,8 +459,8 @@ def test_old_round_article_is_superseded_by_later_event():
         bundle.evidence[i] for i in ids if bundle.evidence[i].event_date.year == 2022
     )
     assert newer.supersedes == older.evidence_id
-    check = judge(bundle).checks["stage"]
-    assert check["status"] == "pass" and check["evidence_ids"] == [newer.evidence_id]
+    assert bundle.profile.stage.normalized_round == "series_b"
+    assert newer.evidence_id in bundle.profile.field_evidence_ids[FIELD_STAGE]
 
 
 def test_one_page_with_old_and_new_rounds_uses_latest_event():
@@ -509,7 +498,7 @@ def test_same_event_date_with_different_rounds_conflicts():
     tool, _ = research({HOME: html()}, specs=specs, dart=False)
     bundle = tool(candidate(), budget()).data
     assert bundle.profile.stage.normalized_round == "unknown"
-    assert judge(bundle).checks["stage"]["status"] == "unknown"
+    assert bundle.profile.stage.normalized_round == "unknown"
 
 
 def test_event_after_as_of_is_rejected():
@@ -542,9 +531,10 @@ def test_tips_label_is_not_auto_eligible():
         obs(FIELD_STAGE, StageObservation("TIPS 선정", "seed", "explicit"))
     ]
     tool, _ = research({HOME: html()}, specs=specs, dart=False)
-    outcome = judge(tool(candidate(), budget()).data)
-    assert outcome.status == "unknown"
-    assert outcome.checks["stage"]["reason_code"] == "STAGE_TIPS_ONLY"
+    bundle = tool(candidate(), budget()).data
+    assert bundle.profile.stage.raw_label == "TIPS 선정"
+    assert bundle.profile.stage.normalized_round == "seed"
+    assert bundle.profile.stage.last_round_date is None
 
 
 def test_estimated_stage_is_not_eligible():
@@ -556,9 +546,12 @@ def test_estimated_stage_is_not_eligible():
         )
     ]
     tool, _ = research({HOME: html()}, specs=specs, dart=False)
-    outcome = judge(tool(candidate(), budget()).data)
-    assert outcome.status == "unknown"
-    assert outcome.checks["stage"]["reason_code"] == "STAGE_ESTIMATED"
+    bundle = tool(candidate(), budget()).data
+    assert bundle.profile.stage.method == "estimated"
+    assert all(
+        bundle.evidence[eid].evidence_kind == "estimated"
+        for eid in bundle.profile.field_evidence_ids[FIELD_STAGE]
+    )
 
 
 # ---------------------------------------------------------------- API·도구 실패

@@ -1,3 +1,17 @@
+# 현재 설정 소유권 - company-report-2
+
+`company-report.v2.json`은 로컬 준비 경로 템플릿이다. schema_version/runtime_path/store_dir/model_path/model_receipt_path가 필수, issuer_receipt_path/acquisition_receipt_path/research_enabled/research_limits는 선택이다. path는 해당 config 위치 기준으로 resolve한다. research 기본은 false, true일 때 max_calls/max_cost_usd/deadline_seconds 필수이며 runtime actual_v3 ceiling을 넘으면 거절한다.
+
+runtime.json은 단일 요청 설정 원본, settings의 frozen loader는 명시 파일/source canonical/installed resource를 선택한다. credentials는 runtime 환경에서 해결하며 config/effective snapshot/State/receipt에는 넣지 않는다. model_path/model_receipt_path는 준비된 genuine local embedding을 가리켜야 하며 없는 모델을 다운로드하거나 합성으로 대체하지 않는다.
+
+issuer-association-1 private receipt의 subject_id/name/evidence_hashes는 reviewed original fingerprint에 결합된다. acquisition receipt는 정확한 reviewed target/hash official-homepage permission으로 별도 검증한다. 연구 opt-in과 homepage hint만으로 arbitrary new web 권한을 만들지 않는다. private receipts는 writer/Judge 입력이 아니다.
+
+company-report-1 및 old policy/catalog schema는 COMPANY_REPORT_V1_MIGRATION_REQUIRED로 출력 전 거절한다. scoring/rubric 실행 설정과 old example config는 regression/retained wheel-resource proof 후 퇴역했다. `pdf.layout.v1.json`의 v1은 PDF profile 버전이며 company-report v1 success 계약과 무관하다. [정확한 API/controlled config](../docs/implementation/company-report.md)를 따른다.
+
+## Historical / 보존 이력 (현재 실행 안내 아님)
+
+아래 전체는 통합 이전의 요구·승인·구현 snapshot이다. 아래의 "현재", CLI/scored/demo 명령과 링크는 당시 기준이며 퇴역한 파일의 실행을 안내하지 않는다. 현재 사용은 위 v2 안내를 따른다. 역사적 과제 요구나 승인 자체를 삭제·완료 처리하지 않는다.
+
 # 설정 소유권
 
 모델·실행 구성의 원본은 `runtime.json`이며 로더는

@@ -105,8 +105,14 @@ class OpenAIStructuredLLM:
     ):
         if model != APPROVED_MODEL:
             raise ValueError("승인된 OpenAI snapshot만 사용할 수 있습니다")
-        if type(max_output_tokens) is not int or not 1 <= max_output_tokens <= 2000:
-            raise ValueError("출력 token 한도는 승인 범위 1..2000이어야 합니다")
+        output_ceiling = 8000 if schema_version == "narrative-report-1" else 2000
+        if (
+            type(max_output_tokens) is not int
+            or not 1 <= max_output_tokens <= output_ceiling
+        ):
+            raise ValueError(
+                f"출력 token 한도는 승인 범위 1..{output_ceiling}이어야 합니다"
+            )
         if not prompt_version.strip() or not schema_version.strip():
             raise ValueError("prompt/schema 버전이 필요합니다")
         self.transport = transport
@@ -144,6 +150,8 @@ class OpenAIStructuredLLM:
                 }
             },
         )
+        if self.schema_version == "narrative-report-1":
+            payload["temperature"] = 0
         started = self.clock.now()
         usage = {}
         error = None

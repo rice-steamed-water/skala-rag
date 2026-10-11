@@ -38,13 +38,12 @@ from skala_rag.agents.evidence_extraction import (
 from skala_rag.contracts.candidates import Candidate
 from skala_rag.contracts.coverage import ResearchGap
 from skala_rag.contracts.error_codes import ERROR_SPECS, ErrorCode
-from skala_rag.contracts.errors import WorkflowError
+from skala_rag.contracts.errors import StageFailure, WorkflowError
 from skala_rag.contracts.evidence import Evidence
 from skala_rag.contracts.interfaces import Clock, LLMError, Retrieve, StructuredLLM
 from skala_rag.contracts.retrieval import RetrievalRecord, RetrievalRequest
 from skala_rag.contracts.sources import Chunk, Source
 from skala_rag.contracts.tools import EvidenceBundle, ToolBudget, ToolResult
-from skala_rag.graph.candidates import StageFailure
 from skala_rag.graph.reducers import merge_evidence
 from skala_rag.scoring.finance import Unavailable, to_amount
 from skala_rag.tools.source_fetch import RawSnapshot, check_as_of
