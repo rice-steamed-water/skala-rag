@@ -1,3 +1,17 @@
+# 공통 계약 - 현재 narrative 경계
+
+현재 호출·config/result는 [company-report-2](company-report.md), 경계 DTO는 `contracts/company_report.py`의 `narrative-report-1`이다. strict scalar/JSON-only/extra=forbid를 유지한다. WriterContext는 target/as_of/18questions/evidence/may_request_information/information_results, EvidenceView는 original ID에 결합된 내용·수치·한계·support/conflict/derivation만 가진다.
+
+AnalysisReply의 18 answers는 answered/partial/unknown/not_applicable이다. 부분/미상은 한계·과제, N/A는 근거 있는 이유를 요구한다. CompositionReply는 markdown_without_reference/cited_evidence_ids/strengths/weaknesses/verification_tasks, Judge는 정확한 context/artifact hash를 검증한다. controller가 information request/context ID를 소유하며 모델 반환 ID를 authority로 취급하지 않는다.
+
+Source/URL/path/publisher/page/chunk/retrieval/provider/corpus metadata와 private reviewed issuer/acquisition receipt는 모델 입력·feedback에 금지된다. private registry가 exact 원본 hash/locator를 참조에 연결하고 context_id에 결합된다. derived support는 admitted originals로 닫히며 순환/생성 prose-only 지원을 허용하지 않는다.
+
+NarrativeRunResult는 outcome=completed|partial|empty|ambiguous|failed, completeness=full|partial|none, validation=not_run|passed|failed다. Path/null 및 receipt hash는 실제 산출물과 일치해야 한다. 현재 schema와 역사 baseline/v3 success enum을 조용히 섞지 않는다. persistent Source/Chunk/Evidence/ReportProvenance reader 계약은 보존했다.
+
+## Historical / 보존 이력 (현재 실행 안내 아님)
+
+아래 전체는 통합 이전의 요구·승인·구현 snapshot이다. 아래의 "현재", CLI/scored/demo 명령과 링크는 당시 기준이며 퇴역한 파일의 실행을 안내하지 않는다. 현재 사용은 위 v2 안내를 따른다. 역사적 과제 요구나 승인 자체를 삭제·완료 처리하지 않는다.
+
 # 공통 데이터 계약
 
 [문서 홈](../README.md) · [아키텍처](architecture.md) · [점수 정책](scoring.md)

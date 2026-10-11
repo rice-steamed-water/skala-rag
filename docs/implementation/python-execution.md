@@ -1,3 +1,15 @@
+# Python 직접 실행 - company-report-2
+
+현재 지원 호출은 `skala_rag.company_report.run_company_report` 하나다. [정확한 signature·설정·예제·상태](company-report.md)를 따른다. 반환 Path의 run-result.json에서 outcome/completeness/validation을 읽으며 process exit 0만으로 PDF 성공을 주장하지 않는다. 유효한 completed/partial만 validation=passed이고 empty/ambiguous/failed와 구분된다.
+
+`examples/company_report_run.py`는 public API를 직접 호출하며 SKALA_COMPANY_REPORT_CONFIG/SKALA_COMPANY_REPORT_OUTPUT/SKALA_COMPANY_NAME으로 대상과 설정을 받는다. 문서의 controlled 명령은 test-only synthetic transport를 쓰고 생산 graph·인용·PDF를 실행한다. paid 실제 QA를 재실행하는 기본값이나 no-op fallback은 없다.
+
+v1 설정은 출력·모델 dispatch 전에 COMPANY_REPORT_V1_MIGRATION_REQUIRED로 거절한다. catalog/policy/actual_admission/authority 대신 v2 private fingerprint-bound issuer/acquisition receipt를 준비한다. 정확한 검토·자산 준비는 hash만으로 생기지 않는다. 기존 후보/fixture CLI·v3 scoring/source-only/demo runner는 퇴역했고 별도 현재 실행 안내가 아니다.
+
+## Historical / 보존 이력 (현재 실행 안내 아님)
+
+아래 전체는 통합 이전의 요구·승인·구현 snapshot이다. 아래의 "현재", CLI/scored/demo 명령과 링크는 당시 기준이며 퇴역한 파일의 실행을 안내하지 않는다. 현재 사용은 위 v2 안내를 따른다. 역사적 과제 요구나 승인 자체를 삭제·완료 처리하지 않는다.
+
 # Python 직접 실행 — 최종 실행 인터페이스 (#166)
 
 ## 결정과 현재 구현의 경계

@@ -5,15 +5,15 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from tests.fixtures.catalog import load_policy
 from tests.fixtures.loader import load_common_fixtures
-from tests.unit.test_fixture_retrieval import request
+from tests.fixtures.retrieval import request
 
 from skala_rag.contracts import RetrievalBundle, ToolBudget
 from skala_rag.contracts.error_codes import ErrorCode
 from skala_rag.contracts.interfaces import Retrieve
 from skala_rag.fakes import FakeClock
 from skala_rag.rag.adapter import IndexedRetriever, IndexSnapshot, index_identity
-from skala_rag.scoring.catalog import load_policy
 from skala_rag.tools.runtime import (
     AdapterRuntime,
     Allowance,
@@ -29,7 +29,8 @@ from skala_rag.tools.runtime import (
 def data():
     return load_common_fixtures(
         load_policy(
-            Path(__file__).resolve().parents[2] / "configs/scoring.draft.json",
+            Path(__file__).resolve().parents[2]
+            / "tests/fixtures/historical-catalog.json",
             execution_mode="fixture",
         )
     )

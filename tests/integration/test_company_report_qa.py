@@ -1,6 +1,4 @@
-"""Auxiliary controlled wires, synthetic embeddings; never actual QA evidence."""
-
-import json
+"""Controlled wires exercise retained examples, never actual model QA."""
 
 import pytest
 from examples.company_report_run import (
@@ -13,80 +11,69 @@ from examples.company_report_run import (
 from tests.integration.test_company_report import Harness, receipt
 from tests.integration.test_company_report import offline as offline
 
-from skala_rag.contracts.company_report import CompanyReportConfigError
+from skala_rag.contracts.company_report import CompanyReportConfigError, ResearchLimits
 
 
 def test_stored_scenario_reads_real_artifacts_and_reopens_lineage(
     tmp_path, monkeypatch
 ):
-    # Given: existing integration wires, real SQLite/PDF and synthetic vectors.
+    # Given a real SQLite store and explicit synthetic model wires.
     case = Harness(tmp_path / "stored", monkeypatch)
-    case.config_data["research_enabled"] = True
-    case.config.write_text(json.dumps(case.config_data), encoding="utf-8")
-    # When: the exported Python scenario explicitly disables research.
+    before = case.store.open()
+    assert before is not None
+    # When the retained Python example invokes the production public API.
     out = scenario_stored_report(
+        "Synthetic a Robotics",
         config_path=case.config,
         output_dir=case.root / "scenario",
-        authority=case.authority,
-        actual_admission=case.actual,
     )
-    # Then: read-only artifact observations match public receipts and the store.
-    _check_report(out, research=False)
-    meta = json.loads((out / "corpus_meta.json").read_bytes())
-    assert meta["execution_scope"] == "controlled_response"
-    assert meta["actual_proof_established"] is False
-    assert meta["before"] == case.before.manifest.model_dump(mode="json")
-    reopened = case.store.open()
-    assert reopened is not None
-    assert meta["after"] == reopened.manifest.model_dump(mode="json")
-    assert (out / "effective_config.json").read_bytes() == (
-        out / "effective-config.json"
-    ).read_bytes()
-    assert receipt(out).candidate_id == case.actual.runtime_binding.call.candidate_id
-    assert all(event["kind"] == "analysis" for event in case.events)
+    # Then the saved partial PDF is validated and originals are unchanged.
+    result = _check_report(out, research=False)
+    assert result.outcome == "partial" and result.completeness == "partial"
+    after = case.store.open()
+    assert after is not None and after.payload == before.payload
+    assert result.subject_id == "co-a"
+    assert case.roles == ["AnalysisReply", "CompositionReply", "SemanticJudgeReply"]
 
 
 def test_research_scenario_preserves_changed_corpus_block(tmp_path, monkeypatch):
-    # Given: starting admission, with no future-corpus preview or replacement.
-    case = Harness(tmp_path / "research", monkeypatch)
-    case.stale = True
-    # When: the exported scenario requests target-only research.
+    # Given no collection authorization and a valid original store.
+    case = Harness(tmp_path / "research", monkeypatch, needs=True)
+    before = case.store.open()
+    assert before is not None
+    # When explicit finite research is requested through the supported example.
     out = scenario_research_target_report(
-        config_path=str(case.config),
-        output_dir=str(case.root / "scenario"),
-        authority=case.authority,
-        actual_admission=case.actual,
+        "Synthetic a Robotics",
+        config_path=case.config,
+        output_dir=case.root / "scenario",
+        research_limits=ResearchLimits(
+            max_calls=1, deadline_seconds=1.0, max_cost_usd="0.01"
+        ),
     )
-    # Then: source-only intake cannot be relabeled as report supplementation.
+    # Then unavailable research is not relabeled as new evidence or full output.
     result = receipt(out)
-    assert result.research_requested
-    assert result.outcome == "research_blocked"
-    assert result.reason_codes == ("CORPUS_ADMISSION_MISMATCH",)
-    assert result.report_validation == "not_run"
-    assert result.report_path is None
-    meta = json.loads((out / "corpus_meta.json").read_bytes())
-    assert meta["before"]["version"] != meta["after"]["version"]
-    assert meta["before"]["evidence"] == meta["after"]["evidence"]
-    assert meta["review_log"] is None
-    reopened = case.store.open()
-    assert reopened is not None
-    assert not reopened.manifest.reports
+    assert result.research_requested and result.outcome == "partial"
+    assert result.validation == "passed" and result.pdf_path is not None
+    assert result.collection_records == []
+    after = case.store.open()
+    assert after is not None and after.payload == before.payload
+    _check_report(out, research=True)
 
 
 @pytest.mark.parametrize("qa", [qa_stored, qa_research])
 def test_actual_qa_rejects_controlled_scope_before_dispatch(tmp_path, monkeypatch, qa):
-    # Given: explicitly synthetic authority from the existing integration helper.
+    # Given explicitly synthetic wires with no genuine model assets or receipt.
     case = Harness(tmp_path / "scope", monkeypatch)
     out = case.root / "forbidden"
-    # When: an actual-only QA wrapper is called with controlled responses.
-    with pytest.raises(CompanyReportConfigError) as error:
-        qa(
-            config_path=case.config,
-            output_dir=out,
-            authority=case.authority,
-            actual_admission=case.actual,
+    arguments = dict(config_path=case.config, output_dir=out)
+    if qa is qa_research:
+        arguments["research_limits"] = ResearchLimits(
+            max_calls=1, deadline_seconds=1.0, max_cost_usd="0.01"
         )
-    # Then: there are no requests, artifacts, or synthetic actual success.
+    # When prerequisites for the actual-only example are absent.
+    with pytest.raises(CompanyReportConfigError) as error:
+        qa("Synthetic a Robotics", **arguments)
+    # Then no model request, output or synthetic actual-success claim is emitted.
     assert error.value.code == "ACTUAL_QA_SCOPE_REQUIRED"
-    assert case.events == []
+    assert case.requests == []
     assert not out.exists()

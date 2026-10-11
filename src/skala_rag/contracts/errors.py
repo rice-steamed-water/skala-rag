@@ -15,3 +15,13 @@ class WorkflowError(Contract):
     retryable: StrictBool
     attempt: Count
     timestamp: Timestamp
+
+
+class StageFailure(Exception):
+    """A stage's already-redacted terminal errors, not missing observations."""
+
+    def __init__(self, errors: list[WorkflowError]):
+        if not errors:
+            raise ValueError("StageFailure requires at least one WorkflowError")
+        super().__init__("Candidate graph stage failed")
+        self.errors = errors

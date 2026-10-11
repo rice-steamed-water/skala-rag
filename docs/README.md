@@ -1,3 +1,19 @@
+# 팀 구현 가이드 - 기업 분석 보고서 v2
+
+## 현재 방향 (#235, 2026-10-11)
+
+한 기업 → 질문별 로컬 RAG → source-neutral 분석 → 선택적 한 번 보강 → 작성/Judge → 정확한 REFERENCE와 한글 PDF가 지원 흐름이다. scoring·적격성·후보 selector·CLI는 실행 요구가 아니다. 역사적 과제 요구와 승인 기록을 삭제하거나 현행 구현 완료로 해석하지 않는다.
+
+먼저 [기업 보고서](implementation/company-report.md), [Python 실행](implementation/python-execution.md), [실제 검증 범위](implementation/actual-v3-status.md)를 읽는다. 구현은 [아키텍처](implementation/architecture.md), [계약](implementation/contracts.md), [보고서](implementation/reporting.md), [PDF](implementation/pdf-rendering.md), [결정 기록](implementation/decisions.md), [설정](../configs/README.md)을 따른다.
+
+여섯 영역은 technology_product/market_customer/business_model/competition_moat/team_execution/finance_funding_deal이며 각 3질문이다. 부분/미상에는 한계와 추가 확인 과제를 남긴다. 실제 0은 유지하고 없는 수치·법적 identity·투자 권고는 만들지 않는다. writer/Judge에는 근거 ID와 내용만 전달하고 출처·URL·경로·검색 메타데이터는 private registry에서 인용으로 해석한다.
+
+실제 Dexory partial과 controlled full/empty/ambiguous/실패 증거는 서로 다른 범위다. [현재 상태](implementation/actual-v3-status.md)에 정확한 한계가 있다. `docs/raws/`와 archived 설계·이력은 변경하지 않는다.
+
+## Historical / 보존 이력 (현재 실행 안내 아님)
+
+아래 전체는 통합 이전의 요구·승인·구현 snapshot이다. 아래의 "현재", CLI/scored/demo 명령과 링크는 당시 기준이며 퇴역한 파일의 실행을 안내하지 않는다. 현재 사용은 위 v2 안내를 따른다. 역사적 과제 요구나 승인 자체를 삭제·완료 처리하지 않는다.
+
 # 팀 구현 가이드 — Robotics Startup Agentic RAG
 
 > 상태: **v3 전환 방향 승인 / baseline 이력 보존 / 세부 정책 OPEN** · 기준일: 2026-09-30 KST

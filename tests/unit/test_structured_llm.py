@@ -7,7 +7,7 @@ import httpx
 import pytest
 from pydantic import BaseModel, ConfigDict
 
-from skala_rag.agents.evaluation import DimensionAssessmentOutput
+from skala_rag.contracts.company_report import Answer
 from skala_rag.contracts.error_codes import ErrorCode
 from skala_rag.contracts.interfaces import LLMError, StructuredLLM
 from skala_rag.fakes import FakeClock
@@ -37,7 +37,14 @@ def response(text='{"rating":null,"reason":"가상 결측"}', **updates):
     return payload
 
 
-def adapter(body=None, *, status=200, exception=None):
+def adapter(
+    body=None,
+    *,
+    status=200,
+    exception=None,
+    schema_version="fixture-schema-v1",
+    max_output_tokens=100,
+):
     received = []
 
     def handler(request):
@@ -53,8 +60,8 @@ def adapter(body=None, *, status=200, exception=None):
         ),
         model=APPROVED_MODEL,
         prompt_version="fixture-prompt-v1",
-        schema_version="fixture-schema-v1",
-        max_output_tokens=100,
+        schema_version=schema_version,
+        max_output_tokens=max_output_tokens,
         clock=FakeClock(datetime(2026, 9, 30, tzinfo=timezone.utc)),
     )
     return llm, received, client
@@ -75,6 +82,35 @@ def test_valid_missing_and_redacted_metadata():
     assert llm.calls[0].input_tokens == 10 and llm.calls[0].output_tokens == 5
     assert "가상 user" not in repr(llm.calls)
     assert len(received) == 1
+
+
+def test_narrative_output_allowance_reaches_provider():
+    # Given: a narrative response allowance above the legacy role ceiling.
+    llm, received, client = adapter(
+        schema_version="narrative-report-1", max_output_tokens=8000
+    )
+    # When: one structured request executes.
+    with client:
+        llm.generate(system="s", user="u", output_schema=Output)
+    # Then: the admitted allowance reaches the wire without a hidden lower cap.
+    assert len(received) == 1
+    assert received[0]["max_output_tokens"] == 8000
+    assert received[0]["temperature"] == 0
+
+
+def test_narrative_output_limit_remains_bounded():
+    # Given / When / Then: an oversized narrative request fails before dispatch.
+    received = []
+    with pytest.raises(ValueError):
+        OpenAIStructuredLLM(
+            transport=lambda payload: received.append(payload) or httpx.Response(200),
+            model=APPROVED_MODEL,
+            max_output_tokens=8001,
+            prompt_version="synthetic",
+            schema_version="narrative-report-1",
+            clock=FakeClock(datetime(2026, 9, 30, tzinfo=timezone.utc)),
+        )
+    assert received == []
 
 
 @pytest.mark.parametrize(
@@ -147,13 +183,19 @@ def test_timeout_distinct_and_no_retry():
 
 
 def test_assessment_schema_has_no_envelope_and_required_nullable_fields():
-    schema = strict_schema(DimensionAssessmentOutput)
-    assert set(schema["properties"]) == {"criteria", "research_gaps", "caveats"}
-    criterion = schema["$defs"]["CriterionOutput"]
+    schema = strict_schema(Answer)
+    assert set(schema["properties"]) == {
+        "schema_version",
+        "status",
+        "findings",
+        "limitation",
+        "verification_task",
+    }
+    criterion = schema
     assert set(criterion["required"]) == set(criterion["properties"])
     assert criterion["additionalProperties"] is False
-    assert "default" not in criterion["properties"]["rating"]
-    assert {"type": "null"} in criterion["properties"]["rating"]["anyOf"]
+    assert "default" not in criterion["properties"]["limitation"]
+    assert {"type": "null"} in criterion["properties"]["limitation"]["anyOf"]
 
 
 def test_dynamic_map_rejected_before_request():

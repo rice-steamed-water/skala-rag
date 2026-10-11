@@ -4,8 +4,10 @@ import hashlib
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
+import sysconfig
 import tarfile
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -81,44 +83,20 @@ def installed_package() -> Iterator[InstalledPackage]:
             cwd=ROOT,
         )
         python = environment_directory / "bin/python"
-        requirements = directory / "resource-dependencies.txt"
-        # Only the loaders' dependency closure is installed. Other package
-        # subsystems are deliberately outside this portability claim.
-        export = [
-            "uv",
-            "export",
-            "--frozen",
-            "--no-dev",
-            "--no-emit-project",
-            "--output-file",
-            str(requirements),
-        ]
-        for dependency in (
-            "httpx",
-            "langchain-core",
-            "langchain-text-splitters",
-            "langgraph",
-            "playwright",
-            "pypdf",
-            "reportlab",
-            "sentence-transformers",
-            "torch",
-        ):
-            export.extend(["--prune", dependency])
-        run_command(export, cwd=ROOT)
-        run_command(
-            [
-                "uv",
-                "pip",
-                "install",
-                "--require-hashes",
-                "--python",
-                str(python),
-                "-r",
-                str(requirements),
-            ],
-            cwd=ROOT,
+        # Copy dependency bytes, never editable project paths. Offline resolver
+        # cache completeness is not this installed-resource test's claim.
+        source_site = Path(sysconfig.get_path("purelib"))
+        target_site = environment_directory / (
+            f"lib/python{sys.version_info.major}.{sys.version_info.minor}/site-packages"
         )
+        for entry in source_site.iterdir():
+            if entry.suffix == ".pth" or entry.name.startswith("skala_rag"):
+                continue
+            target = target_site / entry.name
+            if entry.is_dir():
+                shutil.copytree(entry, target, dirs_exist_ok=True)
+            else:
+                shutil.copy2(entry, target)
         run_command(
             [
                 "uv",
@@ -145,9 +123,15 @@ def packaged_resources() -> Iterator[InstalledPackage]:
 def canonical_resources() -> dict[str, bytes]:
     resources = {
         "_config/runtime.json": (ROOT / "configs/runtime.json").read_bytes(),
+        "_config/pdf.layout.v1.json": (
+            ROOT / "configs/pdf.layout.v1.json"
+        ).read_bytes(),
     }
     for resource in sorted(PROMPT_DIRECTORY.glob("*.json")):
         resources[f"prompt/text/{resource.name}"] = resource.read_bytes()
+    for resource in sorted((ROOT / "src/skala_rag/reporting/fonts").iterdir()):
+        if resource.is_file():
+            resources[f"reporting/fonts/{resource.name}"] = resource.read_bytes()
     assert len(resources) > 1
     return resources
 
@@ -160,8 +144,8 @@ def test_distributions_preserve_canonical_resources(packaged_resources):
         prefix = packaged_resources.sdist.name.removesuffix(".tar.gz")
         for name, content in resources.items():
             source_name = "src/skala_rag/" + name
-            if name == "_config/runtime.json":
-                source_name = "configs/runtime.json"
+            if name.startswith("_config/"):
+                source_name = "configs/" + name.removeprefix("_config/")
             member = archive.extractfile(f"{prefix}/{source_name}")
             assert member is not None
             with member:
@@ -180,7 +164,8 @@ import sys
 from importlib.resources import files
 from pathlib import Path
 from skala_rag import settings
-from skala_rag.prompt._resources import read_prompt
+from skala_rag.prompt._resources import read_prompt, read_questions
+from skala_rag.reporting.pdf import load_pdf_profile
 
 expected = json.loads(sys.argv[1])
 module = Path(settings.__file__).resolve()
@@ -192,8 +177,19 @@ for name, digest in expected["resources"].items():
     content = files("skala_rag").joinpath(name).read_bytes()
     assert hashlib.sha256(content).hexdigest() == digest, name
     if name.startswith("prompt/text/"):
-        literal = "".join(json.loads(content)).encode("utf-8")
-        assert read_prompt(Path(name).name).encode("utf-8") == literal
+        if name.endswith("company_analysis_questions.v1.json"):
+            assert read_questions().encode("utf-8") == content
+        else:
+            literal = "".join(json.loads(content)).encode("utf-8")
+            assert read_prompt(Path(name).name).encode("utf-8") == literal
+profile = load_pdf_profile()
+font_root = files("skala_rag").joinpath("reporting/fonts")
+for name, expected_hash in (
+    ("NanumGothic-Regular.ttf", profile.regular_sha256),
+    ("NanumGothic-Bold.ttf", profile.bold_sha256),
+):
+    content = font_root.joinpath(name).read_bytes()
+    assert hashlib.sha256(content).hexdigest() == expected_hash
 for name, snapshot in expected["profiles"].items():
     assert settings.load_runtime_settings(name).model_dump(mode="json") == snapshot
 print(json.dumps({"status": "PASS", "module": str(module),
@@ -232,24 +228,37 @@ FAILURE_PROBE = """
 import json
 import sys
 from importlib.resources import files
+from pydantic import ValidationError
 from skala_rag.settings import load_runtime_settings
 from skala_rag.prompt._resources import read_prompt
+from skala_rag.reporting.pdf import load_pdf_profile
 
 name, mutation = sys.argv[1:]
 resource = files("skala_rag").joinpath(name)
 original = resource.read_bytes()
+
+def load_resource():
+    if name == "_config/runtime.json":
+        return load_runtime_settings("m2_shared")
+    if name == "_config/pdf.layout.v1.json":
+        return load_pdf_profile()
+    return read_prompt(name.rsplit("/", 1)[1])
+
+# Each mutation starts from a verified valid installed baseline.
+load_resource()
 try:
     if mutation == "missing":
         resource.unlink()
         expected_error = FileNotFoundError
     else:
         resource.write_bytes(b"{")
-        expected_error = json.JSONDecodeError
+        expected_error = (
+            ValidationError
+            if name == "_config/pdf.layout.v1.json"
+            else json.JSONDecodeError
+        )
     try:
-        if name == "_config/runtime.json":
-            load_runtime_settings("m2_shared")
-        else:
-            read_prompt(name.rsplit("/", 1)[1])
+        load_resource()
     except expected_error as error:
         print(json.dumps({"status": "PASS", "resource": name,
                           "mutation": mutation, "error": type(error).__name__}))
@@ -263,7 +272,12 @@ assert resource.read_bytes() == original
 
 @pytest.mark.parametrize("mutation", ["missing", "malformed"])
 @pytest.mark.parametrize(
-    "resource", ["_config/runtime.json", "prompt/text/evidence_extraction.json"]
+    "resource",
+    [
+        "_config/runtime.json",
+        "_config/pdf.layout.v1.json",
+        "prompt/text/evidence_extraction.json",
+    ],
 )
 def test_damaged_installed_resource_fails_closed(
     packaged_resources, resource, mutation

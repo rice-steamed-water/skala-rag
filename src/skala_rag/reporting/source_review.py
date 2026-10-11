@@ -5,19 +5,18 @@ import json
 from collections.abc import Mapping
 from datetime import date, datetime
 
+from skala_rag.contracts.common import JSONMap
 from skala_rag.contracts.evidence import Evidence
 from skala_rag.contracts.sources import Source
-from skala_rag.reporting.v3_context import ReportContextV3, canonical
-
-RESEARCH_POLICY = "unscored-research-only-1"
+from skala_rag.reporting.company_context import canonical
 
 
-def build_source_review_context(
+def validate_source_review(
     capsule: dict,
     *,
     expected_input_id: str,
     expected_sources: Mapping[str, dict],
-) -> ReportContextV3:
+) -> JSONMap:
     """Caller pins the whole capsule and exact Source payloads outside model output.
 
     source_texts are offline extractions, not fetched here. Raw capture integrity
@@ -115,30 +114,4 @@ def build_source_review_context(
             )
         ):
             raise ValueError("source review quote closure invalid")
-    payload = canonical(
-        {
-            **data,
-            "input_id": expected_input_id,
-            "mode": "source_review",
-            "policy_version": RESEARCH_POLICY,
-            "corpus_version": "not-adopted-source-review",
-            "scores": {},
-            "decisions": {},
-            "outcomes": {},
-            "snapshots": {},
-            "errors": [],
-        }
-    )
-    return ReportContextV3(
-        "sha256:" + hashlib.sha256(payload.encode()).hexdigest(), payload
-    )
-
-
-def review_disclosure(data):
-    return (
-        "자료 기반 조사 — unscored / unrated. 평가 미실행; 투자 추천 없음.\n"
-        "기업 자체 발표(self-reported)이며 독립 검증하지 않았다. "
-        f"기준일 {data['as_of']}; 보관 원문 범위만 검토했으며 현재성은 미확인이다.\n"
-        "역사적 자금조달 발표는 현재 라운드·매출·기업가치·투자조건의 근거가 아니다. "
-        "현재 라운드, 매출, 기업가치, 투자조건과 적격성은 미확인이다."
-    )
+    return data

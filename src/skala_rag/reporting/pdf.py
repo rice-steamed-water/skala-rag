@@ -4,6 +4,7 @@ import hashlib
 import html
 import re
 from collections.abc import Callable
+from importlib.resources import files
 from pathlib import Path
 
 import reportlab
@@ -15,7 +16,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Table
+from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Table
 
 from skala_rag.contracts import (
     ReportDraft,
@@ -24,17 +25,21 @@ from skala_rag.contracts import (
     ValidationResult,
 )
 from skala_rag.contracts.tools import RenderResult
+from skala_rag.reporting.company_context import CompanyWriterContext
+from skala_rag.reporting.format import finalize_narrative
+from skala_rag.reporting.narrative import (
+    NARRATIVE_HEADINGS,
+    NarrativeCompositionResult,
+    SemanticJudgeReply,
+    composition_hash,
+)
 from skala_rag.reporting.pdf_presentation import (
     INK,
     NAVY,
     TEAL,
     VERSION,
-    ScoreBar,
     page_decoration,
-    presentation_flowables,
     table_style,
-    validated_presentation,
-    value_text,
 )
 from skala_rag.reporting.validator import artifact_hash
 
@@ -47,6 +52,35 @@ SECTIONS = (
     "REFERENCE",
 )
 FONT_ROOT = Path(__file__).with_name("fonts")
+NARRATIVE_SECTIONS = (*NARRATIVE_HEADINGS, "REFERENCE")
+
+
+def narrative_pdf_draft(
+    result: NarrativeCompositionResult, context: CompanyWriterContext
+) -> ReportDraft:
+    """Resolve references only after checking contextual semantic acceptance."""
+    context.verify_binding()
+    judgment = SemanticJudgeReply.model_validate(
+        result.judgment, context={"writer_context": context.writer_context}
+    )
+    digest = composition_hash(result.composition)
+    if (
+        judgment.verdict != "pass"
+        or judgment.artifact_hash != digest
+        or result.artifact_hash != digest
+    ):
+        raise PDFArtifactError("NARRATIVE_PDF_UPSTREAM_NOT_VALIDATED")
+    finalized = finalize_narrative(result.composition, context)
+    return ReportDraft(
+        schema_version="narrative-report-1",
+        report_id="narrative-" + digest,
+        context_id=finalized.context_id,
+        revision=0,
+        markdown=finalized.markdown,
+        cited_evidence_ids=list(finalized.cited_evidence_ids),
+        reference_source_ids=list(finalized.reference_source_ids),
+        limitations=[],
+    )
 
 
 class PdfProfile(BaseModel):
@@ -58,8 +92,18 @@ class PdfProfile(BaseModel):
     bold_sha256: str
 
 
-def load_pdf_profile(path: Path) -> PdfProfile:
-    return PdfProfile.model_validate_json(path.read_text(encoding="utf-8"))
+def load_pdf_profile(path: Path | None = None) -> PdfProfile:
+    if path is None:
+        module = Path(__file__).resolve()
+        if module.parts[-4:] == ("src", "skala_rag", "reporting", "pdf.py"):
+            content = (module.parents[3] / "configs/pdf.layout.v1.json").read_bytes()
+        else:
+            content = (
+                files("skala_rag").joinpath("_config/pdf.layout.v1.json").read_bytes()
+            )
+    else:
+        content = path.read_bytes()
+    return PdfProfile.model_validate_json(content)
 
 
 def _plain(text):
@@ -70,7 +114,7 @@ def _heading(text):
     return re.sub(r"^\d+\.\s*", "", text).strip()
 
 
-def _blocks(markdown):
+def _blocks(markdown, sections_expected=SECTIONS):
     lines = markdown.splitlines()
     section = None
     sections = []
@@ -86,7 +130,7 @@ def _blocks(markdown):
             title = _heading(heading.group(1))
             if title == "TECHNOLOGY & MARKET":
                 raise ValueError("v3 기술·시장 통합 절은 허용하지 않습니다")
-            if title in SECTIONS:
+            if title in sections_expected:
                 section = title
                 sections.append(title)
                 blocks.append((section, "heading", title))
@@ -111,8 +155,8 @@ def _blocks(markdown):
             continue
         blocks.append((section, "paragraph", line))
         i += 1
-    if sections != list(SECTIONS):
-        raise ValueError("v3 본문 5절과 REFERENCE 순서/중복/누락 오류")
+    if sections != list(sections_expected):
+        raise ValueError("본문과 REFERENCE 순서/중복/누락 오류")
     return blocks
 
 
@@ -138,9 +182,36 @@ def _physical_sections(reader, draft):
         headings.append(re.sub(r"\s+", " ", "".join(part[1] for part in parts)).strip())
     # The public parser also permits an explicit document title before SUMMARY.
     expected = [
-        value for _, kind, value in _blocks(draft.markdown) if kind == "heading"
+        value
+        for _, kind, value in _blocks(
+            draft.markdown,
+            NARRATIVE_SECTIONS
+            if draft.schema_version == "narrative-report-1"
+            else SECTIONS,
+        )
+        if kind == "heading"
     ]
     return headings == expected
+
+
+def _reference_page(reader: PdfReader) -> int:
+    """Measure the reference boundary from actual bold 14pt PDF headings."""
+    for number, page in enumerate(reader.pages, 1):
+        found = []
+
+        def visit(text, cm, tm, font, size):
+            if (
+                abs(size * abs(cm[3]) - 14) < 0.1
+                and font is not None
+                and str(font.get("/BaseFont", "")).endswith("Bold")
+                and text.strip() == "REFERENCE"
+            ):
+                found.append(True)
+
+        page.extract_text(visitor_text=visit)
+        if found:
+            return number
+    raise PDFArtifactError("PDF_REFERENCE_BOUNDARY_MISSING")
 
 
 def _failure(draft, code):
@@ -183,6 +254,44 @@ class PDFRenderer:
         self.proof = proof
         self.execution_mode = execution_mode
 
+    def render_narrative(
+        self,
+        result: NarrativeCompositionResult,
+        context: CompanyWriterContext,
+        template: str,
+    ) -> RenderResult:
+        """Production narrative boundary; no model dispatch or repair counter."""
+        draft = narrative_pdf_draft(result, context)
+        digest = artifact_hash(draft)
+        structural = ValidationResult(
+            schema_version=draft.schema_version,
+            valid=True,
+            context_id=draft.context_id,
+            artifact_hash=digest,
+            checks={
+                "narrative_evidence": {
+                    eid: context.writer_context.evidence[eid].model_dump(mode="json")
+                    for eid in draft.cited_evidence_ids
+                }
+            },
+            errors=[],
+        )
+        judged = ReportJudgement(
+            schema_version=draft.schema_version,
+            verdict="pass",
+            context_id=draft.context_id,
+            judged_artifact_hash=digest,
+            findings=[],
+            revision_instructions=[],
+        )
+        renderer = PDFRenderer(
+            profile=self.profile,
+            output_dir=self.output_dir,
+            proof=lambda _: (structural, judged),
+            execution_mode=self.execution_mode,
+        )
+        return renderer(draft, template)
+
     def __call__(self, draft: ReportDraft, template: str) -> RenderResult:
         try:
             structural, judged = self.proof(draft)
@@ -200,9 +309,8 @@ class PDFRenderer:
                 return _failure(draft, "PDF_PROFILE_NOT_APPROVED")
             if self.profile.renderer_version != reportlab.Version:
                 return _failure(draft, "PDF_RENDERER_VERSION_MISMATCH")
-            presentation = validated_presentation(
-                structural.checks.get("pdf_presentation"), draft, self.execution_mode
-            )
+            if structural.checks.get("pdf_presentation") is not None:
+                return _failure(draft, "PDF_SCORED_PRESENTATION_RETIRED")
             fonts = []
             for filename, expected in [
                 ("NanumGothic-Regular.ttf", self.profile.regular_sha256),
@@ -215,7 +323,23 @@ class PDFRenderer:
                 if name not in pdfmetrics.getRegisteredFontNames():
                     pdfmetrics.registerFont(TTFont(name, str(path)))
                 fonts.append(name)
-            blocks = _blocks(draft.markdown)
+            narrative = draft.schema_version == "narrative-report-1"
+            visible_markdown = draft.markdown
+            citation_labels = {
+                eid: f"[{number}]"
+                for number, eid in enumerate(sorted(draft.cited_evidence_ids), 1)
+            }
+            if narrative:
+                prose, boundary, references = visible_markdown.partition("## REFERENCE")
+                for eid, label in citation_labels.items():
+                    prose = prose.replace(f"[@evidence:{eid}]", label)
+                    references = references.replace(
+                        f"evidence={eid};", f"{label} [@evidence:{eid}];"
+                    )
+                visible_markdown = prose + boundary + references
+            blocks = _blocks(
+                visible_markdown, NARRATIVE_SECTIONS if narrative else SECTIONS
+            )
             glyphs = pdfmetrics.getFont(fonts[0]).face.charToGlyph
             text = _plain(draft.markdown)
             if any(ord(c) not in glyphs for c in text if not c.isspace()):
@@ -313,28 +437,9 @@ class PDFRenderer:
                 "candidate_rows": 0,
             }
             for section, kind, value in blocks:
+                if narrative and kind == "heading" and section == "REFERENCE":
+                    story.append(PageBreak())
                 if kind == "table":
-                    # Only an exact canonical candidate table can receive bars.
-                    # The trusted payload was checked against the current draft;
-                    # narrative numbers never become graphical observations.
-                    score = None
-                    if (
-                        presentation is not None
-                        and section == "INVESTMENT ASSESSMENT & RISKS"
-                        and len(value) > 1
-                        and value[0] == ["항목", "값"]
-                        and value[1][0] == "candidate_id"
-                    ):
-                        score = presentation[0].get(value[1][1])
-                    if score is not None:
-                        visualizations["score_cards"] += 1
-                        story.append(
-                            MeasuredParagraph(
-                                f"점수 요약 / 영역별 점수 — {score.candidate_id}",
-                                subhead,
-                                section,
-                            )
-                        )
                     rows = [
                         [
                             Paragraph(
@@ -345,18 +450,6 @@ class PDFRenderer:
                         ]
                         for i, row in enumerate(value)
                     ]
-                    if score is not None:
-                        for index, row in enumerate(value):
-                            for dimension, item in score.dimension_scores.items():
-                                if row[0] == f"{dimension}.dimension_score_pct" and row[
-                                    1
-                                ] == value_text(item.dimension_score_pct):
-                                    rows[index][1] = ScoreBar(
-                                        item.dimension_score_pct, body
-                                    )
-                                    visualizations["dimension_bars"] += (
-                                        item.dimension_score_pct is not None
-                                    )
                     table = MeasuredTable(
                         rows,
                         colWidths=[width / len(rows[0])] * len(rows[0]),
@@ -379,19 +472,24 @@ class PDFRenderer:
                         )
                     )
                 if (
-                    kind == "heading"
-                    and section == "INVESTMENT ASSESSMENT & RISKS"
-                    and presentation is not None
+                    narrative
+                    and kind == "heading"
+                    and section == "재무·투자유치·거래조건"
                 ):
-                    additions, visualizations = presentation_flowables(
-                        presentation,
+                    from skala_rag.reporting.pdf_presentation import narrative_timeline
+
+                    additions, event_count = narrative_timeline(
+                        structural.checks["narrative_evidence"],
                         width,
                         body,
                         subhead,
                         MeasuredTable,
                         MeasuredParagraph,
+                        section,
+                        citation_labels,
                     )
                     story.extend(additions)
+                    visualizations["timeline_events"] = event_count
             document = SimpleDocTemplate(
                 str(destination),
                 pagesize=A4,
@@ -403,7 +501,13 @@ class PDFRenderer:
             )
 
             def decorate(canvas, doc):
-                page_decoration(canvas, doc, font=fonts[0], mode=self.execution_mode)
+                page_decoration(
+                    canvas,
+                    doc,
+                    font=fonts[0],
+                    mode=self.execution_mode,
+                    narrative=narrative,
+                )
 
             document.build(story, onFirstPage=decorate, onLaterPages=decorate)
             reader = PdfReader(destination)
@@ -419,8 +523,12 @@ class PDFRenderer:
                 else A4[1]
             )
             fraction = summary_height / A4[1]
+            reference_pages = sorted(
+                {box["page"] for box in positions if box["section"] == "REFERENCE"}
+            )
+            body_pages = _reference_page(reader) - 1 if narrative else len(reader.pages)
             checks = dict(
-                page_count=len(reader.pages) <= 5,
+                page_count=body_pages <= (6 if narrative else 5),
                 summary=len(pages) == 1 and fraction <= 0.5,
             )
             normalized = re.sub(r"\s+", "", content)
@@ -456,6 +564,8 @@ class PDFRenderer:
                 template_version=self.profile.version,
                 presentation_version=VERSION,
                 visualizations=visualizations,
+                body_page_count=body_pages,
+                reference_pages=reference_pages,
                 summary_height_pt=summary_height,
                 summary_fraction=fraction,
                 summary_pages=pages,
@@ -482,6 +592,14 @@ class PDFArtifactError(ValueError):
 
 class PDFLayoutValidator:
     """ReportNodes.layout 경계. 저장된 실제 PDF와 draft/measurement를 재검증한다."""
+
+    def validate_narrative(
+        self,
+        result: NarrativeCompositionResult,
+        context: CompanyWriterContext,
+        render: RenderResult,
+    ) -> ValidationResult:
+        return self(narrative_pdf_draft(result, context), context, render)
 
     def __call__(self, draft, context, render):
         measurements = render.layout_measurements
@@ -511,8 +629,10 @@ class PDFLayoutValidator:
             else A4[1]
         )
         margin = 18 * mm
+        narrative = draft.schema_version == "narrative-report-1"
+        body_pages = _reference_page(reader) - 1 if narrative else len(reader.pages)
         checks = dict(
-            page_count=len(reader.pages) <= 5,
+            page_count=body_pages <= (6 if narrative else 5),
             summary=len(pages) == 1 and height / A4[1] <= 0.5,
             page_size=all(
                 abs(float(page.mediabox.width) - A4[0]) < 0.1

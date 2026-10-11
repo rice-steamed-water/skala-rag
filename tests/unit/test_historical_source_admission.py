@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+from tests.fixtures.retrieval import fixture_search
 
 from skala_rag.contracts.bundles import RetrievalBundle
 from skala_rag.contracts.inputs import RunInput
@@ -15,7 +16,6 @@ from skala_rag.contracts.state import create_initial_state
 from skala_rag.fakes import FakeClock
 from skala_rag.graph.snapshot import SnapshotInvalid, freeze_snapshot
 from skala_rag.rag.retrieval import GuardedRetriever
-from skala_rag.tools.fixture_retrieve import fixture_search
 
 
 @pytest.mark.parametrize("path", ["guard", "fixture", "snapshot"])

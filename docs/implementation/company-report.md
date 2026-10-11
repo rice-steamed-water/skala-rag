@@ -1,3 +1,80 @@
+# 기업 보고서 - 단일 v2 Python API (#235)
+
+## 호출과 결과
+
+`run_company_report(company_name, *, config_path, output_dir, research=None, homepage_url=None, as_of=None, research_limits=None) -> Path`가 유일한 보고서 진입점이다. config/output은 `Path`, as_of는 `date`다. 출력 디렉터리가 이미 있으면 FileExistsError다. public authority/actual_admission/legal_identifiers/runtime_document 인자는 제거됐다.
+
+```python
+from datetime import date
+from pathlib import Path
+from skala_rag.company_report import run_company_report
+
+out = run_company_report(
+    "Dexory",
+    config_path=Path("data/local/company-report-v2.json"),
+    output_dir=Path("outputs/company-report-new"),
+    research=False,
+    as_of=date(2026, 10, 10),
+)
+```
+
+반환은 영수증 디렉터리다. `run-result.json`의 `schema_version=company-report-2`를 읽는다.
+
+| outcome | completeness / validation | 의미 |
+| --- | --- | --- |
+| completed | full / passed | 기업 원문이 있고 18질문 모두 answered 또는 근거 있는 N/A; 인용·Judge·PDF 통과 |
+| partial | partial / passed | 기업 원문이 있고 일부 partial/unknown; 같은 검증 통과, 한계·확인 과제 명시 |
+| empty | none / not_run | 허용된 로컬/승인 조사 기회 후 기업 근거 없음; 실질 본문/PDF 없음 |
+| ambiguous | none / not_run | 대상이 하나로 특정되지 않음; 법적 identity를 추정하지 않음 |
+| failed | none / not_run 또는 failed | provider/원문 무결성/모델/출력/검증 기술 실패; 성공 보고서 없음 |
+
+잘못된 설정은 출력 전에 예외다. `company-report-1`은 Pydantic `ValidationError`의 `errors()[0]["ctx"]["error"].code`가 `COMPANY_REPORT_V1_MIGRATION_REQUIRED`인 거절이며 success enum을 재해석하지 않는다. `tests/fixtures/company-report.v1.json`은 거절 검증용 역사 fixture다.
+
+## 설정과 준비 자산
+
+[configs/company-report.v2.json](../../configs/company-report.v2.json)은 경로 템플릿이지 준비된 corpus/model이 아니다. 필수 필드는 schema_version/runtime_path/store_dir/model_path/model_receipt_path, 선택 필드는 issuer_receipt_path/acquisition_receipt_path/research_enabled/research_limits다. 상대 경로는 config 위치 기준으로 해석한다. scoring policy/catalog는 없다. runtime snapshot과 credentials는 runtime 소유다.
+
+CompanyStore의 원본·chunk·검색 lineage와 진짜 로컬 오픈소스 임베딩 자산/revision/hash receipt가 필요하다. 검토한 issuer receipt는 `issuer-association-1`, subject_id/name/evidence_hashes를 저장한다. 원본 fingerprint와 대상에 결합된 private 검토이며 동명이름으로 다른 dataset 사실을 바꾸거나 법적 신원·적격성을 인증하지 않는다. stale/foreign/altered receipt는 거절한다.
+
+## 분석과 인용
+
+technology_product, market_customer, business_model, competition_moat, team_execution, finance_funding_deal 각 3질문, 총 18개다. answered/partial/unknown/not_applicable을 구별한다. partial/unknown에는 limitation과 verification_task, N/A에는 자료에 근거한 적용 제외 이유가 필요하다. 실제 0·통화·단위·기준일을 보존한다.
+
+writer와 모든 feedback/Judge에는 original evidence ID와 source-neutral 내용만 전달한다. source ID/URL/경로/publisher/page/retrieval/provider/corpus/authority는 private citation registry에만 남는다. context_id는 대상·cutoff·질문·writer projection·registry hash에 결합된다. 인용은 검증된 원본/지원 ID를 정확한 Source/locator로 연결하며 생성 보고서를 독립 사실로 승격하지 않는다.
+
+## 유한 조사와 수정
+
+기본 research=false. 인자 research는 파일 값을 덮어쓰며 실행 전에 고정된다. true에는 max_calls/max_cost_usd/deadline_seconds가 필요하고 runtime 상한을 넘을 수 없다. 누락은 `RESEARCH_CAPS_REQUIRED`, 초과는 `RESEARCH_CAPS_EXCEED_RUNTIME`으로 출력 전 거절한다.
+
+opt-in·homepage_url·한도는 수집 권한이 아니다. 현재 acquisition은 private reviewed receipt의 정확한 target/hash에 결합된 official-homepage만 허용한다. 임의 new web/경쟁사 수집을 승인하지 않는다. 권한 없음은 not_authorized, 실패는 acquisition_failed로 기록하고 빈 성공으로 바꾸지 않는다. optional 조사 실패는 기존 유효 근거를 보존한다.
+
+정보 요청은 한 번, 최대 6개 need다. 제공은 질문 답변 완료를 뜻하지 않는다. need 없으면 첫 분석을 재사용하고 analysis/composition/Judge 3호출이다. 보강하면 final analysis를 한 번 추가한다. 구성·의미·layout 수정은 총 2회 공유하며 acquisition을 다시 열거나 누적 ledger/deadline을 초기화하지 않는다. 불확실한 외부 dispatch를 자동 재시도하지 않는다.
+
+## 산출물
+
+request.json/effective-config.json/provider-trace.json/writer-input.json/analysis.json/composition.json/judgment.json/references.json/pdf-validation.json/run-result.json 및 성공 보고서 report.md/report.pdf를 확인한다. 실패·empty·ambiguous는 validated PDF로 취급하지 않는다. run-result의 validation_receipt_hashes는 저장된 judgment/PDF validation/references에 결합된다. 개인정보/credential은 기록하지 않는다.
+
+## 실행 가능한 controlled 로컬 예제
+
+`examples/company_report_run.py`는 public API만 호출한다. 직접 실행에는 SKALA_COMPANY_REPORT_CONFIG/SKALA_COMPANY_REPORT_OUTPUT/SKALA_COMPANY_NAME을 설정한다. 예제 cutoff는 2026-10-10이고 research=false다. 실제 자산 설정이면 실제 모델 비용이 발생하므로 아래 검증은 별도 QA hook만 사용했다.
+
+기존 test Harness를 쓰는 ignored QA hook `.omo/evidence/report-focused-consolidation/task15-hook/sitecustomize.py`는 정확히 합성 local encoder/HTTP transport를 준비한다. 네트워크 connect를 차단하고 fixture의 v2 config를 SKALA_COMPANY_REPORT_CONFIG에 넣는다. 생산 graph·DTO·인용·PDF는 대체하지 않는다. hook과 검증 증거는 개발 작업물이며 배포 API나 제품 fallback이 아니다.
+
+```bash
+PYTHONPATH="$PWD/.omo/evidence/report-focused-consolidation/task15-hook:$PWD" \
+  uv run python examples/company_report_run.py
+```
+
+결과는 `outputs/report-focused-consolidation/task15-example`에 남는다. 새 출력 경로와 새 fixture 자산 경로를 위해 재실행 시 SKALA_COMPANY_REPORT_OUTPUT/SKALA_QA_EXAMPLE_ASSETS를 지정한다. 이 예제는 controlled partial/한글 PDF 연결 증거이며 실제 모델/기업 품질은 증명하지 않는다. malformed v1은 `task-15-migration.json`에 정확한 거절과 무출력으로 기록한다.
+
+## 실제와 controlled의 경계
+
+[실제 상태](actual-v3-status.md)를 따른다. 실제 Dexory는 저장 원문·BGE-M3·real analysis/composition/Judge, cutoff 2026-10-10, 수집 0회로 partial PDF를 생성했다. full real-company와 live 신규 조사 성공은 입증하지 않았다. 현재 문서/예제 검증은 paid call·download·source collection을 추가하지 않는다.
+
+## Historical / 보존 이력 (현재 실행 안내 아님)
+
+아래 전체는 통합 이전의 요구·승인·구현 snapshot이다. 아래의 "현재", CLI/scored/demo 명령과 링크는 당시 기준이며 퇴역한 파일의 실행을 안내하지 않는다. 현재 사용은 위 v2 안내를 따른다. 역사적 과제 요구나 승인 자체를 삭제·완료 처리하지 않는다.
+
 # 임의 기업 보고서 실행 (#233)
 
 `skala_rag.company_report.run_company_report`는 기업명 하나로 저장 자료 기반 평가 보고서를 만든다. 결과는 항상 디렉터리이며, 거절도 `run-result.json` 영수증으로 남는다. 잘못된 설정·타입만 출력 전에 예외를 낸다.

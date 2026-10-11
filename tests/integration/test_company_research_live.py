@@ -22,7 +22,6 @@ from decimal import Decimal
 
 import pytest
 
-from skala_rag.agents.eligibility import check_eligibility
 from skala_rag.agents.eligibility_extraction import LLMEligibilityExtractor
 from skala_rag.contracts.candidates import Candidate
 from skala_rag.contracts.tools import ToolBudget
@@ -173,13 +172,6 @@ def test_live_company_research_smoke():
             for sid, s in bundle.sources.items()
         }
         report["profile"] = bundle.profile.model_dump(mode="json")
-        report["eligibility"] = check_eligibility(
-            bundle.profile,
-            bundle.evidence,
-            {"policy_version": "live-smoke-unapproved"},
-            run_id=run_id,
-            evidence_revision=1,
-        ).model_dump(mode="json", include={"status", "reason_codes"})
         report["evidence"] = {
             eid: {"claim": e.claim, "excerpt": e.excerpt, "event_date": e.event_date}
             for eid, e in bundle.evidence.items()
@@ -200,9 +192,8 @@ def test_live_company_research_smoke():
         value = os.environ.get(secret, "").strip()
         if value:
             assert value not in dumped
-    # 결과가 무엇이든 unknown을 eligible로 바꾸지 않는다.
-    if result.data is not None and "eligibility" in report:
-        assert report["eligibility"]["status"] != "eligible" or result.data.evidence
+    # 관측만 기록하며 투자 적격성 판정을 생성하지 않는다.
+    assert "eligibility" not in report
 
 
 def _runtime_llm(api_key: str, clock: SystemClock, run_id: str) -> RuntimeStructuredLLM:

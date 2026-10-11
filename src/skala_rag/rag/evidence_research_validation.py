@@ -30,8 +30,8 @@ from skala_rag.agents.evidence_research import (
 from skala_rag.contracts import ToolBudget
 from skala_rag.contracts.candidates import Candidate
 from skala_rag.contracts.coverage import ResearchGap
+from skala_rag.contracts.errors import StageFailure
 from skala_rag.contracts.interfaces import Clock as RuntimeClock
-from skala_rag.graph.candidates import StageFailure
 from skala_rag.prompts.evidence_extraction import PROMPT_VERSION, ExtractionOutput
 from skala_rag.rag.adapter import IndexedRetriever
 from skala_rag.rag.corpus import manifest_hash

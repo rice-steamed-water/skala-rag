@@ -18,7 +18,7 @@ from skala_rag.contracts import (
     Source,
 )
 from skala_rag.contracts.ids import evaluation_key
-from skala_rag.scoring.catalog import ScoringPolicy
+from tests.fixtures.catalog import FixtureCatalog
 
 
 class CommonFixtures(BaseModel):
@@ -160,7 +160,7 @@ class CommonFixtures(BaseModel):
 
 
 def load_common_fixtures(
-    catalog: ScoringPolicy,
+    catalog: FixtureCatalog,
     path: Path = Path(__file__).with_name("common.json"),
 ) -> CommonFixtures:
     """매 호출마다 파일을 새로 검증해 독립된 DTO 객체를 반환한다."""

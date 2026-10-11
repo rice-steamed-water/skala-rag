@@ -1,0 +1,20 @@
+[
+  {"schema_version":"narrative-report-1","question_id":"technology_product.1","domain":"technology_product","question":"What customer task/problem is addressed?"},
+  {"schema_version":"narrative-report-1","question_id":"technology_product.2","domain":"technology_product","question":"What field performance/reliability evidence exists?"},
+  {"schema_version":"narrative-report-1","question_id":"technology_product.3","domain":"technology_product","question":"What deployment/integration/manufacturing/operation/scale constraints remain?"},
+  {"schema_version":"narrative-report-1","question_id":"market_customer.1","domain":"market_customer","question":"Who buys/uses/pays and why?"},
+  {"schema_version":"narrative-report-1","question_id":"market_customer.2","domain":"market_customer","question":"What paid adoption/repeat use/expansion evidence supports demand?"},
+  {"schema_version":"narrative-report-1","question_id":"market_customer.3","domain":"market_customer","question":"What customer concentration or adoption barriers remain?"},
+  {"schema_version":"narrative-report-1","question_id":"business_model.1","domain":"business_model","question":"How is revenue earned?"},
+  {"schema_version":"narrative-report-1","question_id":"business_model.2","domain":"business_model","question":"What customer economic benefit is evidenced?"},
+  {"schema_version":"narrative-report-1","question_id":"business_model.3","domain":"business_model","question":"Can delivery/maintenance/support economics sustain growth?"},
+  {"schema_version":"narrative-report-1","question_id":"competition_moat.1","domain":"competition_moat","question":"What specific defensible assets exist?"},
+  {"schema_version":"narrative-report-1","question_id":"competition_moat.2","domain":"competition_moat","question":"What proves technology/data/IP/customer relationships create an advantage?"},
+  {"schema_version":"narrative-report-1","question_id":"competition_moat.3","domain":"competition_moat","question":"What would weaken that advantage?"},
+  {"schema_version":"narrative-report-1","question_id":"team_execution.1","domain":"team_execution","question":"What development/sales/delivery/operation capabilities are evidenced?"},
+  {"schema_version":"narrative-report-1","question_id":"team_execution.2","domain":"team_execution","question":"What is the plan-versus-execution record?"},
+  {"schema_version":"narrative-report-1","question_id":"team_execution.3","domain":"team_execution","question":"What critical people/capacity gaps remain?"},
+  {"schema_version":"narrative-report-1","question_id":"finance_funding_deal.1","domain":"finance_funding_deal","question":"What funding history, financial condition and capital needs are known?"},
+  {"schema_version":"narrative-report-1","question_id":"finance_funding_deal.2","domain":"finance_funding_deal","question":"Does available funding support those needs?"},
+  {"schema_version":"narrative-report-1","question_id":"finance_funding_deal.3","domain":"finance_funding_deal","question":"What current pricing/dilution/terms remain unverified?"}
+]

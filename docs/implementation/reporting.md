@@ -1,3 +1,17 @@
+# 보고서 계약 - 여섯 영역 narrative
+
+현재 목차는 SUMMARY → 기술·제품 → 시장·고객 → 사업 모델 → 경쟁·진입장벽 → 팀·실행 → 재무·투자유치·거래조건 → 장점·위험·추가 확인 과제 → REFERENCE다. 각 영역 3질문으로 총 18개 답변이며 점수·투자 추천·candidate scoreboard는 없다.
+
+원본 근거가 있고 질문 결측이면 validated partial이다. partial/unknown은 한계·확인 과제를 표시하고 관측 없음과 부정 사실/실제 0을 구별한다. 법적 신원·매출·고객 수·moat를 이름이나 자금조달만으로 추정하지 않는다. 근거가 부족한 장점/위험을 채워 넣지 않는다.
+
+writer/Judge는 source-neutral 내용만 받는다. controller가 인용 original/support IDs를 private registry의 정확한 원본 Source/hash/locator로 연결한다. 본문 used ID 집합과 references 집합은 정확히 같아야 하며 unused/forged/stale 참조나 생성 보고서의 독립 사실 승격은 거절한다. semantic Judge는 entity/metric/unit/currency/date/unknown/recommendation을 검사하고 context/composition hash에 묶인다.
+
+본문 최대 6장, 참고문헌 별도다. 4-6장은 목표이지 4장이 최소가 아니다. 실제 Dexory partial은 본문 2장/참고 1장으로 통과했다. [PDF 규칙](pdf-rendering.md), [API 결과 구분](company-report.md), [실제 증거 한계](actual-v3-status.md)를 따른다.
+
+## Historical / 보존 이력 (현재 실행 안내 아님)
+
+아래 전체는 통합 이전의 요구·승인·구현 snapshot이다. 아래의 "현재", CLI/scored/demo 명령과 링크는 당시 기준이며 퇴역한 파일의 실행을 안내하지 않는다. 현재 사용은 위 v2 안내를 따른다. 역사적 과제 요구나 승인 자체를 삭제·완료 처리하지 않는다.
+
 # 보고서 목차·인용·구조 검증 계약 — D09 승인 기록
 
 > 실행 인터페이스는 후속 #166의 [Python 직접 호출](python-execution.md)을 따른다. 아래 CLI2 언급은 기존 승인/호환 매핑이며 신규 CLI 개발 요구가 아니다. completed+Warning·draft/findings·final 금지는 유지한다.

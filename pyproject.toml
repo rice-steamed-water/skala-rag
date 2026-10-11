@@ -13,7 +13,6 @@ dependencies = [
     "langchain-core>=1.6.6",
     "langchain-text-splitters>=1.1.2",
     "langgraph>=1.2.12",
-    "playwright==1.63.0",
     "pydantic>=2.13.5",
     "pypdf>=6.19.0",
     "python-dotenv>=1.2.3",
@@ -27,9 +26,11 @@ packages = ["src/skala_rag"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "configs/runtime.json" = "skala_rag/_config/runtime.json"
+"configs/pdf.layout.v1.json" = "skala_rag/_config/pdf.layout.v1.json"
 
 [tool.hatch.build.targets.sdist.force-include]
 "configs/runtime.json" = "configs/runtime.json"
+"configs/pdf.layout.v1.json" = "configs/pdf.layout.v1.json"
 "src/skala_rag/prompt/text" = "src/skala_rag/prompt/text"
 
 [tool.ruff]
@@ -44,6 +45,7 @@ select = ["E", "F", "I"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--import-mode=importlib"
+pythonpath = ["."]
 markers = ["browser: 실제 Chromium(Playwright)을 실행하는 테스트"]
 
 [dependency-groups]

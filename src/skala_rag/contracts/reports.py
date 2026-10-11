@@ -1,5 +1,6 @@
 """Typed report payloads, without context assembly or semantic validation."""
 
+from dataclasses import dataclass
 from typing import Literal, Self
 
 from pydantic import StrictBool, model_validator
@@ -157,3 +158,21 @@ class ReportJudgement(Contract):
     findings: list[ReportFinding]
     revision_instructions: list[Text]
     judged_artifact_hash: Text
+
+
+@dataclass(frozen=True, slots=True)
+class NarrativeReportResult:
+    """Validated narrative artifacts for retention, never execution authority.
+
+    The persisted ReportProvenance schema remains unchanged; this descriptor is
+    only the caller boundary and distinguishes partial prose from failed output.
+    """
+
+    outcome: Literal["completed", "partial", "failed"]
+    draft: ReportDraft | None
+    validation: ValidationResult | None
+    judgement: ReportJudgement | None
+    revisions: int
+    context_id: str
+    error_code: str | None = None
+    pdf_validation: ValidationResult | None = None

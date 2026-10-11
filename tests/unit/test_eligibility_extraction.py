@@ -17,7 +17,6 @@ from skala_rag.agents.eligibility import (
     FIELD_EXIT,
     FIELD_LISTING,
     FIELD_STAGE,
-    check_eligibility,
 )
 from skala_rag.agents.eligibility_extraction import (
     SELF_LIMITATION,
@@ -451,16 +450,6 @@ def _research(llm: StructuredLLM, dart_cls="E", *, content=None, max_chars=10_00
     return tool(candidate(), budget)
 
 
-def _judge(bundle):
-    return check_eligibility(
-        bundle.profile,
-        bundle.evidence,
-        {"policy_version": "synthetic-policy"},
-        run_id="run-extract",
-        evidence_revision=1,
-    )
-
-
 def test_end_to_end_with_openai_adapter_traces_every_fact():
     clock = FakeClock(NOW)
     llm = OpenAIStructuredLLM(
@@ -484,8 +473,6 @@ def test_end_to_end_with_openai_adapter_traces_every_fact():
     for ids in profile.field_evidence_ids.values():
         for evidence_id in ids:
             assert bundle.evidence[evidence_id].source_id in bundle.sources
-    outcome = _judge(bundle)
-    assert outcome.status == "eligible"
     homepage = result.retrieval_records[0].arguments_without_secrets
     assert homepage["extractor"] == PROMPT_VERSION
     assert llm.calls[0].status == "success"
@@ -503,9 +490,6 @@ def test_completed_exit_source_cannot_become_eligible_with_false():
     )
     assert result.status == "ok" and result.errors == []
     assert result.data is not None
-    verdict = _judge(result.data)
-    assert verdict.checks["exit"]["status"] == "unknown"
-    assert verdict.status == "unknown"
     assert result.data.sources  # Rejected facts are not technical/fetch failures.
     assert result.data.profile.exit_completed is None
     assert not result.data.profile.field_evidence_ids.get(FIELD_EXIT)
@@ -561,14 +545,10 @@ def test_source_polarity_correspondence_reaches_actual_eligibility(
     assert result.status == "ok" and result.errors == []
     assert result.data is not None and result.data.sources
     bundle = result.data
-    verdict = _judge(bundle)
-    check = "listing" if field == FIELD_LISTING else "exit"
     if opposite:
         assert getattr(bundle.profile, field) is None
         assert not bundle.profile.field_evidence_ids.get(field)
         assert not any(e.excerpt == statement for e in bundle.evidence.values())
-        assert verdict.checks[check]["status"] == "unknown"
-        assert verdict.status == "unknown"
         notes = result.retrieval_records[-1].arguments_without_secrets["providers"][
             "official-homepage"
         ]["notes"]
@@ -585,8 +565,6 @@ def test_source_polarity_correspondence_reaches_actual_eligibility(
             r.retrieval_id for r in result.retrieval_records
         }
         assert SELF_LIMITATION in item.limitations
-        assert verdict.checks[check]["status"] == ("fail" if supported else "pass")
-        assert verdict.status == ("ineligible" if supported else "eligible")
         assert bundle.profile.domain_match is True
         assert bundle.profile.stage.normalized_round == "series_a"
 
@@ -631,7 +609,6 @@ def test_unsupported_source_statement_is_unknown_not_negative(field, statement, 
     assert result.data is not None
     assert getattr(result.data.profile, field) is None
     assert not result.data.profile.field_evidence_ids.get(field)
-    assert _judge(result.data).status == "unknown"
 
 
 @pytest.mark.parametrize(
@@ -710,7 +687,6 @@ def test_containing_source_context_overrules_cherry_picked_excerpt(
     assert result.data is not None
     assert getattr(result.data.profile, field) is None
     assert not result.data.profile.field_evidence_ids.get(field)
-    assert _judge(result.data).status == "unknown"
 
 
 @pytest.mark.parametrize(
@@ -767,7 +743,6 @@ def test_future_or_separate_qualification_cannot_prove_polarity(
     assert result.status == "ok" and result.data is not None
     assert getattr(result.data.profile, field) is None
     assert not result.data.profile.field_evidence_ids.get(field)
-    assert _judge(result.data).status == "unknown"
 
 
 @pytest.mark.parametrize("field", [FIELD_LISTING, FIELD_EXIT])
@@ -782,7 +757,6 @@ def test_repeated_supported_occurrences_keep_correct_polarity(field):
     )
     assert result.data is not None
     assert getattr(result.data.profile, field) is False
-    assert _judge(result.data).status == "eligible"
 
 
 @pytest.mark.parametrize("field", [FIELD_LISTING, FIELD_EXIT])
@@ -844,7 +818,6 @@ def test_listed_false_and_no_exit_draft_do_not_reach_eligible_with_dart_e():
     assert result.data.profile.exit_completed is None
     assert not result.data.profile.field_evidence_ids.get(FIELD_EXIT)
     assert not any("상장 기업이며" in e.excerpt for e in result.data.evidence.values())
-    assert _judge(result.data).status == "unknown"
 
 
 @pytest.mark.parametrize(
@@ -873,9 +846,6 @@ def test_separate_listing_refutes_no_exit_before_actual_admission(listing, rever
     )
     assert result.status == "ok" and result.errors == []
     assert result.data is not None and result.data.sources
-    verdict = _judge(result.data)
-    assert verdict.checks["exit"]["status"] == "unknown"
-    assert verdict.status == "unknown"
     assert result.data.profile.is_listed is False  # Independent OpenDART E.
     assert result.data.profile.exit_completed is None
     assert not result.data.profile.field_evidence_ids.get(FIELD_EXIT)
@@ -901,9 +871,6 @@ def test_unsupported_listing_context_cannot_admit_no_exit(listing):
     )
     assert result.status == "ok" and result.errors == []
     assert result.data is not None and result.data.sources
-    verdict = _judge(result.data)
-    assert verdict.checks["exit"]["status"] == "unknown"
-    assert verdict.status == "unknown"
     assert result.data.profile.exit_completed is None
     assert not result.data.profile.field_evidence_ids.get(FIELD_EXIT)
     notes = result.retrieval_records[-1].arguments_without_secrets["providers"][
@@ -931,9 +898,6 @@ def test_separate_unlisted_preserves_supported_no_exit_control(listing, reverse)
     )
     assert result.status == "ok" and result.errors == []
     assert result.data is not None and result.data.sources
-    verdict = _judge(result.data)
-    assert verdict.status == "eligible"
-    assert verdict.checks["exit"]["status"] == "pass"
     assert result.data.profile.exit_completed is False
     ids = result.data.profile.field_evidence_ids[FIELD_EXIT]
     assert len(ids) == 1 and result.data.evidence[ids[0]].excerpt == no_exit
@@ -965,10 +929,6 @@ def test_explicit_truth_denial_vetoes_source_before_actual_admission(
     )
     assert result.status == "ok" and result.errors == []
     assert result.data is not None and result.data.sources
-    verdict = _judge(result.data)
-    check = "listing" if field == FIELD_LISTING else "exit"
-    assert verdict.checks[check]["status"] == "unknown"
-    assert verdict.status == "unknown"
     assert getattr(result.data.profile, field) is None
     assert not result.data.profile.field_evidence_ids.get(field)
     assert not any(e.excerpt == assertion for e in result.data.evidence.values())
@@ -993,7 +953,6 @@ def test_non_denial_context_keeps_supported_negative_control(field, context):
         field, f"{assertion} {context}", False, excerpt=assertion
     )
     assert result.status == "ok" and result.data is not None
-    assert _judge(result.data).status == "eligible"
     assert getattr(result.data.profile, field) is False
 
 
@@ -1008,11 +967,6 @@ def test_component_no_exit_fixture_wording_reaches_actual_consumer(statement, ex
     result = _polarity_research(FIELD_EXIT, statement, False)
     assert result.status == "ok" and result.errors == []
     assert result.data is not None and result.data.sources
-    verdict = _judge(result.data)
-    assert verdict.status == expected
-    assert verdict.checks["exit"]["status"] == (
-        "pass" if expected == "eligible" else "unknown"
-    )
     if expected == "eligible":
         assert result.data.profile.exit_completed is False
         ids = result.data.profile.field_evidence_ids[FIELD_EXIT]
@@ -1031,9 +985,6 @@ def test_unlisted_alone_does_not_manufacture_no_exit():
         ),
     )
     assert result.status == "ok" and result.data is not None
-    verdict = _judge(result.data)
-    assert verdict.checks["exit"]["status"] == "unknown"
-    assert verdict.status == "unknown"
     assert result.data.profile.is_listed is False
     assert result.data.profile.exit_completed is None
     assert not result.data.profile.field_evidence_ids.get(FIELD_EXIT)
@@ -1042,9 +993,6 @@ def test_unlisted_alone_does_not_manufacture_no_exit():
 def test_homepage_and_dart_listing_conflict_is_unknown():
     result = _research(FakeLLM(GOOD), dart_cls="K")
     assert result.data.profile.is_listed is None
-    outcome = _judge(result.data)
-    assert outcome.checks["listing"]["status"] == "unknown"
-    assert outcome.status == "unknown"
 
 
 @pytest.mark.parametrize(
@@ -1131,13 +1079,9 @@ def test_exit_event_vocabulary_cannot_bypass_actual_no_exit_admission(event, rev
     assert result.status == "ok" and result.errors == []
     assert result.data is not None and result.data.sources
     bundle = result.data
-    verdict = _judge(bundle)
     assert bundle.profile.exit_completed is None
     assert not bundle.profile.field_evidence_ids.get(FIELD_EXIT)
     assert not any(e.excerpt == no_exit for e in bundle.evidence.values())
-    exit_check = verdict.checks["exit"]
-    assert isinstance(exit_check, dict) and exit_check["status"] == "unknown"
-    assert verdict.status == "unknown"
     assert bundle.profile.is_listed is False  # Independent OpenDART E.
     assert bundle.profile.domain_match is True
     assert bundle.profile.stage.normalized_round == "series_a"
@@ -1178,7 +1122,6 @@ def test_exit_event_vocabulary_preserves_existing_supported_assertions(
     assert bundle.profile.exit_completed is value
     ids = bundle.profile.field_evidence_ids[FIELD_EXIT]
     assert len(ids) == 1 and bundle.evidence[ids[0]].excerpt == assertion
-    assert _judge(bundle).status == ("ineligible" if value else "eligible")
 
 
 @pytest.mark.parametrize(
@@ -1196,7 +1139,6 @@ def test_exit_event_vocabulary_without_target_preserves_no_exit_control(context)
     )
     assert result.status == "ok" and result.data is not None
     assert result.data.profile.exit_completed is False
-    assert _judge(result.data).status == "eligible"
 
 
 # ---------------------------------------- #207 bounded Exit-event noun variants
@@ -1241,10 +1183,6 @@ def test_exit_event_noun_variants_block_actual_no_exit_admission(event, reverse)
     assert bundle.profile.exit_completed is None
     assert not bundle.profile.field_evidence_ids.get(FIELD_EXIT)
     assert not any(e.excerpt == no_exit for e in bundle.evidence.values())
-    verdict = _judge(bundle)
-    exit_check = verdict.checks["exit"]
-    assert isinstance(exit_check, dict) and exit_check["status"] == "unknown"
-    assert verdict.status == "unknown"
     assert bundle.profile.is_listed is False  # Independent OpenDART E.
     assert bundle.profile.domain_match is True
     assert bundle.profile.stage.normalized_round == "series_a"
@@ -1283,7 +1221,6 @@ def test_exit_event_noun_variants_other_company_preserves_no_exit(context, rever
     )
     assert result.status == "ok" and result.data is not None
     assert result.data.profile.exit_completed is False
-    assert _judge(result.data).status == "eligible"
 
 
 def test_exit_event_noun_variants_preserves_supported_no_exit():
@@ -1293,4 +1230,3 @@ def test_exit_event_noun_variants_preserves_supported_no_exit():
     assert result.data.profile.exit_completed is False
     ids = result.data.profile.field_evidence_ids[FIELD_EXIT]
     assert len(ids) == 1 and result.data.evidence[ids[0]].excerpt == no_exit
-    assert _judge(result.data).status == "eligible"
