@@ -1,4 +1,7 @@
-"""Controller-owned narrative lifecycle; public graph assembly belongs to task 10."""
+"""보고서의 실행 순서와 한도를 관리하는 수명주기·LangGraph 구성.
+
+공개 함수가 준비한 근거를 분석·보강·작성·검증 노드에 순서대로 전달한다.
+"""
 
 import json
 from collections.abc import Callable
@@ -43,11 +46,11 @@ class NarrativeLifecycleError(ValueError):
 
 
 class NarrativeReportLifecycle:
-    """Mutable run owner: one consumed enrichment round and two shared repairs.
+    """자료 보강 한 번과 공유 수정 두 번을 관리하는 실행 소유자.
 
-    Detached context bytes are published only after complete admission. The same
-    runtime ledger, allowance and absolute deadline govern every model
-    attempt; neither repairs nor acquisition construct a fresh runtime.
+    근거 검증이 끝난 문맥만 다음 단계에 전달한다. 문맥은 모델이 볼 입력 묶음이다.
+    모든 모델 호출은 같은 비용 원장·요청 예산·마감 시간을 사용한다.
+    자료 보강이나 보고서 수정은 예산을 초기화하지 않는다.
     """
 
     def __init__(
@@ -60,6 +63,7 @@ class NarrativeReportLifecycle:
         allowance: Allowance,
         issuer_association: IssuerAssociation | None = None,
     ) -> None:
+        # 기업·기준일·원문·출처 장부가 이 문맥에 실제로 묶여 있는지 먼저 확인한다.
         context.verify_binding()
         writer = context.writer_context
         if (
@@ -81,6 +85,7 @@ class NarrativeReportLifecycle:
         self._call = binding.call.model_copy(deep=True)
         self._readiness = binding.readiness.model_copy(deep=True)
         self._allowance = Allowance.model_validate(allowance).model_copy(deep=True)
+        # 여러 한도가 있으면 가장 이른 마감만 적용해 실행 시간을 늘리지 않는다.
         deadline = min(service.deadline, binding.budget.deadline)
         if service.admission is not None:
             deadline = min(deadline, service.admission.deadline)
@@ -94,6 +99,8 @@ class NarrativeReportLifecycle:
         self._dispatched = False
         self.collection_records: tuple[RetrievalRecord, ...] = ()
         self.model_records: list[RetrievalRecord] = []
+        # 전달받은 문맥을 원본 snapshot으로 다시 만들었을 때 같아야 한다.
+        # snapshot은 이 단계에서 사용할 원문 저장소의 특정 버전이다.
         rebuilt = self._project(
             snapshot,
             tuple(writer.evidence),
@@ -156,8 +163,8 @@ class NarrativeReportLifecycle:
         old_citations = self._context.citation_registry["citations"]
         new_citations = projected.citation_registry["citations"]
         assert isinstance(old_citations, dict) and isinstance(new_citations, dict)
-        # Store publication rebinds every unchanged chunk to the complete corpus.
-        # Projection has already verified that version and all original lineage.
+        # 새 자료를 저장하면 기존 chunk도 새 전체 자료 버전을 가리킨다.
+        # 문맥 생성 단계에서 그 버전과 원본 연결을 검증했으므로 버전 연결을 맞춘다.
         version = (snapshot or self._snapshot).manifest.version
         for citation in old_citations.values():
             assert isinstance(citation, dict)
@@ -166,6 +173,7 @@ class NarrativeReportLifecycle:
             for chunk in chunks.values():
                 assert isinstance(chunk, dict)
                 chunk["corpus_version"] = version
+        # 보강은 근거를 추가할 수 있지만 기존 대상·질문·근거 내용을 바꿀 수는 없다.
         if (
             old.target != new.target
             or old.as_of != new.as_of
@@ -183,7 +191,7 @@ class NarrativeReportLifecycle:
             raise NarrativeLifecycleError("NARRATIVE_DEADLINE_EXCEEDED")
 
     def begin_information(self, reply: AnalysisReply) -> InformationRequest:
-        """Validate model needs, then consume the round before any dispatch."""
+        """모델의 자료 요청을 검증하고 실제 조사 전에 보강 기회를 소비한다."""
         if (
             self._round_consumed
             or not self._context.writer_context.may_request_information
@@ -204,11 +212,12 @@ class NarrativeReportLifecycle:
             context={"writer_context": writer},
         )
         self._request = request.model_copy(deep=True)
+        # 조사 실패에도 다시 요청해 무한 반복하지 않도록 전송 전에 소비 상태를 기록한다.
         self._round_consumed = True
         return request
 
     def resolve_information(self, request: InformationRequest) -> InformationResponse:
-        """Dispatch once and atomically publish the controller-built result context."""
+        """자료 요청을 한 번 처리하고 검증된 새 문맥을 한꺼번에 반영한다."""
         writer = self._context.writer_context
         parsed = InformationRequest.model_validate(
             request.model_dump(), context={"writer_context": writer}
@@ -248,11 +257,12 @@ class NarrativeReportLifecycle:
                 "information_request": self._request,
             },
         )
+        # 중간 검증이 실패하면 여기까지 오지 않아 기존 문맥을 일부만 바꾸지 않는다.
         self._context, self._snapshot = projected, result.snapshot
         return response
 
     def finalize_information(self) -> CompanyWriterContext:
-        """Close unused/failed acquisition permanently without discarding evidence."""
+        """이미 확보한 근거를 유지하며 추가 자료 요청 가능 상태를 닫는다."""
         if self._context.writer_context.may_request_information:
             projected = self._project(self._snapshot, (), ())
             self._check_generation(projected)
@@ -260,7 +270,7 @@ class NarrativeReportLifecycle:
         return self._context
 
     def finalize_analysis(self, reply: AnalysisReply) -> AnalysisReply:
-        """Rebind validated no-needs answers after closing unused acquisition."""
+        """보강 요청이 없으면 기존 분석 답변을 최종 문맥에 다시 연결해 재사용한다."""
         parsed = AnalysisReply.model_validate(
             reply.model_dump(),
             context={"writer_context": self._context.writer_context},
@@ -276,6 +286,8 @@ class NarrativeReportLifecycle:
             != prior.writer_context.information_results
         ):
             raise NarrativeLifecycleError("NARRATIVE_GENERATION_CHANGED")
+        # 요청 가능 상태를 닫으면서 문맥 ID가 바뀐다. 근거가 같음을 확인한 뒤
+        # ID를 다시 연결하므로 모델을 한 번 더 호출할 필요가 없다.
         return AnalysisReply.model_validate(
             {**parsed.model_dump(), "context_id": final.context_id},
             context={"writer_context": final.writer_context},
@@ -287,7 +299,7 @@ class NarrativeReportLifecycle:
         context_id: str,
         kind: Literal["composition", "semantic", "layout"],
     ) -> int:
-        """All repair stages consume the same counter; acquisition stays closed."""
+        """작성·의미·레이아웃의 공유 수정 횟수를 소비한다. 조사는 닫힌 상태다."""
         if (
             context_id != self._context.context_id
             or self._context.writer_context.may_request_information
@@ -300,7 +312,7 @@ class NarrativeReportLifecycle:
         return self._repairs
 
     def execute_model(self, *, transport: SingleAttempt[ModelT]) -> ToolResult[ModelT]:
-        """Run a task-10 role adapter under the same captured allowance/deadline."""
+        """어떤 모델 역할이든 같은 실행 예산·마감으로 호출하고 사용 기록을 남긴다."""
         self._check_deadline()
         self._context.verify_binding()
         writer = self._context.writer_context
@@ -319,7 +331,7 @@ class NarrativeReportLifecycle:
 
 
 class CompanyReportState(TypedDict, total=False):
-    """Only serialized outputs cross graph edges; runtime owners stay in closures."""
+    """노드 간에는 직렬화된 결과만 넘긴다. 실행 환경·키·원장은 클로저에 둔다."""
 
     has_evidence: bool
     needs_information: bool
@@ -340,7 +352,7 @@ def run_narrative_graph(
     output_dir: Path,
     pdf_profile: "PdfProfile",
 ) -> CompanyReportState:
-    """Run the production roles, finite enrichment and validation-gated PDF path."""
+    """분석·선택적 보강·작성·검증을 연결하고 검증된 PDF 결과를 반환한다."""
     from langgraph.graph import END, START, StateGraph
 
     from skala_rag.agents.company_analysis import (
@@ -356,6 +368,7 @@ def run_narrative_graph(
     lifecycle: NarrativeReportLifecycle | None = None
 
     def legacy_proof(draft: ReportDraft) -> tuple[ValidationResult, ReportJudgement]:
+        # 이전 점수형 보고서의 검증 경로가 실수로 호출되면 명시적으로 거절한다.
         raise CompanyReportConfigError("LEGACY_PDF_PROOF_NOT_USED")
 
     def owner() -> NarrativeReportLifecycle:
@@ -363,11 +376,13 @@ def run_narrative_graph(
         return lifecycle
 
     def provider(state: CompanyReportState) -> CompanyReportState:
+        # 자료가 없으면 그래프를 종료한다. 근거 없이 분석 모델을 호출하지 않는다.
         nonlocal lifecycle
         lifecycle = provide()
         return {"has_evidence": lifecycle is not None}
 
     def analysis(state: CompanyReportState) -> CompanyReportState:
+        # 분석 역할은 18개 질문의 답변과 부족한 자료 요청을 한 응답으로 돌려준다.
         run = owner()
         result = analyze_company(
             run,
@@ -389,6 +404,7 @@ def run_narrative_graph(
         }
 
     def enrichment(state: CompanyReportState) -> CompanyReportState:
+        # 첫 분석이 요청한 자료만 보강한다. 요청 검증과 한 번 제한은 수명주기가 맡는다.
         run = owner()
         reply = AnalysisReply.model_validate_json(
             state["analysis"], context={"writer_context": run.context.writer_context}
@@ -397,10 +413,12 @@ def run_narrative_graph(
         return {}
 
     def final_analysis(state: CompanyReportState) -> CompanyReportState:
+        # 보강 후에는 자료 요청을 닫고 늘어난 근거로 분석을 한 번 다시 수행한다.
         owner().finalize_information()
         return analysis(state)
 
     def reuse_analysis(state: CompanyReportState) -> CompanyReportState:
+        # 보강할 것이 없으면 첫 분석을 재사용해 불필요한 모델 호출을 줄인다.
         run = owner()
         reply = AnalysisReply.model_validate_json(
             state["analysis"], context={"writer_context": run.context.writer_context}
@@ -408,6 +426,7 @@ def run_narrative_graph(
         return {"analysis": run.finalize_analysis(reply).model_dump_json()}
 
     def composition(state: CompanyReportState) -> CompanyReportState:
+        # 작성·Judge의 상세 흐름은 reporting/narrative.py에서 읽을 수 있다.
         run = owner()
         reply = AnalysisReply.model_validate_json(
             state["analysis"], context={"writer_context": run.context.writer_context}
@@ -419,6 +438,8 @@ def run_narrative_graph(
                 settings=settings,
                 feedback=("composition",) if run.repair_count else (),
             )
+            # 검증된 근거 ID를 실제 참고문헌으로 연결한다.
+            # 출처를 모델이 쓰게 하지 않는다.
             finalized = finalize_narrative(result.composition, run.context)
             rendered = PDFRenderer(
                 profile=pdf_profile,
@@ -431,6 +452,7 @@ def run_narrative_graph(
             validated = PDFLayoutValidator().validate_narrative(
                 result, run.context, rendered
             )
+            # 내용·인용 검증에 더해 PDF 레이아웃까지 통과해야 결과를 다음 단계로 넘긴다.
             if validated.valid:
                 return {
                     "composition": result.composition.model_dump_json(),
@@ -450,8 +472,11 @@ def run_narrative_graph(
                         sort_keys=True,
                     ),
                 }
+            # while 루프지만 무한 수정은 아니다. 다른 수정과 합쳐 두 번을 넘으면 예외다.
             run.consume_repair(context_id=run.context.context_id, kind="layout")
 
+    # 노드는 처리 함수, 간선은 실행 순서다.
+    # 조건부 간선이 자료·보강 여부로 갈림길을 정한다.
     graph = StateGraph(CompanyReportState)
     graph.add_node("provider", provider)
     graph.add_node("analysis", analysis)
@@ -468,6 +493,7 @@ def run_narrative_graph(
         "analysis",
         lambda state: "enrichment" if state["needs_information"] else "reuse_analysis",
     )
+    # 보강 여부와 관계없이 최종 분석 뒤에는 작성·Judge·인용·PDF 단계로 합류한다.
     graph.add_edge("enrichment", "final_analysis")
     graph.add_edge("final_analysis", "composition_judge_citations_pdf")
     graph.add_edge("reuse_analysis", "composition_judge_citations_pdf")

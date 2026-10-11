@@ -1,4 +1,7 @@
-"""Python-direct narrative reporting; the returned directory owns the receipt."""
+"""기업 보고서의 공개 진입점. 설정·자료·예산을 준비하고 결과 디렉터리를 반환한다.
+
+예제에서 넘어온 호출은 이 파일에서 준비한 뒤 graph/company_report.py로 이어진다.
+"""
 
 import hashlib
 import json
@@ -53,12 +56,16 @@ from skala_rag.tools.runtime import (
 
 
 class _Clock:
+    """검색·모델 호출이 같은 UTC 시계로 실행 마감 시간을 판단하게 한다."""
+
     def now(self) -> datetime:
         return datetime.now(UTC)
 
 
 @dataclass(frozen=True, slots=True)
 class _Binding:
+    """조사 서비스와 모델 역할이 공유할 실행 환경·예산·호출 정보를 묶는다."""
+
     runtime: AdapterRuntime
     budget: ToolBudget
     call: CallContext
@@ -67,6 +74,7 @@ class _Binding:
 
 
 def _no_retry(seconds: float) -> None:
+    # 재시도로 같은 외부 요청을 중복 전송하지 않도록 이 실행에서는 재시도를 금지한다.
     raise CompanyReportConfigError("UNEXPECTED_TRANSPORT_RETRY")
 
 
@@ -80,12 +88,13 @@ def run_company_report(
     as_of: date | None = None,
     research_limits: Mapping[str, int | float | str | Decimal] | None = None,
 ) -> Path:
-    """Return receipts for validated reports or explicit non-report outcomes.
+    """보고서 또는 보고서를 만들지 못한 이유가 담긴 결과 디렉터리를 반환한다.
 
-    Invalid configuration raises before writes. Credentials are resolved by the
-    runtime and never serialized. Homepage is a subject hint, not fetch permission.
-    No legal identity, eligibility or scored-policy approval is manufactured.
+    잘못된 설정은 파일을 쓰기 전에 예외를 낸다. API 키는 실행 환경에서만 읽는다.
+    홈페이지는 대상 구분용 힌트이지 수집 권한이 아니다.
+    근거 없는 법적 신원·적격성·점수 판정을 만들지 않는다.
     """
+    # 1. 외부 입력을 DTO로 검증하고 설정을 고정한다. DTO는 필드와 타입을 정한 계약이다.
     request = CompanyReportRequest(
         schema_version="company-report-request-1",
         company_name=company_name,
@@ -96,6 +105,7 @@ def run_company_report(
     config = load_company_report_config(
         config_path, research=research, research_limits=research_limits
     )
+    # 기존 결과를 덮어쓰지 않는다. 매 실행마다 새 출력 디렉터리를 사용한다.
     out = TypeAdapter(Path).validate_python(output_dir, strict=True).resolve()
     if out.exists():
         raise FileExistsError(out)
@@ -105,6 +115,8 @@ def run_company_report(
     cutoff = request.as_of or clock.now().date()
     document = config.runtime_document
     limits = document.profiles.actual_v3
+    # 2. 전체 실행의 호출 수·토큰·비용을 하나의 원장으로 관리한다.
+    # 역할이 바뀌거나 보고서를 수정해도 이 원장을 새로 만들지 않는다.
     runtime = AdapterRuntime(
         policy=RuntimePolicy(
             schema_version="runtime-1",
@@ -133,6 +145,7 @@ def run_company_report(
         clock=clock,
         sleep=_no_retry,
     )
+    # 키는 모델 호출에만 전달한다. 아래 설정·결과 JSON에는 저장하지 않는다.
     key = resolve_environment_credential("OPENAI_API_KEY")
     deadline = clock.now() + timedelta(seconds=limits.deadline_seconds)
     binding = _Binding(
@@ -165,9 +178,9 @@ def run_company_report(
         ),
         tool_name="openai-responses",
     )
-    # Divide the configured run token ceiling across its call capacity. The legacy
-    # request_input_tokens=1 sentinel is not a narrative request bound. Every role
-    # verifies its actual UTF-8 request/schema fits this captured allowance.
+    # 전체 입력 토큰 한도를 호출 수로 나눠 한 요청에 예약할 예산을 정한다.
+    # 과거 설정의 request_input_tokens=1은 이 보고서의 요청 크기 제한이 아니다.
+    # 각 역할은 실제 UTF-8 요청과 스키마가 이 예약 범위에 들어가는지 확인한다.
     request_input_tokens = limits.max_input_tokens // limits.max_calls
     allowance = Allowance(
         schema_version="runtime-1",
@@ -196,6 +209,8 @@ def run_company_report(
     write("effective-config.json", config.model_dump(mode="json"))
 
     def provider() -> NarrativeReportLifecycle | None:
+        # 3. 로컬 저장소와 모델을 열고 대상 기업에 속한 원문 근거를 찾는다.
+        # None은 허용할 기업 근거가 없다는 뜻이다. 무결성·권한 문제는 예외로 구분한다.
         nonlocal lifecycle, subject_id
         store = CompanyStore.from_local(
             config.store_dir,
@@ -214,6 +229,8 @@ def run_company_report(
             company_name=company_name,
             as_of=cutoff,
         )
+        # 저장된 이름·별칭과 선택적 홈페이지 힌트로 대상을 좁힌다.
+        # 검토 영수증은 기업과 원문을 연결하며, 법적 신원을 인증하지는 않는다.
         matches = [
             item.candidate
             for item in manifest.companies.values()
@@ -235,8 +252,8 @@ def run_company_report(
             if config.research_enabled:
                 raise CompanyReportConfigError("RESEARCH_AUTHORIZATION_REQUIRED")
             return None
-        # The service requires a subject DTO, not a legal identity or profile.
-        # A reviewed issuer has no observed country or legal identifiers.
+        # 서비스에 넘길 대상 DTO를 만든다. 검토된 원문 연결만 있는 경우에는
+        # 알 수 없는 국가와 법적 식별자를 임의로 채우지 않는다.
         if matches:
             candidate = matches[0]
         else:
@@ -254,6 +271,8 @@ def run_company_report(
         subject_id = candidate.candidate_id
         questions = analysis_questions()
         selected_ids: set[str] = set()
+        # 기업명만 검색하면 질문별 자료를 놓칠 수 있어 18개 질문 각각으로 검색한다.
+        # BGE-M3는 여기서 유사한 원문을 찾는 임베딩 모델이며 글을 쓰는 모델이 아니다.
         for question in questions:
             started = clock.now()
             if started >= deadline:
@@ -279,6 +298,8 @@ def run_company_report(
                     }
                 )
             )
+            # 여러 질문에서 같은 근거를 찾을 수 있다.
+            # ID는 중복 제거하고 검색 기록은 남긴다.
             selected_ids.update(ids)
             local_records.append(
                 RetrievalRecord(
@@ -320,6 +341,8 @@ def run_company_report(
             if config.research_enabled:
                 raise CompanyReportConfigError("RESEARCH_AUTHORIZATION_REQUIRED")
             return None
+        # 4. 작성 모델에는 근거 ID와 내용만 보여준다.
+        # 원본 URL·위치·검색 이력은 별도 인용 장부에 남겨 코드가 출처를 연결한다.
         context = build_writer_context(
             snapshot,
             company_name=company_name,
@@ -336,6 +359,7 @@ def run_company_report(
             binding=binding,
             admit=lambda retained, selected, records: selected,
         )
+        # 수명주기 객체가 보강 한 번·공유 수정 두 번과 같은 실행 제약을 소유한다.
         lifecycle = NarrativeReportLifecycle(
             context=context,
             snapshot=snapshot,
@@ -349,6 +373,7 @@ def run_company_report(
     outcome: Literal["completed", "partial", "empty", "ambiguous", "failed"] = "failed"
     reasons = ["COMPANY_WORKFLOW_FAILED"]
     completeness: Literal["full", "partial", "none"] = "none"
+    # 5. 그래프가 분석 → 선택적 보강 → 작성·Judge → 인용·PDF 검사를 연결한다.
     try:
         state = run_narrative_graph(
             provide=provider,
@@ -366,6 +391,7 @@ def run_company_report(
             reply = AnalysisReply.model_validate_json(
                 state["analysis"], context={"writer_context": writer}
             )
+            # 검증 통과와 자료의 완전성은 별개다. 미상·부분 답변이 있으면 partial이다.
             partial = any(
                 answer.status in ("partial", "unknown")
                 for answer in reply.answers.values()
@@ -383,6 +409,7 @@ def run_company_report(
                 hashlib.sha256((out / name).read_bytes()).hexdigest()
                 for name in ("judgment.json", "pdf-validation.json", "references.json")
             ]
+            # 그래프의 검증을 통과한 결과만 사용자용 report.md/report.pdf로 저장한다.
             (out / "report.md").write_text(state["markdown"], encoding="utf-8")
             (out / "report.pdf").write_bytes(Path(state["pdf_path"]).read_bytes())
             md_path, pdf_path = str(out / "report.md"), str(out / "report.pdf")
@@ -399,10 +426,11 @@ def run_company_report(
             outcome, subject_id = "ambiguous", None
         elif lifecycle is not None:
             validation = "failed"
-        # Failed drafts remain diagnostics, never public report artifacts.
+        # 실패 초안은 진단 자료로만 남긴다. 사용자용 보고서 파일로 오인되지 않게 지운다.
         for name in ("report.md", "report.pdf"):
             (out / name).unlink(missing_ok=True)
         md_path = pdf_path = None
+    # 6. 성공·빈 결과·실패 모두 추적할 수 있도록 실행 기록과 최종 영수증을 남긴다.
     if lifecycle is not None:
         write(
             "writer-input.json",
@@ -425,6 +453,7 @@ def run_company_report(
         "provider-trace.json",
         {"records": [record.model_dump(mode="json") for record in local_records]},
     )
+    # 호출자는 이 영수증의 outcome·completeness·validation을 함께 읽어 결과를 판단한다.
     result = NarrativeRunResult(
         schema_version="company-report-2",
         run_id=run_id,
