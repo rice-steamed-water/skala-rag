@@ -23,3 +23,4 @@ build/
 # Local data and run outputs
 data/local/
 outputs/
+/raw/

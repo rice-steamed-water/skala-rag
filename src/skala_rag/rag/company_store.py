@@ -34,7 +34,12 @@ from skala_rag.contracts import (
 )
 from skala_rag.contracts.common import Contract, ISODate, Text
 from skala_rag.contracts.reports import NarrativeReportResult
-from skala_rag.rag.corpus import CorpusManifest, ManifestDocument, manifest_hash
+from skala_rag.rag.corpus import (
+    CorpusManifest,
+    ManifestDocument,
+    manifest_hash,
+    verify_markdown_chunks,
+)
 from skala_rag.rag.extraction import PageChunkSettings, extract_pdf
 from skala_rag.rag.index_v3 import (
     EmbeddingVector,
@@ -107,6 +112,7 @@ class RetainedSource:
     evidence: tuple[Evidence, ...]
     retrieval_records: tuple[RetrievalRecord, ...]
     page_settings: PageChunkSettings | None = None
+    markdown_content: bytes | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -218,6 +224,11 @@ class StoreSnapshot:
                     for e in manifest.evidence.values()
                     if e.source_id == hit.source.source_id
                     and e.excerpt in hit.chunk.text
+                    and (
+                        manifest.documents[e.source_id].admission_kind
+                        != "operator_folder"
+                        or any(p.chunk_id == hit.chunk.chunk_id for p in e.provenance)
+                    )
                 }
             originals = _evidence_closure(ids, manifest.evidence, manifest.sources)
             results.append(
@@ -304,10 +315,20 @@ class CompanyStore:
         *,
         model_path: Path,
         receipt_path: Path,
+        index_settings: IndexSettings | None = None,
     ) -> "CompanyStore":
         """Read existing local assets only. Missing assets never trigger download."""
         receipt = json.loads(receipt_path.read_bytes())
         settings = IndexSettings(**json.loads(receipt["metadata"]["settings_snapshot"]))
+        if index_settings is not None:
+            # 모델 영수증은 그대로 검증하고 snapshot 소유 청크 설정만 분리한다.
+            expected = settings.snapshot()
+            supplied = index_settings.snapshot()
+            expected.pop("chunk_settings")
+            supplied.pop("chunk_settings")
+            if supplied != expected:
+                raise CompanyStoreError("MODEL_RECEIPT_SETTINGS_MISMATCH")
+            settings = index_settings
         encoder = load_local_encoder(
             model_path,
             device=settings.embedding_settings["device"],
@@ -406,6 +427,21 @@ class CompanyStore:
                 raise CompanyStoreError("RETAINED_PATH_ESCAPE")
             if _hash(path.read_bytes()) != source.content_hash:
                 raise CompanyStoreError("SOURCE_HASH_MISMATCH")
+            document = manifest.documents[source.source_id]
+            extraction = document.markdown_extraction
+            if extraction is not None:
+                markdown_path = (self.root / extraction.markdown_path).resolve()
+                if not markdown_path.is_relative_to(self.root / "data/local"):
+                    raise CompanyStoreError("RETAINED_PATH_ESCAPE")
+                verify_markdown_chunks(
+                    document,
+                    markdown_path.read_bytes(),
+                    (
+                        c
+                        for c in manifest.chunks.values()
+                        if c.source_id == source.source_id
+                    ),
+                )
         _evidence_closure(set(manifest.evidence), manifest.evidence, manifest.sources)
         for rid, report in manifest.reports.items():
             for parent in report.parent_report_ids:
@@ -476,8 +512,10 @@ class CompanyStore:
                     or source.content_hash != _hash(material.content)
                     or source.content_hash != doc.content_hash
                     or source.local_path != doc.local_path
-                    or not doc.approved
-                    or not doc.reviewer
+                    or (
+                        doc.admission_kind == "reviewed"
+                        and (not doc.approved or not doc.reviewer)
+                    )
                     or not (
                         doc.extraction_status == "ok"
                         or (
@@ -494,7 +532,26 @@ class CompanyStore:
                 if not chunks:
                     raise CompanyStoreError("SOURCE_CHUNKS_REQUIRED")
                 suffix = Path(doc.local_path).suffix.lower()
-                if suffix == ".pdf":
+                if doc.markdown_extraction is not None:
+                    # 수동 PDF는 원본 hash를 유지하고 별도 Markdown 구간으로 검증한다.
+                    if suffix != ".pdf" or material.markdown_content is None:
+                        raise CompanyStoreError("MARKDOWN_EXTRACTION_REQUIRED")
+                    if (
+                        source.published_at is not None
+                        or source.publisher is not None
+                        or source.author is not None
+                        or source.url is not None
+                        or doc.publication_date is not None
+                        or doc.publisher is not None
+                    ):
+                        raise CompanyStoreError("OPERATOR_METADATA_MISMATCH")
+                    verify_markdown_chunks(doc, material.markdown_content, chunks)
+                    contents[doc.markdown_extraction.markdown_path] = (
+                        material.markdown_content
+                    )
+                elif material.markdown_content is not None:
+                    raise CompanyStoreError("UNEXPECTED_MARKDOWN_EXTRACTION")
+                elif suffix == ".pdf":
                     if material.page_settings is None:
                         raise CompanyStoreError("PDF_EXTRACTION_SETTINGS_REQUIRED")
                     extracted = extract_pdf(
@@ -759,6 +816,32 @@ class CompanyStore:
     def _validate_closure(self, state) -> None:
         _evidence_closure(set(state["evidence"]), state["evidence"], state["sources"])
         for evidence in state["evidence"].values():
+            document = state["documents"][evidence.source_id]
+            if document.admission_kind == "operator_folder":
+                # 원문 literal만 허용한다. 폴더 배치로 신뢰도·법적 식별을 만들지 않는다.
+                if (
+                    evidence.evidence_kind != "reported"
+                    or evidence.confidence != "unknown"
+                    or evidence.claim != evidence.excerpt
+                    or any(
+                        getattr(evidence, name) is not None
+                        for name in (
+                            "value",
+                            "unit",
+                            "currency",
+                            "value_as_of",
+                            "event_date",
+                            "period",
+                            "geography",
+                            "derivation",
+                            "supersedes",
+                        )
+                    )
+                    or evidence.supporting_evidence_ids
+                    or evidence.conflicts_with
+                    or len(evidence.provenance) != 1
+                ):
+                    raise CompanyStoreError("OPERATOR_EVIDENCE_MISMATCH")
             if not evidence.provenance:
                 raise CompanyStoreError("EVIDENCE_PROVENANCE_REQUIRED")
             for provenance in evidence.provenance:
@@ -778,6 +861,10 @@ class CompanyStore:
                         or chunk.source_id != evidence.source_id
                         or evidence.excerpt not in chunk.text
                         or evidence.locator != chunk.locator
+                        or (
+                            document.admission_kind == "operator_folder"
+                            and evidence.excerpt != chunk.text
+                        )
                     ):
                         raise CompanyStoreError("RAG_LINEAGE_MISMATCH")
         for record in state["retrieval_records"].values():
@@ -808,6 +895,8 @@ class CompanyStore:
                         or evidence.evidence_kind != "reported"
                         or evidence.candidate_id != candidate.candidate_id
                         or evidence.scope != "company"
+                        or state["documents"][evidence.source_id].admission_kind
+                        == "operator_folder"
                     ):
                         raise CompanyStoreError("IDENTITY_LINEAGE_MISMATCH")
 
@@ -877,6 +966,17 @@ class CompanyStore:
             chunks=tuple(state["chunks"].values()),
             settings=self.settings,
             extraction_results=extractions,
+            markdown_contents={
+                doc.source_id: (
+                    contents[doc.markdown_extraction.markdown_path]
+                    if doc.markdown_extraction.markdown_path in contents
+                    else (
+                        self.root / doc.markdown_extraction.markdown_path
+                    ).read_bytes()
+                )
+                for doc in corpus.documents
+                if doc.markdown_extraction is not None
+            },
         )
         versions = self.root / "versions"
         versions.mkdir(exist_ok=True)

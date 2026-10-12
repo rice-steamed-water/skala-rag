@@ -28,6 +28,7 @@ from skala_rag.contracts.company_report import (
     CompanyReportConfigError,
     CompositionReply,
     EvidenceIDs,
+    OperatorFolderBinding,
     WriterContext,
     _NarrativeContract,
     _writer_context,
@@ -156,6 +157,12 @@ def _neutral_reply(context: CompanyWriterContext, prose: list[str]) -> None:
     """
     tokens: set[str] = set()
     registry = context.citation_registry
+    if registry["operator_folder"] is not None:
+        # 검증된 원문 claim/excerpt의 예외는 모델 생성 문장에 적용하지 않는다.
+        folder = OperatorFolderBinding.model_validate(registry["operator_folder"])
+        tokens.update(
+            (folder.generation_id, folder.input_fingerprint, folder.store_version)
+        )
     # 영수증마다 출처 메타데이터 값과 chunk ID를 금지 토큰으로 수집한다.
     # 대상 회사 이름과 겹치는 값은 회사명을 쓰는 것이므로 제외한다.
     for receipt in registry["citations"].values():

@@ -1,6 +1,8 @@
 """T11: 미승인·추출 미완료·교체 문서 제외와 버전 고정. 가상 manifest만 쓴다."""
 
+import json
 from datetime import date
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -234,3 +236,58 @@ def test_allowed_sources_follow_company_scope_and_gate():
     )
     with pytest.raises(CorpusGateError):
         allowed_source_ids(corpus, failed, "co-a")
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"approved": True, "reviewer": "forged-reviewer"},
+        {"scope": "industry", "candidate_ids": ()},
+        {"candidate_ids": ("co-a", "co-b")},
+        {"markdown_extraction": None},
+    ],
+)
+def test_operator_admission_cannot_forge_reviewed_authority(changes):
+    # Given: 폴더 입력에는 reviewer/approved 권한이 없고 한 대상만 지정한다.
+    from skala_rag.rag.corpus import MarkdownExtraction
+
+    extraction = MarkdownExtraction(
+        schema_version="markitdown-pdf-1",
+        markdown_path="data/local/a.markdown",
+        markdown_hash="sha256:" + "a" * 64,
+        parser_version="0.1.8",
+        recipe_hash="b" * 64,
+        converted_at="2026-10-12T00:00:00+00:00",
+    )
+    values = dict(
+        admission_kind="operator_folder",
+        approved=False,
+        reviewer=None,
+        scope="company",
+        candidate_ids=("co-a",),
+        markdown_extraction=extraction,
+    )
+    # When/Then: reviewed 위조나 여러 대상 결합을 실제 DTO가 거절한다.
+    with pytest.raises(ValidationError):
+        doc("operator", **(values | changes))
+
+
+def test_prechange_reviewed_corpus_keeps_frozen_serialization_and_hash():
+    # Given: 변경 전 writer가 생성한 고정 JSON과 당시 계산한 corpus hash.
+    fixture = json.loads(
+        (
+            Path(__file__).parents[1] / "fixtures/company_store_reviewed_v1.json"
+        ).read_text()
+    )
+    old_payload = json.loads(fixture["corpus_json"])
+    assert all(
+        "admission_kind" not in doc and "markdown_extraction" not in doc
+        for doc in old_payload["documents"]
+    )
+    # When: 현재 계약으로 과거 payload를 읽는다. 새 DTO로 fixture를 만들지 않는다.
+    corpus = CorpusManifest.model_validate_json(fixture["corpus_json"])
+    # Then: 내부 기본값은 reviewed/null이지만 canonical 표현과 hash는 그대로다.
+    assert corpus.documents[0].admission_kind == "reviewed"
+    assert corpus.documents[0].markdown_extraction is None
+    assert corpus.model_dump(mode="json") == old_payload
+    assert manifest_hash(corpus) == fixture["corpus_hash"]

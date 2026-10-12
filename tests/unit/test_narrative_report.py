@@ -11,6 +11,7 @@ import pytest
 from pydantic import ValidationError
 from tests.fixtures.narrative import gates_payload, runtime_binding
 from tests.unit.test_company_analysis import VERSION, reply_payload
+from tests.unit.test_company_report_context import make_operator_inputs
 from tests.unit.test_company_store import (
     SyntheticEncoder,
     identity,
@@ -40,6 +41,7 @@ from skala_rag.reporting.narrative import (
     NARRATIVE_HEADINGS,
     NarrativeModelSettings,
     SemanticJudgeReply,
+    _neutral_reply,
     compose_and_judge,
     composition_hash,
 )
@@ -320,6 +322,41 @@ def test_injection_metadata_when_composition_crosses_judge_boundary(tmp_path):
         compose_and_judge(lifecycle, analysis, settings=model)
     # Then: the leaking prose never reaches Judge transport.
     assert len(wire) == ledger.snapshot()["calls"] == 1
+
+
+@pytest.mark.parametrize(
+    "field", ["generation_id", "input_fingerprint", "store_version"]
+)
+def test_generated_operator_metadata_rejected_with_current_binding(tmp_path, field):
+    """현재 가져오기 연결 값은 모델 생성 문장의 원문 예외가 아니다."""
+    # Given: real PDF conversion/store and its fresh private generation binding.
+    inputs = make_operator_inputs(tmp_path)
+    context = build_writer_context(**inputs)
+    token = getattr(inputs["operator_folder"], field)
+    # When / Then: generated prose is rejected before the next role accepts it.
+    with pytest.raises(CompanyContextError, match="SOURCE_METADATA_IN_WRITER_TEXT"):
+        _neutral_reply(context, [json.dumps({"nested": token})])
+
+
+def test_operator_company_name_remains_public_in_generated_prose(tmp_path):
+    """회사 이름은 비공개 가져오기 연결 값과 구별한다."""
+    # Given: an admitted operator target and its public original evidence ID.
+    inputs = make_operator_inputs(tmp_path)
+    context = build_writer_context(**inputs)
+    eid = inputs["evidence_ids"][0]
+    # When / Then: normal company prose with a public citation stays accepted.
+    _neutral_reply(context, [f"{inputs['company_name']} [@evidence:{eid}]"])
+
+
+def test_operator_original_exemption_does_not_extend_to_generated_copy(tmp_path):
+    """원문 두 필드의 span 예외를 모델이 복사한 문장에 확장하지 않는다."""
+    # Given: the complete original claim/excerpt passes physical span admission.
+    inputs = make_operator_inputs(tmp_path)
+    context = build_writer_context(**inputs)
+    original = next(iter(inputs["retained"].manifest.evidence.values()))
+    # When / Then: copying the same source metadata into generated prose is rejected.
+    with pytest.raises(CompanyContextError, match="SOURCE_METADATA_IN_WRITER_TEXT"):
+        _neutral_reply(context, [original.claim, original.excerpt])
 
 
 def test_composition_repairs_when_parser_rejects_foreign_ids(tmp_path):

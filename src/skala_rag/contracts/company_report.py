@@ -108,6 +108,76 @@ class ResearchLimits(_ResearchOverrides):
     deadline_seconds: Seconds
 
 
+class OperatorFolderConfig(_CompanyContract):
+    """수동 폴더의 현재 가져오기 세대를 지정하며 검토 권한을 부여하지 않는다."""
+
+    imports_path: ConfigPath
+    generation_id: Text
+    store_version: SHA256
+
+
+class ImportTarget(_CompanyContract):
+    """운영자가 지정한 폴더 대상이며 법적 기업 식별을 뜻하지 않는다."""
+
+    subject_id: Text
+    name: Text
+    raw_dir: ConfigPath
+
+
+class ImportFile(_CompanyContract):
+    """발견한 PDF별 결과를 보존하며 읽기 실패의 해시는 null로 남긴다."""
+
+    relative_path: Text
+    pdf_hash: Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")] | None
+    status: Literal["ok", "empty", "failed"]
+    source_id: Text | None
+    error_code: Text | None
+
+
+class ImportSnapshot(_CompanyContract):
+    """ready 세대가 명시적으로 다시 열어야 하는 불변 저장소 버전이다."""
+
+    store_dir: ConfigPath
+    store_version: SHA256
+
+
+class ImportState(_CompanyContract):
+    """현재 상태 영수증: ready만 완전한 해시와 불변 snapshot을 가진다."""
+
+    schema_version: Literal["manual-import-1"]
+    generation_id: Text
+    status: Literal["importing", "ready", "empty", "failed"]
+    target: ImportTarget
+    input_fingerprint: SHA256 | None
+    recipe_hash: SHA256 | None
+    files: tuple[ImportFile, ...]
+    snapshot: ImportSnapshot | None
+
+    @model_validator(mode="after")
+    def check_ready_snapshot(self) -> Self:
+        """미완료 상태를 snapshot 존재만으로 ready로 오인하지 못하게 한다."""
+        ready = self.status == "ready"
+        if ready != (self.snapshot is not None):
+            raise CompanyReportConfigError("IMPORT_SNAPSHOT_STATUS_MISMATCH")
+        if ready and (
+            self.input_fingerprint is None
+            or self.recipe_hash is None
+            or any(item.pdf_hash is None for item in self.files)
+        ):
+            raise CompanyReportConfigError("READY_IMPORT_HASHES_REQUIRED")
+        return self
+
+
+class OperatorFolderBinding(_CompanyContract):
+    """보고서의 비공개 경계에서 대상·입력·세대·저장소를 함께 고정한다."""
+
+    subject_id: Text
+    name: Text
+    generation_id: Text
+    input_fingerprint: SHA256
+    store_version: SHA256
+
+
 class CompanyReportConfig(_CompanyContract):
     schema_version: Literal["company-report-2"]
     runtime_path: ConfigPath
@@ -116,6 +186,7 @@ class CompanyReportConfig(_CompanyContract):
     model_receipt_path: ConfigPath
     issuer_receipt_path: ConfigPath | None = None
     acquisition_receipt_path: ConfigPath | None = None
+    operator_folder: OperatorFolderConfig | None = None
     research_enabled: bool = False
     research_limits: ResearchLimits | None = None
 
@@ -128,6 +199,18 @@ class CompanyReportConfig(_CompanyContract):
         ):
             raise CompanyReportConfigError("COMPANY_REPORT_V1_MIGRATION_REQUIRED")
         return value
+
+    @model_validator(mode="after")
+    def separate_operator_authority(self) -> Self:
+        """폴더 입력을 reviewed issuer/acquisition 승인과 혼합하지 않는다."""
+        if self.operator_folder is not None and (
+            self.issuer_receipt_path is not None
+            or self.acquisition_receipt_path is not None
+        ):
+            raise CompanyReportConfigError(
+                "OPERATOR_FOLDER_REVIEWED_AUTHORITY_CONFLICT"
+            )
+        return self
 
 
 class EffectiveCompanyReportConfig(CompanyReportConfig):
@@ -235,6 +318,11 @@ def load_company_report_config(
     ):
         if values[name] is not None:
             values[name] = (path.parent / values[name]).resolve()
+    if configured.operator_folder is not None:
+        # 기존 config 디렉터리 기준 경로 해석을 중첩 폴더 binding에도 적용한다.
+        values["operator_folder"]["imports_path"] = (
+            path.parent / configured.operator_folder.imports_path
+        ).resolve()
     document = (
         load_runtime_document(path=values["runtime_path"])
         if runtime_document is None

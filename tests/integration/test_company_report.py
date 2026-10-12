@@ -6,6 +6,7 @@ import json
 import socket
 from dataclasses import replace
 from datetime import date
+from pathlib import Path
 
 import httpx
 import pytest
@@ -18,16 +19,22 @@ from tests.unit.test_company_report_research import (
     configured_service,
 )
 from tests.unit.test_company_report_research import make_case as make_research_case
-from tests.unit.test_company_store import identity
+from tests.unit.test_company_store import identity, material
 from tests.unit.test_openai_attempt import body
 
 import skala_rag.company_report as public
-from skala_rag.agents.company_analysis import analysis_questions
+from skala_rag.agents.company_analysis import CompanyAnalysisAttempt, analysis_questions
 from skala_rag.contracts.company_report import (
     QUESTION_IDS,
     NarrativeRunResult,
 )
 from skala_rag.rag.company_store import CompanyStore, evidence_fingerprint
+from skala_rag.rag.manual_pdf import (
+    ImportResult,
+    import_company_pdfs,
+    manual_index_settings,
+)
+from skala_rag.reporting.company_context import build_writer_context
 from skala_rag.reporting.narrative import NARRATIVE_HEADINGS
 from skala_rag.settings import load_runtime_document
 from skala_rag.tools.openai_attempt import OpenAIResponsesAttempt
@@ -624,3 +631,261 @@ def test_public_signature_has_only_simplified_inputs():
         "as_of",
         "research_limits",
     ]
+
+
+def test_question_balanced_selection_limits_exact_chunks(tmp_path, monkeypatch):
+    # Given: eighteen questions return different first hits from a real retained index.
+    harness = Harness(tmp_path, monkeypatch)
+    seeds = [
+        material(
+            f"balanced-{number}", text=f"Controlled question observation {number}."
+        )
+        for number in range(18)
+    ]
+    seeds = [
+        replace(
+            seed,
+            chunks=tuple(
+                chunk.model_copy(
+                    update={
+                        "embedding_model": harness.store.settings.model_id,
+                        "embedding_revision": harness.store.settings.model_revision,
+                    }
+                )
+                for chunk in seed.chunks
+            ),
+        )
+        for seed in seeds
+    ]
+    snapshot = harness.store.ingest_sources(seeds)
+    real_search = harness.store.search_local
+    hits = real_search("Controlled observation", top_k=30, timeout_seconds=10)
+    by_chunk = {hit.chunk.chunk_id: hit for hit in hits}
+    questions = [
+        f"{identity().candidate.canonical_name} {q.question}"
+        for q in analysis_questions()
+    ]
+
+    def controlled_search(query, **kwargs):
+        number = questions.index(query)
+        seed = seeds[number]
+        return (by_chunk[seed.chunks[0].chunk_id],)
+
+    monkeypatch.setattr(harness.store, "search_local", controlled_search)
+    # When: the production provider balances questions and checks closure.
+    out = harness.run()
+    # Then: the first eleven question hits plus reviewed name evidence fit exactly.
+    result = receipt(out)
+    assert result.outcome == "partial"
+    writer = json.loads((out / "writer-input.json").read_bytes())
+    assert set(writer["evidence"]) == {
+        "ev-a",
+        *(seed.evidence[0].evidence_id for seed in seeds[:11]),
+    }
+    reopened = harness.store.open()
+    assert reopened is not None
+    assert snapshot.manifest.version == reopened.manifest.version
+
+
+def test_whole_original_excluded_when_complete_request_cannot_fit(
+    tmp_path, monkeypatch
+):
+    # Given: an original chunk alone exceeds the complete analysis request budget.
+    harness = Harness(tmp_path, monkeypatch)
+    original = harness.store.open()
+    assert original is not None
+    runtime = load_runtime_document()
+    context = build_writer_context(
+        original,
+        company_name=identity().candidate.canonical_name,
+        as_of=date(2026, 10, 10),
+        questions=analysis_questions(),
+        evidence_ids=["ev-a", "ev-more"],
+    )
+    attempt = CompanyAnalysisAttempt(
+        context,
+        llm_settings=runtime.llm,
+        clock=public._Clock(),
+        max_output_tokens=runtime.profiles.actual_v3.request_output_tokens,
+    )
+    document = runtime.model_dump(mode="json")
+    document["profiles"]["actual_v3"]["max_input_tokens"] = (
+        attempt.allowance.input_tokens + 12000
+    ) * runtime.profiles.actual_v3.max_calls
+    harness.runtime.write_text(json.dumps(document))
+    seed = material("oversized", text="Controlled original observation. " * 500)
+    seed = replace(
+        seed,
+        chunks=tuple(
+            chunk.model_copy(
+                update={
+                    "embedding_model": harness.store.settings.model_id,
+                    "embedding_revision": harness.store.settings.model_revision,
+                }
+            )
+            for chunk in seed.chunks
+        ),
+    )
+    snapshot = harness.store.ingest_sources((seed,))
+    # When: public selection applies the actual prompt/schema/allowance check.
+    out = harness.run()
+    # Then: no excerpt is truncated or sent; other whole originals remain usable.
+    assert receipt(out).outcome == "partial"
+    writer = json.loads((out / "writer-input.json").read_bytes())
+    assert seed.evidence[0].evidence_id not in writer["evidence"]
+    assert (
+        snapshot.manifest.evidence[seed.evidence[0].evidence_id].excerpt
+        == seed.evidence[0].excerpt
+    )
+
+
+def configure_operator_harness(
+    harness: Harness, monkeypatch: pytest.MonkeyPatch, *, count: int = 15
+) -> tuple[Path, ImportResult, list[Path]]:
+    """실제 MarkItDown·index·보고서에 합성 모델 transport만 연결한다."""
+    from reportlab.pdfgen.canvas import Canvas
+
+    name = identity().candidate.canonical_name
+    raw = harness.root / "raw" / name
+    raw.mkdir(parents=True)
+    for number in range(count):
+        pdf = Canvas(str(raw / f"input-{number:02d}.pdf"))
+        pdf.drawString(40, 700, f"Controlled robotics observation number {number}.")
+        pdf.save()
+    original_settings = harness.store.settings
+    receipt_path = harness.root / "synthetic-manual-receipt.json"
+    receipt_path.write_text(
+        json.dumps({"metadata": {"settings_snapshot": original_settings._payload}})
+    )
+    data = json.loads(harness.config.read_bytes())
+    data["model_receipt_path"] = str(receipt_path)
+    harness.config.write_text(json.dumps(data))
+    runtime = json.loads(harness.runtime.read_bytes())
+    runtime["profiles"]["actual_v3"]["retrieval_top_k"] = 20
+    harness.runtime.write_text(json.dumps(runtime))
+    imported = import_company_pdfs(
+        company_name=name,
+        raw_root=raw.parent,
+        output_root=harness.root / "imports",
+        base_config_path=harness.config,
+        subject_id="co-a",
+        encoder=harness.store.encoder,
+    )
+    assert imported.config_path is not None and imported.state.snapshot is not None
+    harness.config = imported.config_path
+    harness.store = CompanyStore(
+        imported.state.snapshot.store_dir,
+        settings=manual_index_settings(receipt_path),
+        encoder=harness.store.encoder,
+    )
+    loads = []
+
+    def controlled_load(root, *, model_path, receipt_path, index_settings=None):
+        assert root == harness.store.root
+        assert index_settings is not None
+        assert index_settings.snapshot() == harness.store.settings.snapshot()
+        loads.append(root)
+        return harness.store
+
+    monkeypatch.setattr(CompanyStore, "from_local", controlled_load)
+    return raw, imported, loads
+
+
+def run_operator_harness(harness: Harness) -> Path:
+    """가져온 시각 이후 기준일로 실제 public runner를 호출한다."""
+    return public.run_company_report(
+        identity().candidate.canonical_name,
+        config_path=harness.config,
+        output_dir=harness.root / "output",
+        as_of=date(2099, 12, 31),
+    )
+
+
+def test_operator_runner_opens_exact_version_and_retains_bounded_context(
+    tmp_path, monkeypatch
+):
+    # Given: real converted originals, no reviewed or legal identity.
+    harness = Harness(tmp_path, monkeypatch)
+    _, imported, loads = configure_operator_harness(harness, monkeypatch)
+    assert imported.state.snapshot is not None
+    versions = []
+    original_open = harness.store.open
+
+    def observe_open(*, version=None):
+        versions.append(version)
+        return original_open(version=version)
+
+    monkeypatch.setattr(harness.store, "open", observe_open)
+    # When: the public report runs through lifecycle rebuild and finalization.
+    out = run_operator_harness(harness)
+    # Then: every reopen is explicit; only twelve whole originals enter model input.
+    result = receipt(out)
+    assert result.outcome == "partial" and result.validation == "passed"
+    assert len(loads) == 1
+    assert versions and set(versions) == {imported.state.snapshot.store_version}
+    assert all(
+        len(request["writer_context"]["evidence"]) == 12 for request in harness.requests
+    )
+    assert result.subject_id == imported.state.target.subject_id
+    assert len(json.loads((out / "references.json").read_bytes())["references"]) == 1
+
+
+@pytest.mark.parametrize(
+    "damage", ["raw_edit", "raw_delete", "generation", "status", "root"]
+)
+def test_operator_startup_blocks_stale_inputs_before_model_load(
+    tmp_path, monkeypatch, damage
+):
+    # Given: a copied ready config whose current folder admission no longer matches.
+    harness = Harness(tmp_path, monkeypatch)
+    raw, _, loads = configure_operator_harness(harness, monkeypatch, count=1)
+    config = json.loads(harness.config.read_bytes())
+    state_path = Path(config["operator_folder"]["imports_path"])
+    state = json.loads(state_path.read_bytes())
+    match damage:
+        case "raw_edit":
+            (raw / "input-00.pdf").write_bytes(b"changed original")
+        case "raw_delete":
+            (raw / "input-00.pdf").unlink()
+        case "generation":
+            config["operator_folder"]["generation_id"] = "copied-old-generation"
+            harness.config.write_text(json.dumps(config))
+        case "status":
+            state.update(status="importing", snapshot=None)
+            state_path.write_text(json.dumps(state))
+        case "root":
+            config["store_dir"] = str(tmp_path / "wrong-store")
+            harness.config.write_text(json.dumps(config))
+    # When: startup admits the report.
+    out = run_operator_harness(harness)
+    # Then: neither local model nor paid model dispatch can happen first.
+    result = receipt(out)
+    assert result.outcome == "failed"
+    assert result.model_usage["calls"] == 0
+    assert not loads and not harness.requests
+
+
+def test_matching_excerpt_cannot_select_unreturned_chunk(tmp_path, monkeypatch):
+    # Given: a misleading hit includes identical prose from an unreturned chunk.
+    harness = Harness(tmp_path, monkeypatch)
+    original = harness.store.open()
+    assert original is not None
+    manifest = original.manifest
+    forged = manifest.evidence["ev-a"].model_copy(deep=True)
+    forged.evidence_id = "ev-unreturned"
+    forged.provenance[0].chunk_id = "chunk-unreturned"
+    manifest.evidence[forged.evidence_id] = forged
+    hits = harness.store.search_local("Controlled", top_k=1, timeout_seconds=10)
+    hit = replace(hits[0], original_evidence=(*hits[0].original_evidence, forged))
+    monkeypatch.setattr(
+        harness.store,
+        "open",
+        lambda: replace(original, payload=manifest.model_dump_json().encode()),
+    )
+    monkeypatch.setattr(harness.store, "search_local", lambda *args, **kwargs: (hit,))
+    # When: provider selection resolves exact source/chunk provenance.
+    out = harness.run()
+    # Then: equal text cannot expand the selected evidence or hide broken lineage.
+    assert receipt(out).outcome == "partial"
+    writer = json.loads((out / "writer-input.json").read_bytes())
+    assert forged.evidence_id not in writer["evidence"]

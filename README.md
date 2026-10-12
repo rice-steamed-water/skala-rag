@@ -24,6 +24,14 @@ out = run_company_report(
 
 반환 디렉터리의 `run-result.json`에서 outcome/completeness/validation을 확인한다. 정상 Python 종료만으로 성공을 판단하지 않는다. [호출·설정·controlled 예제](docs/implementation/company-report.md), [현재 실제 증거와 한계](docs/implementation/actual-v3-status.md), [문서 홈](docs/README.md)을 따른다.
 
+### 직접 받은 기업 PDF 쓰기 (#237)
+
+1. `raw/{기업명}/`에 텍스트 PDF를 넣는다.
+2. `uv run python examples/import_company_pdfs.py --company "기업명" --base-config <절대 경로 설정>`으로 가져온다. 출력의 `config_path=`가 보고서용 설정이다.
+3. `.env`에 `SKALA_COMPANY_NAME`, `SKALA_COMPANY_REPORT_CONFIG`, `SKALA_COMPANY_REPORT_OUTPUT`, `OPENAI_API_KEY`를 두고 `uv run --env-file .env python examples/company_report_run.py`로 실행한다. 이 단계는 유료 모델 API를 쓴다.
+
+준비물, 상태, 외부 전송 범위는 [수동 PDF 가이드](docs/implementation/manual-pdf-guide.md)를 따른다.
+
 ### 검증과 실제 범위
 
 `uv run ruff check .`, `uv run ruff format --check .`, `uv run pytest`가 최종 필수 검사다. 합성 transport는 생산 graph·인용·PDF 연결을 검사할 뿐 실제 모델 품질 증거가 아니다. task 12의 저장 자료 기반 실제 Dexory 결과는 18답변 중 answered 2/partial 2/unknown 14, 확인 과제 16개, 실제 인용 원본 3개다. PDF는 본문 2장과 참고문헌 1장이며 4장은 최소 조건이 아니다. 실제 신규 수집·전체 질문 완전 답변·임의 기업 live research는 입증하지 않았다.
