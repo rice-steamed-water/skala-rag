@@ -409,3 +409,36 @@ def test_absolute_deadline_never_resets(case, action):
     assert controller.context == prior
     assert case.attempt.timeouts == []
     assert controller.collection_records == ()
+
+
+def test_later_projection_cannot_enlarge_closed_chunk_budget(case):
+    # Given: later retained originals exceed the established context's chunk budget.
+    controller = case.controller
+    store = controller._service.store
+    seeds = [
+        material(f"extra-{number}", text=f"Additional controlled observation {number}.")
+        for number in range(12)
+    ]
+    seeds = [
+        replace(
+            seed,
+            chunks=tuple(
+                chunk.model_copy(
+                    update={
+                        "embedding_model": store.settings.model_id,
+                        "embedding_revision": store.settings.model_revision,
+                    }
+                )
+                for chunk in seed.chunks
+            ),
+        )
+        for seed in seeds
+    ]
+    retained = store.ingest_sources(seeds)
+    original = controller.context
+    # When / Then: later projection fails atomically and preserves established evidence.
+    with pytest.raises(CompanyContextError, match="WRITER_CHUNK_LIMIT_EXCEEDED"):
+        controller._project(
+            retained, tuple(seed.evidence[0].evidence_id for seed in seeds), ()
+        )
+    assert controller.context == original

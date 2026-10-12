@@ -16,7 +16,7 @@ from uuid import uuid4
 
 from pydantic import TypeAdapter
 
-from skala_rag.agents.company_analysis import analysis_questions
+from skala_rag.agents.company_analysis import CompanyAnalysisAttempt, analysis_questions
 from skala_rag.agents.company_report_research import (
     PROVIDER,
     build_narrative_research_service,
@@ -37,6 +37,8 @@ from skala_rag.graph.company_report import (
 )
 from skala_rag.rag.company_store import CompanyStore, evidence_fingerprint
 from skala_rag.reporting.company_context import (
+    CompanyContextError,
+    CompanyWriterContext,
     build_writer_context,
     load_issuer_association,
 )
@@ -212,12 +214,42 @@ def run_company_report(
         # 3. 로컬 저장소와 모델을 열고 대상 기업에 속한 원문 근거를 찾는다.
         # None은 허용할 기업 근거가 없다는 뜻이다. 무결성·권한 문제는 예외로 구분한다.
         nonlocal lifecycle, subject_id
-        store = CompanyStore.from_local(
-            config.store_dir,
-            model_path=config.model_path,
-            receipt_path=config.model_receipt_path,
-        )
-        snapshot = store.open()
+        folder_binding = None
+        if config.operator_folder is not None:
+            # 현재 raw·recipe·대상·세대를 모델 자산 로드와 검색보다 먼저 재검사한다.
+            # 저장소 소유자의 canonical helper만 사용하며 폴더 신원을 추정하지 않는다.
+            from skala_rag.rag.manual_pdf import (
+                manual_index_settings,
+                validate_operator_folder_input,
+                validate_operator_import,
+            )
+
+            folder_binding = validate_operator_folder_input(
+                config, company_name=company_name
+            )
+            store = CompanyStore.from_local(
+                config.store_dir,
+                model_path=config.model_path,
+                receipt_path=config.model_receipt_path,
+                index_settings=manual_index_settings(config.model_receipt_path),
+            )
+            # CURRENT 대신 admission 때 고정한 불변 버전을 명시적으로 연다.
+            snapshot = store.open(version=folder_binding.store_version)
+            ready = validate_operator_import(
+                config,
+                subject_id=folder_binding.subject_id,
+                name=folder_binding.name,
+                store=store,
+            )
+            if ready.binding != folder_binding or ready.snapshot != snapshot:
+                raise CompanyReportConfigError("IMPORT_GENERATION_CHANGED")
+        else:
+            store = CompanyStore.from_local(
+                config.store_dir,
+                model_path=config.model_path,
+                receipt_path=config.model_receipt_path,
+            )
+            snapshot = store.open()
         if snapshot is None:
             if config.research_enabled:
                 raise CompanyReportConfigError("RESEARCH_AUTHORIZATION_REQUIRED")
@@ -246,7 +278,7 @@ def run_company_report(
         ]
         if len(matches) > 1:
             raise CompanyReportConfigError("AMBIGUOUS_ISSUER_SUBJECT")
-        if not matches and association is None:
+        if not matches and association is None and folder_binding is None:
             if manifest.evidence:
                 raise CompanyReportConfigError("ISSUER_ASSOCIATION_REQUIRED")
             if config.research_enabled:
@@ -254,7 +286,18 @@ def run_company_report(
             return None
         # 서비스에 넘길 대상 DTO를 만든다. 검토된 원문 연결만 있는 경우에는
         # 알 수 없는 국가와 법적 식별자를 임의로 채우지 않는다.
-        if matches:
+        if folder_binding is not None:
+            candidate = Candidate(
+                schema_version="company-report-2",
+                candidate_id=folder_binding.subject_id,
+                canonical_name=folder_binding.name,
+                aliases=[],
+                country="unknown",
+                homepage_url=homepage_url,
+                legal_identifiers={},
+                discovery_source_ids=[],
+            )
+        elif matches:
             candidate = matches[0]
         else:
             assert association is not None
@@ -270,7 +313,7 @@ def run_company_report(
             )
         subject_id = candidate.candidate_id
         questions = analysis_questions()
-        selected_ids: set[str] = set()
+        question_ids: list[tuple[str, ...]] = []
         # 기업명만 검색하면 질문별 자료를 놓칠 수 있어 18개 질문 각각으로 검색한다.
         # BGE-M3는 여기서 유사한 원문을 찾는 임베딩 모델이며 글을 쓰는 모델이 아니다.
         for question in questions:
@@ -288,19 +331,36 @@ def run_company_report(
                 current_report_id=run_id,
             )
             ids = tuple(
-                sorted(
-                    {
-                        item.evidence_id
-                        for hit in hits
-                        for item in hit.original_evidence
-                        if (item.scope == "company" and item.candidate_id == subject_id)
-                        or (item.scope == "industry" and item.candidate_id is None)
-                    }
+                dict.fromkeys(
+                    item.evidence_id
+                    for hit in hits
+                    for item in (
+                        hit.original_evidence
+                        if hit.prior_report is not None and folder_binding is None
+                        else manifest.evidence.values()
+                    )
+                    if (item.scope == "company" and item.candidate_id == subject_id)
+                    or (item.scope == "industry" and item.candidate_id is None)
+                    if (
+                        hit.prior_report is not None
+                        and folder_binding is None
+                        and hit.prior_report.original_evidence_hashes.get(
+                            item.evidence_id
+                        )
+                        == evidence_fingerprint(item, manifest.sources[item.source_id])
+                    )
+                    or (
+                        item.source_id == hit.source.source_id
+                        and any(
+                            provenance.chunk_id == hit.chunk.chunk_id
+                            for provenance in item.provenance
+                        )
+                    )
                 )
             )
             # 여러 질문에서 같은 근거를 찾을 수 있다.
             # ID는 중복 제거하고 검색 기록은 남긴다.
-            selected_ids.update(ids)
+            question_ids.append(ids)
             local_records.append(
                 RetrievalRecord(
                     schema_version="company-report-2",
@@ -336,21 +396,55 @@ def run_company_report(
             )
             if clock.now() >= deadline:
                 raise CompanyReportConfigError("NARRATIVE_DEADLINE_EXCEEDED")
-        ids = tuple(sorted(selected_ids))
+        # 질문마다 첫 근거부터 번갈아 검토한다. 전체 청크를 빼며 원문을 자르지 않는다.
+        selected_ids: list[str] = []
+        context = None
+
+        def check_context(projected: CompanyWriterContext) -> None:
+            """초기 선택과 후속 보강에 동일한 실제 프롬프트·schema 예산을 적용한다."""
+            CompanyAnalysisAttempt(
+                projected,
+                llm_settings=document.llm,
+                clock=clock,
+                max_output_tokens=limits.request_output_tokens,
+                allowance=allowance,
+                api_key=key,
+            )
+
+        for rank in range(max(map(len, question_ids), default=0)):
+            for found in question_ids:
+                if rank >= len(found) or found[rank] in selected_ids:
+                    continue
+                trial_ids = (*selected_ids, found[rank])
+                try:
+                    trial = build_writer_context(
+                        snapshot,
+                        company_name=company_name,
+                        as_of=cutoff,
+                        questions=questions,
+                        evidence_ids=trial_ids,
+                        issuer_association=association,
+                        operator_folder=folder_binding,
+                    )
+                    # 실제 분석 프롬프트와 응답 schema를 포함한 기존 바이트·비용 gate다.
+                    check_context(trial)
+                except (CompanyContextError, CompanyReportConfigError) as exc:
+                    if exc.code not in (
+                        "WRITER_CHUNK_LIMIT_EXCEEDED",
+                        "ROLE_ALLOWANCE_INSUFFICIENT",
+                    ):
+                        raise
+                    continue
+                selected_ids.append(found[rank])
+                context = trial
+        ids = tuple(selected_ids)
         if not ids:
             if config.research_enabled:
                 raise CompanyReportConfigError("RESEARCH_AUTHORIZATION_REQUIRED")
             return None
         # 4. 작성 모델에는 근거 ID와 내용만 보여준다.
         # 원본 URL·위치·검색 이력은 별도 인용 장부에 남겨 코드가 출처를 연결한다.
-        context = build_writer_context(
-            snapshot,
-            company_name=company_name,
-            as_of=cutoff,
-            questions=questions,
-            evidence_ids=ids,
-            issuer_association=association,
-        )
+        assert context is not None
         service = build_narrative_research_service(
             config=config,
             store=store,
@@ -367,6 +461,8 @@ def run_company_report(
             binding=binding,
             allowance=allowance,
             issuer_association=association,
+            operator_folder=folder_binding,
+            check_context=check_context,
         )
         return lifecycle
 

@@ -1,10 +1,13 @@
 """Controlled-response proof with real SQLite, never actual model/API authority."""
 
+import base64
 import fcntl
 import hashlib
 import json
+import zlib
 from dataclasses import replace
 from datetime import date, datetime, timezone
+from pathlib import Path
 
 import pytest
 
@@ -728,3 +731,43 @@ def test_malformed_source_never_publishes(tmp_path, failure):
     with pytest.raises(CompanyStoreError):
         store.ingest_sources((replace(incoming, **changes[failure]),))
     assert store.open().payload == previous.payload
+
+
+def test_prechange_reviewed_snapshot_reopens_without_rebuild_or_hash_change(tmp_path):
+    # Given: 새 schema가 아닌 변경 전 commit writer가 생성한 실제 불변 bytes.
+    fixture = json.loads(
+        (
+            Path(__file__).parents[1] / "fixtures/company_store_reviewed_v1.json"
+        ).read_text()
+    )
+    old_manifest = json.loads(fixture["manifest_json"])
+    assert all(
+        "admission_kind" not in doc and "markdown_extraction" not in doc
+        for doc in old_manifest["documents"].values()
+    )
+    encoder = SyntheticEncoder()
+    store = CompanyStore(
+        tmp_path / "legacy-store",
+        settings=IndexSettings(**json.loads(old_manifest["settings_snapshot"])),
+        encoder=encoder,
+    )
+    directory = store.root / "versions" / old_manifest["version"]
+    directory.mkdir(parents=True)
+    (directory / "manifest.json").write_text(fixture["manifest_json"])
+    index_bytes = zlib.decompress(base64.b64decode(fixture["sqlite_zlib_base64"]))
+    (directory / "index.sqlite").write_bytes(index_bytes)
+    (store.root / "CURRENT").write_text(old_manifest["version"] + "\n")
+    for relative_path, content in fixture["originals_base64"].items():
+        path = store.root / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(base64.b64decode(content))
+    # When: 현행 reader가 old-shape manifest와 실제 SQLite를 명시 버전으로 연다.
+    snapshot = store.open(version=old_manifest["version"])
+    # Then: manifest/index/source hash 검증이 통과하고 기존 인용을 그대로 검색한다.
+    assert snapshot is not None and encoder.calls == 0
+    assert snapshot.manifest.version == old_manifest["version"]
+    assert snapshot.manifest.model_dump(mode="json") == old_manifest
+    assert (directory / "index.sqlite").read_bytes() == index_bytes
+    hit = snapshot.search(query(), top_k=1)[0]
+    assert hit.chunk.chunk_id == "chunk-a"
+    assert [e.evidence_id for e in hit.original_evidence] == ["ev-a"]

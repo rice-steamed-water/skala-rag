@@ -18,6 +18,7 @@ from skala_rag.rag.corpus import (
     compare_index_inputs,
     manifest_hash,
     require_indexable,
+    verify_markdown_chunks,
 )
 from skala_rag.rag.extraction import ExtractionResult
 from skala_rag.rag.reviewed_extraction import verify_text_review
@@ -185,6 +186,7 @@ def build_index_plan(
     chunks: Sequence[Chunk],
     settings: IndexSettings,
     extraction_results: Mapping[str, ExtractionResult] | None = None,
+    markdown_contents: Mapping[str, bytes] | None = None,
 ) -> IndexPlan:
     """Require full manifest closure; no partial indexing of a failed corpus."""
     if not isinstance(settings, IndexSettings):
@@ -235,6 +237,22 @@ def build_index_plan(
             raise ValueError(f"chunk provenance/model mismatch: {item.chunk_id}")
         observed.add(doc.document_id)
     for doc in manifest.documents:
+        if doc.markdown_extraction is not None:
+            # 폴더 입력도 실제 추출 bytes 없이 metadata만으로 인덱싱하지 않는다.
+            if markdown_contents is None or doc.source_id not in markdown_contents:
+                raise ValueError("operator folder requires retained Markdown bytes")
+            if (
+                doc.markdown_extraction.recipe_hash
+                != hashlib.sha256(settings._payload.encode()).hexdigest()
+                or doc.markdown_extraction.parser_version
+                != settings.chunk_settings.get("parser_version")
+            ):
+                raise ValueError("operator extraction settings mismatch")
+            verify_markdown_chunks(
+                doc,
+                markdown_contents[doc.source_id],
+                (item for item in ordered if item.source_id == doc.source_id),
+            )
         review = doc.text_index_review
         if review is None:
             continue

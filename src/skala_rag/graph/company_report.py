@@ -22,6 +22,7 @@ from skala_rag.contracts.company_report import (
     InformationRequest,
     InformationResponse,
     InformationResult,
+    OperatorFolderBinding,
 )
 from skala_rag.contracts.tools import ToolResult
 from skala_rag.rag.company_store import StoreSnapshot
@@ -62,6 +63,8 @@ class NarrativeReportLifecycle:
         binding: ResearchRuntimeBinding,
         allowance: Allowance,
         issuer_association: IssuerAssociation | None = None,
+        operator_folder: OperatorFolderBinding | None = None,
+        check_context: Callable[[CompanyWriterContext], None] | None = None,
     ) -> None:
         # 기업·기준일·원문·출처 장부가 이 문맥에 실제로 묶여 있는지 먼저 확인한다.
         context.verify_binding()
@@ -81,6 +84,8 @@ class NarrativeReportLifecycle:
         self._context = context
         self._snapshot = snapshot
         self._issuer_association = issuer_association
+        self._operator_folder = operator_folder
+        self._check_context = check_context
         self._runtime = binding.runtime
         self._call = binding.call.model_copy(deep=True)
         self._readiness = binding.readiness.model_copy(deep=True)
@@ -142,16 +147,21 @@ class NarrativeReportLifecycle:
         may_request: bool = False,
     ) -> CompanyWriterContext:
         writer = self._context.writer_context
-        return build_writer_context(
+        projected = build_writer_context(
             snapshot,
             company_name=writer.target.name,
             as_of=writer.as_of,
             questions=writer.questions,
             evidence_ids=tuple(dict.fromkeys((*writer.evidence, *ids))),
             issuer_association=self._issuer_association,
+            operator_folder=self._operator_folder,
             may_request_information=may_request,
             information_results=results,
         )
+        # 보강도 초기 선택과 같은 요청 예산으로 검사하며 기존 원문을 자르지 않는다.
+        if self._check_context is not None:
+            self._check_context(projected)
+        return projected
 
     def _check_generation(
         self,
@@ -176,6 +186,8 @@ class NarrativeReportLifecycle:
         # 보강은 근거를 추가할 수 있지만 기존 대상·질문·근거 내용을 바꿀 수는 없다.
         if (
             old.target != new.target
+            or self._context.citation_registry.get("operator_folder")
+            != projected.citation_registry.get("operator_folder")
             or old.as_of != new.as_of
             or old.questions != new.questions
             or any(new.evidence.get(eid) != item for eid, item in old.evidence.items())

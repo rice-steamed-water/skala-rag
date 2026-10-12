@@ -9,9 +9,10 @@
 import hashlib
 import json
 import os
-from datetime import date
+import sys
 from pathlib import Path
 
+from pydantic import ValidationError
 from pypdf import PdfReader
 
 from skala_rag.company_report import run_company_report
@@ -120,17 +121,45 @@ def qa_research(
     return out
 
 
-if __name__ == "__main__":
-    # 터미널에서 이 파일을 직접 실행할 때만 아래 코드가 동작한다.
-    # 세 환경 변수는 기업명·설정 파일·새 출력 폴더를 지정한다.
-    # 기준일은 예제 재현을 위해 고정했다. 다른 기준일은 직접 호출할 때 지정한다.
-    output = run_company_report(
-        os.environ["SKALA_COMPANY_NAME"],
-        config_path=Path(os.environ["SKALA_COMPANY_REPORT_CONFIG"]),
-        output_dir=Path(os.environ["SKALA_COMPANY_REPORT_OUTPUT"]),
-        research=False,
-        as_of=date(2026, 10, 10),
-    )
+def main() -> int:
+    """환경 변수로 보고서를 실행하고 영수증에 맞는 종료 코드를 돌려준다.
+
+    0 = 검증 통과한 completed/partial, 1 = 실패·빈 결과·검증 실패, 2 = 설정 오류.
+    기준일은 지정하지 않아 실행 당일이 사용된다.
+    """
+    try:
+        output = run_company_report(
+            os.environ["SKALA_COMPANY_NAME"],
+            config_path=Path(os.environ["SKALA_COMPANY_REPORT_CONFIG"]),
+            output_dir=Path(os.environ["SKALA_COMPANY_REPORT_OUTPUT"]),
+            research=False,
+        )
+    except KeyError as exc:
+        print(f"ENV_REQUIRED name={exc.args[0]}", file=sys.stderr)
+        return 2
+    except (CompanyReportConfigError, OSError, ValidationError) as exc:
+        code = getattr(exc, "code", type(exc).__name__)
+        print(f"REPORT_CONFIG_ERROR code={code}", file=sys.stderr)
+        return 2
     # 정상 종료나 PDF 파일 존재만으로 성공을 판단하지 않고 영수증까지 검사한다.
-    result = _check_report(output, research=False)
+    result_path = output / "run-result.json"
+    receipt = NarrativeRunResult.model_validate_json(result_path.read_bytes())
+    if receipt.outcome not in ("completed", "partial"):
+        # 실패 영수증의 결과·사유·경로를 그대로 보여 준다.
+        print(
+            f"REPORT_NOT_COMPLETED outcome={receipt.outcome} "
+            f"reasons={','.join(receipt.reason_codes)} result={result_path}",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        result = _check_report(output, research=False)
+    except AssertionError:
+        print(f"REPORT_VALIDATION_FAILED result={result_path}", file=sys.stderr)
+        return 1
     print(result.model_dump_json())
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

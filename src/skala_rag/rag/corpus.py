@@ -12,19 +12,39 @@
 
 import hashlib
 import json
+import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import ConfigDict, Field, StrictBool, model_validator
 
 from skala_rag.contracts._validation import validate_unique
-from skala_rag.contracts.common import Contract, ISODate, Locator, Text
+from skala_rag.contracts.common import Contract, ISODate, Locator, Text, Timestamp
+from skala_rag.contracts.sources import Chunk
 from skala_rag.rag.text_review import TextIndexReview
 
 LOCAL_CORPUS_ROOT = PurePosixPath("data/local")
+
+
+class MarkdownExtraction(Contract):
+    """PDF와 별도로 보존한 Markdown의 변환 설정·시각·해시를 고정한다."""
+
+    model_config = ConfigDict(frozen=True)
+    schema_version: Literal["markitdown-pdf-1"]
+    markdown_path: Locator
+    markdown_hash: Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
+    parser_version: Text
+    recipe_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    converted_at: Timestamp
+
+    @model_validator(mode="after")
+    def validate_path(self) -> Self:
+        """추출본도 원본과 같은 상대 경로 경계를 지킨다."""
+        validate_local_path(self.markdown_path)
+        return self
 
 
 class ManifestDocument(Contract):
@@ -44,6 +64,12 @@ class ManifestDocument(Contract):
     extraction_status: Literal["pending", "ok", "partial", "failed"]
     reviewer: Text | None = None
     approved: StrictBool
+    admission_kind: Literal["reviewed", "operator_folder"] = Field(
+        default="reviewed", exclude_if=lambda value: value == "reviewed"
+    )
+    markdown_extraction: MarkdownExtraction | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     text_index_review: TextIndexReview | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
@@ -57,6 +83,18 @@ class ManifestDocument(Contract):
         validate_unique(list(self.candidate_ids), "candidate_ids")
         if self.approved and self.reviewer is None:
             raise ValueError("approved document requires reviewer")
+        if self.admission_kind == "operator_folder":
+            if (
+                self.approved
+                or self.reviewer is not None
+                or self.scope != "company"
+                or len(self.candidate_ids) != 1
+                or self.markdown_extraction is None
+                or self.text_index_review is not None
+            ):
+                raise ValueError("operator folder requires unreviewed PDF extraction")
+        elif self.markdown_extraction is not None:
+            raise ValueError("Markdown extraction requires operator folder admission")
         if self.text_index_review is not None:
             if self.extraction_status != "partial":
                 raise ValueError("text review applies only to partial documents")
@@ -145,7 +183,7 @@ def check_corpus(manifest: CorpusManifest) -> GateResult:
     issues: list[GateIssue] = []
     indexable: list[str] = []
     for item in manifest.documents:
-        if not item.approved:
+        if not item.approved and item.admission_kind != "operator_folder":
             issues.append(
                 GateIssue(
                     Rejection.DOCUMENT_NOT_APPROVED,
@@ -171,6 +209,52 @@ def check_corpus(manifest: CorpusManifest) -> GateResult:
         indexable_document_ids=tuple(indexable),
         issues=tuple(issues),
     )
+
+
+def verify_markdown_chunks(
+    document: ManifestDocument, content: bytes, chunks: Iterable[Chunk]
+) -> None:
+    """보존 Markdown의 반열린 문자 구간과 청크를 정확히 대조한다."""
+    extraction = document.markdown_extraction
+    if extraction is None:
+        raise ValueError("Markdown extraction descriptor required")
+    if "sha256:" + hashlib.sha256(content).hexdigest() != extraction.markdown_hash:
+        raise ValueError("Markdown hash mismatch")
+    text = content.decode("utf-8")
+    prefix = re.escape(extraction.markdown_path) + r"#char=([0-9]+):([0-9]+)"
+    observed = set()
+    for chunk in chunks:
+        match = re.fullmatch(prefix, chunk.locator)
+        if match is None:
+            raise ValueError("Markdown span locator mismatch")
+        start, end = map(int, match.groups())
+        identity = hashlib.sha256(
+            json.dumps(
+                [
+                    document.source_id,
+                    extraction.markdown_hash,
+                    extraction.parser_version,
+                    extraction.recipe_hash,
+                    start,
+                    end,
+                ],
+                separators=(",", ":"),
+                ensure_ascii=False,
+            ).encode()
+        ).hexdigest()
+        if (
+            not 0 <= start < end <= len(text)
+            or chunk.text != text[start:end]
+            or chunk.chunk_id != "chunk-markdown-" + identity
+            or chunk.source_id != document.source_id
+            or chunk.page_start is not None
+            or chunk.page_end is not None
+            or (start, end) in observed
+        ):
+            raise ValueError("Markdown chunk identity/text mismatch")
+        observed.add((start, end))
+    if not observed:
+        raise ValueError("Markdown chunks required")
 
 
 def require_indexable(result: GateResult) -> tuple[str, ...]:

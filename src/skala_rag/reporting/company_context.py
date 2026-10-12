@@ -21,6 +21,7 @@ from skala_rag.contracts.company_report import (
     InformationResult,
     NarrativeQuestion,
     NarrativeTarget,
+    OperatorFolderBinding,
     ReviewedIssuerReceipt,
     WriterContext,
     _reject_nonfinite,
@@ -35,6 +36,7 @@ from skala_rag.rag.company_store import (
     _has_ancestor,
     evidence_fingerprint,
 )
+from skala_rag.rag.corpus import verify_markdown_chunks
 from skala_rag.rag.retrieval import source_date
 from skala_rag.reporting.validator import TOKEN
 
@@ -164,7 +166,8 @@ def _context_digest(projection: JSONMap, registry: str) -> str:
 _PRIVATE_TEXT: Final = re.compile(
     r"(?:[a-z][a-z0-9+.-]*://|www\.|(?:^|\s)/(?:\w|Users/)|"
     r"\b(?:data/local|outputs/|source_id|chunk_id|retrieval_id|local_path|"
-    r"corpus_version|index_version|page_start|page_end)\b"
+    r"corpus_version|index_version|generation_id|input_fingerprint|store_version|"
+    r"page_start|page_end)\b"
     r'|\b(?:provider|publisher|author|page|url|path)\b["\s]*[:=]'
     r"|\bpage\s+\d+)",
     re.IGNORECASE,
@@ -198,7 +201,12 @@ def _check_neutral_text(value: JsonValue, private_tokens: set[str]) -> None:
 
 
 def _original_citation(
-    retained: StoreSnapshot, manifest: StoreManifest, item: Evidence, as_of: date
+    retained: StoreSnapshot,
+    manifest: StoreManifest,
+    item: Evidence,
+    as_of: date,
+    *,
+    operator_folder: bool = False,
 ) -> JSONMap:
     """Close exact original bytes, subject, locator and every retrieval proof."""
     source = manifest.sources.get(item.source_id)
@@ -210,7 +218,11 @@ def _original_citation(
         or doc.source_id != item.source_id
         or source.bibliographic_metadata.get("generated_report")
         or any(item.source_id in r.source_ids for r in manifest.reports.values())
-        or not doc.approved
+        or (
+            not doc.approved
+            and not (operator_folder and doc.admission_kind == "operator_folder")
+        )
+        or (doc.admission_kind == "operator_folder" and not operator_folder)
         or doc.extraction_status not in ("ok", "partial")
         or (doc.extraction_status == "partial" and doc.text_index_review is None)
         or source.content_hash != doc.content_hash
@@ -236,6 +248,19 @@ def _original_citation(
         raise CompanyContextError("ORIGINAL_BYTES_UNAVAILABLE") from exc
     if "sha256:" + hashlib.sha256(raw).hexdigest() != source.content_hash:
         raise CompanyContextError("ORIGINAL_BYTES_MISMATCH")
+    markdown = None
+    if doc.admission_kind == "operator_folder":
+        # 원본 PDF 확인 뒤 추출본을 읽고, 아래 각 청크의 정확한 span을 검증한다.
+        extraction = doc.markdown_extraction
+        if extraction is None or path.suffix.lower() != ".pdf":
+            raise CompanyContextError("ORIGINAL_EXTRACTION_REQUIRED")
+        markdown_path = (retained.root / extraction.markdown_path).resolve()
+        if not markdown_path.is_relative_to((retained.root / "data/local").resolve()):
+            raise CompanyContextError("ORIGINAL_PATH_ESCAPE")
+        try:
+            markdown = markdown_path.read_bytes()
+        except OSError as exc:
+            raise CompanyContextError("ORIGINAL_BYTES_UNAVAILABLE") from exc
     if not item.provenance:
         raise CompanyContextError("EXACT_LOCATOR_LINEAGE_REQUIRED")
     chunks = {}
@@ -279,7 +304,18 @@ def _original_citation(
             or item.excerpt not in chunk.text
         ):
             raise CompanyContextError("EXACT_LOCATOR_LINEAGE_REQUIRED")
-        if path.suffix.lower() != ".pdf":
+        if markdown is not None:
+            try:
+                verify_markdown_chunks(doc, markdown, (chunk,))
+            except ValueError as exc:
+                raise CompanyContextError("ORIGINAL_MARKDOWN_MISMATCH") from exc
+            if (
+                item.claim != chunk.text
+                or item.excerpt != chunk.text
+                or item.evidence_kind != "reported"
+            ):
+                raise CompanyContextError("ORIGINAL_TEXT_MISMATCH")
+        elif path.suffix.lower() != ".pdf":
             try:
                 text = raw.decode("utf-8")
             except UnicodeDecodeError as exc:
@@ -307,6 +343,7 @@ def build_writer_context(
     questions: Sequence[NarrativeQuestion],
     evidence_ids: Sequence[str],
     issuer_association: IssuerAssociation | None = None,
+    operator_folder: OperatorFolderBinding | None = None,
     may_request_information: bool = True,
     information_results: Sequence[InformationResult] = (),
 ) -> CompanyWriterContext:
@@ -318,6 +355,15 @@ def build_writer_context(
     Legacy scored assembly below remains solely for unmigrated v1 consumers.
     """
     manifest = retained.manifest
+    # 폴더 연결은 사용자 입력의 대상·세대일 뿐 검토 영수증이나 법적 신원이 아니다.
+    if operator_folder is not None:
+        if issuer_association is not None:
+            raise CompanyContextError("OPERATOR_FOLDER_REVIEWED_AUTHORITY_CONFLICT")
+        if (
+            operator_folder.name != company_name
+            or operator_folder.store_version != manifest.version
+        ):
+            raise CompanyContextError("OPERATOR_FOLDER_BINDING_MISMATCH")
     matches = [
         identity
         for identity in manifest.companies.values()
@@ -330,7 +376,10 @@ def build_writer_context(
     if len(matches) > 1:
         raise CompanyContextError("AMBIGUOUS_ISSUER_SUBJECT")
     association = issuer_association
-    if matches:
+    if operator_folder is not None:
+        cid, name = operator_folder.subject_id, operator_folder.name
+        identity_ids = []
+    elif matches:
         identity = matches[0]
         cid = identity.candidate.candidate_id
         name = identity.candidate.canonical_name
@@ -403,9 +452,30 @@ def build_writer_context(
     except CycleError as exc:
         raise CompanyContextError("CIRCULAR_SUPERSESSION_LINEAGE") from exc
     citations = {
-        eid: _original_citation(retained, manifest, manifest.evidence[eid], as_of)
+        eid: _original_citation(
+            retained,
+            manifest,
+            manifest.evidence[eid],
+            as_of,
+            operator_folder=operator_folder is not None,
+        )
         for eid in sorted(selected)
     }
+    # 검색 hit 수가 아니라 지원·충돌·정정 폐쇄 후의 정확한 원문 청크를 센다.
+    chunk_pairs = {
+        (manifest.evidence[eid].source_id, provenance.chunk_id)
+        for eid in selected
+        for provenance in manifest.evidence[eid].provenance
+        if provenance.chunk_id is not None
+    }
+    if len(chunk_pairs) > 12:
+        raise CompanyContextError("WRITER_CHUNK_LIMIT_EXCEEDED")
+    if operator_folder is not None and any(
+        manifest.documents[manifest.evidence[eid].source_id].admission_kind
+        != "operator_folder"
+        for eid in selected
+    ):
+        raise CompanyContextError("OPERATOR_FOLDER_SOURCE_MISMATCH")
     for eid in identity_ids:
         item = manifest.evidence[eid]
         if item.evidence_kind != "reported" or (
@@ -442,6 +512,15 @@ def build_writer_context(
         information_results=list(information_results),
     )
     private_tokens = {manifest.version, manifest.index_metadata.index_version}
+    if operator_folder is not None:
+        # 회사명·공개 subject ID와 달리 가져오기 세대·해시는 원문 밖에서 비공개다.
+        private_tokens.update(
+            (
+                operator_folder.generation_id,
+                operator_folder.input_fingerprint,
+                operator_folder.store_version,
+            )
+        )
     private_tokens.update(manifest.chunks)
     private_tokens.update(manifest.retrieval_records)
     for source in manifest.sources.values():
@@ -474,10 +553,13 @@ def build_writer_context(
     for question in writer.questions:
         _check_neutral_text(question.question, private_tokens)
     for view in views.values():
+        # PDF·Markdown·정확한 span 검사를 통과한 원문 두 필드만 문자열 예외다.
+        original_fields = {"claim", "excerpt"} if operator_folder is not None else set()
         _check_neutral_text(
             view.model_dump(
                 mode="json",
-                exclude={"supporting_evidence_ids", "conflicts_with", "supersedes"},
+                exclude={"supporting_evidence_ids", "conflicts_with", "supersedes"}
+                | original_fields,
             ),
             private_tokens,
         )
@@ -488,6 +570,11 @@ def build_writer_context(
             "target": writer.target.model_dump(mode="json"),
             "as_of": as_of.isoformat(),
             "issuer_evidence_ids": sorted(identity_ids),
+            "operator_folder": (
+                operator_folder.model_dump(mode="json")
+                if operator_folder is not None
+                else None
+            ),
             "issuer_association": (
                 {
                     "subject_id": association.subject_id,

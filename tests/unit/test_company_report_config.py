@@ -13,6 +13,8 @@ from skala_rag.contracts.company_report import (
     CompanyReportConfigError,
     CompanyReportReceipt,
     CompanyReportRequest,
+    ImportState,
+    OperatorFolderBinding,
     load_company_report_config,
 )
 from skala_rag.settings import load_runtime_document
@@ -501,3 +503,186 @@ def test_invalid_v2_scored_paths_are_not_ignored(tmp_path, config_data, field):
     # When / Then
     with pytest.raises(ValidationError):
         load_company_report_config(path)
+
+
+def test_operator_folder_resolves_and_freezes_binding(tmp_path, config_data):
+    # Given
+    config_data["operator_folder"] = {
+        "imports_path": "../imports/state.json",
+        "generation_id": "manual-generation",
+        "store_version": "a" * 64,
+    }
+    path = write_config(tmp_path, config_data)
+    # When
+    effective = load_company_report_config(path)
+    # Then
+    assert effective.operator_folder is not None
+    assert (
+        effective.operator_folder.imports_path
+        == (path.parent / "../imports/state.json").resolve()
+    )
+    assert not effective.operator_folder.imports_path.exists()
+    assert effective.issuer_receipt_path is None
+    assert effective.acquisition_receipt_path is None
+    with pytest.raises(ValidationError):
+        setattr(effective.operator_folder, "generation_id", "changed")
+    config_data["operator_folder"]["generation_id"] = "next-generation"
+    changed = load_company_report_config(write_config(tmp_path, config_data))
+    assert changed.config_hash != effective.config_hash
+
+
+@pytest.mark.parametrize("field", ["issuer_receipt_path", "acquisition_receipt_path"])
+def test_operator_folder_rejects_reviewed_authority(tmp_path, config_data, field):
+    # Given
+    config_data["operator_folder"] = {
+        "imports_path": "state.json",
+        "generation_id": "manual-generation",
+        "store_version": "a" * 64,
+    }
+    config_data[field] = "reviewed.json"
+    # When / Then
+    with pytest.raises(ValidationError) as error:
+        load_company_report_config(write_config(tmp_path, config_data))
+    assert error.value.errors()[0]["ctx"]["error"].code == (
+        "OPERATOR_FOLDER_REVIEWED_AUTHORITY_CONFLICT"
+    )
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"imports_path": ""},
+        {"imports_path": True},
+        {"generation_id": 1},
+        {"generation_id": " "},
+        {"store_version": "sha256:" + "a" * 64},
+        {"store_version": None},
+        {"approved": True},
+        {"reviewer": "operator"},
+    ],
+)
+def test_operator_folder_rejects_invalid_binding(tmp_path, config_data, override):
+    # Given
+    config_data["operator_folder"] = {
+        "imports_path": "state.json",
+        "generation_id": "manual-generation",
+        "store_version": "a" * 64,
+    } | override
+    # When / Then
+    with pytest.raises(ValidationError):
+        load_company_report_config(write_config(tmp_path, config_data))
+
+
+@pytest.fixture
+def import_state_data():
+    return {
+        "schema_version": "manual-import-1",
+        "generation_id": "manual-generation",
+        "status": "ready",
+        "target": {
+            "subject_id": "folder-subject",
+            "name": "Synthetic Robotics",
+            "raw_dir": "/raw/Synthetic Robotics",
+        },
+        "input_fingerprint": "a" * 64,
+        "recipe_hash": "b" * 64,
+        "files": [
+            {
+                "relative_path": "company.pdf",
+                "pdf_hash": "sha256:" + "c" * 64,
+                "status": "ok",
+                "source_id": "original-source",
+                "error_code": None,
+            }
+        ],
+        "snapshot": {"store_dir": "/store", "store_version": "d" * 64},
+    }
+
+
+def test_import_state_roundtrips_and_freezes_nested_values(import_state_data):
+    # Given / When
+    state = ImportState.model_validate_json(json.dumps(import_state_data))
+    # Then
+    assert ImportState.model_validate_json(state.model_dump_json()) == state
+    assert isinstance(state.files, tuple)
+    with pytest.raises(ValidationError):
+        setattr(state.files[0], "pdf_hash", "sha256:" + "f" * 64)
+    with pytest.raises(ValidationError):
+        setattr(state.target, "name", "Different Robotics")
+
+
+@pytest.mark.parametrize("status", ["importing", "ready", "empty", "failed"])
+@pytest.mark.parametrize("has_snapshot", [False, True])
+def test_snapshot_is_present_exactly_when_ready(
+    import_state_data, status, has_snapshot
+):
+    # Given
+    import_state_data["status"] = status
+    if not has_snapshot:
+        import_state_data["snapshot"] = None
+    # When / Then
+    if (status == "ready") == has_snapshot:
+        state = ImportState.model_validate_json(json.dumps(import_state_data))
+        assert state.status == status
+    else:
+        with pytest.raises(ValidationError):
+            ImportState.model_validate_json(json.dumps(import_state_data))
+
+
+@pytest.mark.parametrize("missing", ["input_fingerprint", "recipe_hash", "pdf_hash"])
+@pytest.mark.parametrize("status", ["ready", "failed"])
+def test_null_hashes_are_allowed_only_before_ready(import_state_data, missing, status):
+    # Given
+    import_state_data["status"] = status
+    if missing == "pdf_hash":
+        import_state_data["files"][0][missing] = None
+    else:
+        import_state_data[missing] = None
+    if status != "ready":
+        import_state_data["snapshot"] = None
+    # When / Then
+    if status == "ready":
+        with pytest.raises(ValidationError):
+            ImportState.model_validate_json(json.dumps(import_state_data))
+    else:
+        state = ImportState.model_validate_json(json.dumps(import_state_data))
+        assert state.snapshot is None
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"status": "completed"},
+        {"generation_id": False},
+        {"input_fingerprint": "sha256:" + "a" * 64},
+        {"recipe_hash": "b" * 63},
+        {"approved": True},
+        {"target": {"subject_id": "x", "name": "x", "raw_dir": [], "extra": 1}},
+        {"files": [{"relative_path": "x", "pdf_hash": "c" * 64, "status": "ok"}]},
+    ],
+)
+def test_import_state_rejects_malformed_or_extra_input(import_state_data, override):
+    # Given
+    import_state_data.update(override)
+    # When / Then
+    with pytest.raises(ValidationError):
+        ImportState.model_validate_json(json.dumps(import_state_data))
+
+
+def test_operator_context_binding_is_not_a_reviewed_receipt():
+    # Given
+    data = {
+        "subject_id": "folder-subject",
+        "name": "Synthetic Robotics",
+        "generation_id": "manual-generation",
+        "input_fingerprint": "a" * 64,
+        "store_version": "b" * 64,
+    }
+    # When
+    binding = OperatorFolderBinding.model_validate(data)
+    # Then
+    assert (
+        OperatorFolderBinding.model_validate_json(binding.model_dump_json()) == binding
+    )
+    with pytest.raises(ValidationError):
+        OperatorFolderBinding.model_validate(data | {"evidence_hashes": {}})

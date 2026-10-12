@@ -4,7 +4,7 @@
 
 한 기업 → 질문별 로컬 RAG → source-neutral 분석 → 선택적 한 번 보강 → 작성/Judge → 정확한 REFERENCE와 한글 PDF가 지원 흐름이다. scoring·적격성·후보 selector·CLI는 실행 요구가 아니다. 역사적 과제 요구와 승인 기록을 삭제하거나 현행 구현 완료로 해석하지 않는다.
 
-먼저 [기업 보고서](implementation/company-report.md), [Python 실행](implementation/python-execution.md), [실제 검증 범위](implementation/actual-v3-status.md)를 읽는다. 구현은 [아키텍처](implementation/architecture.md), [계약](implementation/contracts.md), [보고서](implementation/reporting.md), [PDF](implementation/pdf-rendering.md), [결정 기록](implementation/decisions.md), [설정](../configs/README.md)을 따른다.
+먼저 [기업 보고서](implementation/company-report.md), [Python 실행](implementation/python-execution.md), [실제 검증 범위](implementation/actual-v3-status.md)를 읽는다. 직접 받은 기업 PDF를 넣으려면 [수동 PDF 가이드](implementation/manual-pdf-guide.md)를 따른다. 구현은 [아키텍처](implementation/architecture.md), [계약](implementation/contracts.md), [보고서](implementation/reporting.md), [PDF](implementation/pdf-rendering.md), [결정 기록](implementation/decisions.md), [설정](../configs/README.md)을 따른다.
 
 여섯 영역은 technology_product/market_customer/business_model/competition_moat/team_execution/finance_funding_deal이며 각 3질문이다. 부분/미상에는 한계와 추가 확인 과제를 남긴다. 실제 0은 유지하고 없는 수치·법적 identity·투자 권고는 만들지 않는다. writer/Judge에는 근거 ID와 내용만 전달하고 출처·URL·경로·검색 메타데이터는 private registry에서 인용으로 해석한다.
 
